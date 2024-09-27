@@ -19,9 +19,13 @@ try:
     while True:
         if GPIO.input(HALL_SENSOR_Y) == GPIO.LOW:
             print("Y magnet detected!")
+        else:
+            print("No Y magnet detected.")
         time.sleep(0.5)
         if GPIO.input(HALL_SENSOR_X) == GPIO.LOW:
             print("X magnet detected!")
+        else:
+            print("No X magnet detected.")
         time.sleep(0.5)
 except KeyboardInterrupt:
     print("Program terminated by user")
