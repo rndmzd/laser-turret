@@ -5,7 +5,7 @@ import time
 GPIO.setmode(GPIO.BCM)
 
 # Define the GPIO pin connected to the Hall sensor
-HALL_SENSOR_X = 27  # You can change this if using
+HALL_SENSOR_X = 17  # You can change this if using
 HALL_SENSOR_Y = 22  # You can change this if using a different pin
 
 # Set up the GPIO pin as input (the external pull-up resistor is used)
