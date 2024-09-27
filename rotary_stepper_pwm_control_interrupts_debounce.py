@@ -95,7 +95,7 @@ def encoder_callback(gpio, level, tick):
 
             threading.Thread(target=move_stepper, args=(current_direction,)).start()
 
-            print(f"Moved one step {'CW' if current_direction == 1 else 'CCW'}")
+            # print(f"Moved one step {'CW' if current_direction == 1 else 'CCW'}")
 
         clkLastState = clkState
         last_callback_time = current_time

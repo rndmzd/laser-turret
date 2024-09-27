@@ -89,7 +89,7 @@ def encoder_callback(gpio, level, tick):
         # Move the stepper motor in a separate thread
         threading.Thread(target=move_stepper, args=(current_direction,)).start()
 
-        print(f"Moved one step {'CW' if current_direction == 1 else 'CCW'}")
+        # print(f"Moved one step {'CW' if current_direction == 1 else 'CCW'}")
 
     clkLastState = clkState
 

@@ -74,7 +74,7 @@ try:
             else:
                 print("Failed to create waveform.")
 
-            print(f"Moved one step {'CW' if current_direction == 1 else 'CCW'}")
+            # print(f"Moved one step {'CW' if current_direction == 1 else 'CCW'}")
 
             clkLastState = clkState
 
