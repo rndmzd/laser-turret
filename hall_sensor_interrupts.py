@@ -24,8 +24,8 @@ GPIO.setup(SENSOR_1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Enable internal p
 GPIO.setup(SENSOR_2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Enable internal pull-up for sensor 2
 
 # Event detection on both rising and falling edges
-GPIO.add_event_detect(SENSOR_1_PIN, GPIO.BOTH, callback=sensor1_callback, bouncetime=50)
-GPIO.add_event_detect(SENSOR_2_PIN, GPIO.BOTH, callback=sensor2_callback, bouncetime=50)
+GPIO.add_event_detect(SENSOR_1_PIN, GPIO.BOTH, callback=sensor1_callback)
+GPIO.add_event_detect(SENSOR_2_PIN, GPIO.BOTH, callback=sensor2_callback)
 
 try:
     print("Monitoring Hall sensors. Press Ctrl+C to exit.")
