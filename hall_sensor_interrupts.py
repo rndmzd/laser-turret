@@ -18,6 +18,8 @@ def sensor2_callback(channel):
     else:
         print("Sensor 2 detected a magnetic field (LOW)")
 
+GPIO.cleanup()
+
 # Setup GPIO
 GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
 GPIO.setup(SENSOR_1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Enable internal pull-up for sensor 1
