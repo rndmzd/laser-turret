@@ -25,7 +25,7 @@ try:
         
         # Move in CW direction
         print(f"{motor.name}: Moving in CW direction.")
-        motor.set_directionf('CW')
+        motor.set_direction('CW')
         motor.step(5, delay=0.1)
 
         input(f"{motor.name}: Press Enter to switch direction.")
