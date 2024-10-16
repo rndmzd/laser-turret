@@ -1,33 +1,37 @@
 import RPi.GPIO as GPIO
 import time
 
-# Set up GPIO using BCM numbering
-GPIO.setmode(GPIO.BCM)
-
-# Define the GPIO pin connected to the Hall sensor
-HALL_SENSOR_X = 17  # You can change this if using
-HALL_SENSOR_Y = 22  # You can change this if using a different pin
-
-# Set up the GPIO pin as input (the external pull-up resistor is used)
-GPIO.setup(HALL_SENSOR_X, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(HALL_SENSOR_Y, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-print("Hall Sensor Test Program")
-print("Press Ctrl+C to exit")
+# Define GPIO pins for Hall sensors
+hall_sensor_pins = {'X': 18, 'Y': 25}
 
 try:
+    # Setup GPIO mode
+    GPIO.setmode(GPIO.BCM)
+
+    # Setup Hall sensor pins as input
+    GPIO.setup(hall_sensor_pins['X'], GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(hall_sensor_pins['Y'], GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+    print("Monitoring Hall sensors for X and Y axes...")
+    print("Manually move the turret to test if the sensors are detecting travel limits.")
+
     while True:
-        if GPIO.input(HALL_SENSOR_Y) == GPIO.LOW:
-            print("Y magnet detected!")
-        else:
-            print("No Y magnet detected.")
-        time.sleep(0.5)
-        if GPIO.input(HALL_SENSOR_X) == GPIO.LOW:
-            print("X magnet detected!")
-        else:
-            print("No X magnet detected.")
-        time.sleep(0.5)
+        # Read Hall sensor states
+        x_limit_reached = GPIO.input(hall_sensor_pins['X'])
+        y_limit_reached = GPIO.input(hall_sensor_pins['Y'])
+
+        if x_limit_reached:
+            print("X-axis limit detected!")
+        if y_limit_reached:
+            print("Y-axis limit detected!")
+
+        # Small delay to prevent excessive CPU usage
+        time.sleep(0.1)
+
 except KeyboardInterrupt:
-    print("Program terminated by user")
+    print("\nTest interrupted by user.")
+
 finally:
+    # Clean up GPIO settings
     GPIO.cleanup()
+    print("GPIO cleanup complete.")
