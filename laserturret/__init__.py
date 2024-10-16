@@ -1,1 +1,1 @@
-from .steppercontrol import StepperController
+from .steppercontrol import StepperMotor
