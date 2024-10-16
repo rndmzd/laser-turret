@@ -40,20 +40,20 @@ class StepperMotor:
 
         # Set default direction and microstepping mode
         GPIO.output(self.dir_pin, GPIO.LOW)
-        self.set_microstepping('Full')
+        self.set_microstepping('FULL')
 
     def set_microstepping(self, mode):
         """
         Set the microstepping mode.
 
-        :param mode: One of 'Full', 'Half', 'Quarter', 'Eighth', 'Sixteenth'.
+        :param mode: One of 'FULL', 'HALF', 'QUARTER', 'EIGHTH', 'SIXTEENTH'.
         """
         modes = {
-            'Full':      (GPIO.LOW, GPIO.LOW, GPIO.LOW),
-            'Half':      (GPIO.HIGH, GPIO.LOW, GPIO.LOW),
-            'Quarter':   (GPIO.LOW, GPIO.HIGH, GPIO.LOW),
-            'Eighth':    (GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
-            'Sixteenth': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH)
+            'FULL':      (GPIO.LOW, GPIO.LOW, GPIO.LOW),
+            'HALF':      (GPIO.HIGH, GPIO.LOW, GPIO.LOW),
+            'QUARTER':   (GPIO.LOW, GPIO.HIGH, GPIO.LOW),
+            'EIGHTH':    (GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
+            'SIXTEENTH': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH)
         }
         if mode in modes:
             ms1_state, ms2_state, ms3_state = modes[mode]
@@ -61,7 +61,7 @@ class StepperMotor:
             GPIO.output(self.ms_pins['MS2'], ms2_state)
             GPIO.output(self.ms_pins['MS3'], ms3_state)
         else:
-            raise ValueError("Invalid microstepping mode. Choose from 'Full', 'Half', 'Quarter', 'Eighth', 'Sixteenth'.")
+            raise ValueError("Invalid microstepping mode. Choose from 'FULL', 'HALF', 'QUARTER', 'EIGHTH', 'SIXTEENTH'.")
 
     def set_direction(self, direction):
         """
