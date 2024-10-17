@@ -28,6 +28,9 @@ class StepperMotor:
 
         # Default microstepping settings
         self.step_style = stepper.SINGLE
+        
+        self.motor_direction = None
+        self.set_direction('CW')
 
         # Setup limit switch pin if provided
         if self.limit_switch_pin is not None:
