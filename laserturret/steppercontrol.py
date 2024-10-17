@@ -72,7 +72,7 @@ class StepperMotor:
         else:
             raise ValueError("Invalid microstepping style. Choose from 'SINGLE', 'DOUBLE', 'INTERLEAVE', 'MICROSTEP'.")
 
-    def step(self, steps, delay=0.01):
+    def step(self, steps, delay=0.00001):
         """
         Move the motor a specific number of steps.
 
