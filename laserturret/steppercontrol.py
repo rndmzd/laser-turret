@@ -48,11 +48,11 @@ class StepperMotor:
         """
         if direction == 'CW':
             self.motor_direction = stepper.FORWARD
-            if self.limit_switch_direction == 'CCW':
+            if self.limit_switch_direction == 'CCW' and self.stop_flag == True:
                 self.stop_flag = False  # Reset stop flag if moving away from limit
         elif direction == 'CCW':
             self.motor_direction = stepper.BACKWARD
-            if self.limit_switch_direction == 'CW':
+            if self.limit_switch_direction == 'CW' and self.stop_flag == True:
                 self.stop_flag = False  # Reset stop flag if moving away from limit
         else:
             raise ValueError("Invalid direction. Use 'CW' or 'CCW'.")
