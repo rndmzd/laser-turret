@@ -58,8 +58,10 @@ try:
     # Calibrate both motors
     calibrate_motor(motor_x)
     calibrate_motor(motor_y)
+    print("Calibration complete for all motors.") 
 
-    print("Calibration complete for all motors.")
+except KeyboardInterrupt:
+        print("Calibration process interrupted by user.")
 
 except Exception as e:
     print(f"An error occurred during calibration: {e}")
