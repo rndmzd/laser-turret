@@ -32,7 +32,7 @@ class StepperMotor:
         self.step_style = stepper.SINGLE
         
         self.motor_direction = None
-        self.set_direction(limit_switch_direction if)
+        self.set_direction(limit_switch_direction if limit_switch_direction is not None else 'CW')
 
         self.position = 0
 
