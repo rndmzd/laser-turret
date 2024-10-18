@@ -14,8 +14,18 @@ def calibrate_motor(motor):
     print(f"motor.motor_direction: {motor.motor_direction}")
     print(f"motor.limit_switch_direction: {motor.limit_switch_direction}")
 
-    if user_response == 'yes' and motor.motor_direction == motor.limit_switch_direction:
-        print(f"{motor.name}: Direction confirmed. Proceeding.")
+    if user_response == 'yes':
+        limit_direction_confirm = False
+        if motor.limit_switch_direction == 'CW' and motor.motor_direction == 1:
+            limit_direction_confirm = True
+        elif motor.limit_switch_direction == 'CCW' and motor.motor_direction == 2:
+            limit_direction_confirm = True
+        
+        if limit_direction_confirm:
+            print(f"{motor.name}: Direction confirmed. Proceeding.")
+        else:
+            print(f"{motor.name}: Limit switch direction in init arguments must be changed.")
+            exit(1)
     else:
         print(f"{motor.name}: Limit switch direction in init arguments must be changed.")
         exit(1)
