@@ -50,12 +50,21 @@ def calibrate_motor(motor):
 
     print(f"{motor.name}: {motor.step_count} steps taken to reach the limit switch.")
 
-# Initialize two motors for calibration using the steppercontrol module
-motor_1 = StepperMotor(motor_channel=1, limit_switch_pin=18, limit_switch_direction='CW', name='Motor 1')
-motor_2 = StepperMotor(motor_channel=2, limit_switch_pin=25, limit_switch_direction='CW', name='Motor 2')
+try:
+    # Initialize two motors for calibration using the steppercontrol module
+    motor_1 = StepperMotor(motor_channel=1, limit_switch_pin=18, limit_switch_direction='CW', name='Motor 1')
+    motor_2 = StepperMotor(motor_channel=2, limit_switch_pin=25, limit_switch_direction='CW', name='Motor 2')
 
-# Calibrate both motors
-calibrate_motor(motor_1)
-calibrate_motor(motor_2)
+    # Calibrate both motors
+    calibrate_motor(motor_1)
+    calibrate_motor(motor_2)
 
-print("Calibration complete for all motors.")
+    print("Calibration complete for all motors.")
+
+except Exception as e:
+    print(f"An error occurred during calibration: {e}")
+
+finally:
+    motor_1.cleanup()
+    motor_2.cleanup()
+    print("GPIO cleanup complete.")
