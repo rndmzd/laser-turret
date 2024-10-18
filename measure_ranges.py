@@ -7,7 +7,7 @@ def calibrate_motor(motor):
     input(f"Press any key to start calibration for {motor.name}.")
 
     # Move the motor 5 steps and ask the user for confirmation
-    motor.set_direction('CW')
+    # motor.set_direction('CW')
     motor.step(5, delay=0.05)
     user_response = input("Was this the direction towards the limit switch? (yes/no): ").strip().lower()
 
@@ -52,12 +52,12 @@ def calibrate_motor(motor):
 
 try:
     # Initialize two motors for calibration using the steppercontrol module
-    motor_1 = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CCW', name='MotorX')
-    motor_2 = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='MotorY')
+    motor_x = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CCW', name='MotorX')
+    motor_y = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='MotorY')
 
     # Calibrate both motors
-    calibrate_motor(motor_1)
-    calibrate_motor(motor_2)
+    calibrate_motor(motor_x)
+    calibrate_motor(motor_y)
 
     print("Calibration complete for all motors.")
 
@@ -65,8 +65,8 @@ except Exception as e:
     print(f"An error occurred during calibration: {e}")
 
 finally:
-    if motor_1:
-        motor_1.cleanup()
-    if motor_2:
-        motor_2.cleanup()
+    if motor_x:
+        motor_x.cleanup()
+    if motor_y:
+        motor_y.cleanup()
     print("GPIO cleanup complete.")
