@@ -101,7 +101,7 @@ class StepperMotor:
         self.position = 0
         self.stop_flag = False
 
-    def limit_switch_callback(self):
+    def limit_switch_callback(self, channel):
         """
         Callback function for limit detection.
         """
