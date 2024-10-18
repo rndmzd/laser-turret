@@ -8,7 +8,7 @@ class StepperMotor:
         """
         Initialize the stepper motor using Adafruit MotorKit.
 
-        :param motor_channel: The motor channel (1, 2, 3, or 4) on the Adafruit Motor HAT.
+        :param motor_channel: The motor channel (1 or 2) on the Adafruit Motor HAT.
         :param limit_switch_pin: GPIO pin for the limit switch to detect travel limit.
         :param limit_switch_direction: 'CW' or 'CCW' indicating the direction towards the limit switch.
         :param steps_per_rev: Number of steps per revolution for the stepper motor.
@@ -24,13 +24,15 @@ class StepperMotor:
 
         # Initialize MotorKit instance with microsteps
         self.kit = MotorKit(steppers_microsteps=microsteps)
+        if motor_channel not in [1, 2]:
+            raise ValueError("Invalid motor channel. Use 1 or 2.")
         self.motor = self.kit.stepper1 if motor_channel == 1 else self.kit.stepper2
 
         # Default microstepping settings
         self.step_style = stepper.SINGLE
         
         self.motor_direction = None
-        self.set_direction('CW')
+        self.set_direction(limit_switch_direction if)
 
         self.position = 0
 
