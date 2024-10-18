@@ -46,6 +46,7 @@ def calibrate_motor(motor):
 
     # Move towards the limit switch and count steps
     motor.set_direction(motor.limit_switch_direction)
+    motor.stop_flag = False
     motor.step(10000, delay=0.05)  # Move until the limit switch is triggered
 
     print(f"{motor.name}: {motor.position} steps taken to reach the limit switch.")
