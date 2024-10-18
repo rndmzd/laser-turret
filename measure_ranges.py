@@ -48,7 +48,7 @@ def calibrate_motor(motor):
     motor.set_direction(motor.limit_switch_direction)
     motor.step(10000, delay=0.05)  # Move until the limit switch is triggered
 
-    print(f"{motor.name}: {motor.step_count} steps taken to reach the limit switch.")
+    print(f"{motor.name}: {motor.position} steps taken to reach the limit switch.")
 
 try:
     # Initialize two motors for calibration using the steppercontrol module
