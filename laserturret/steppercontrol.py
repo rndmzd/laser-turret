@@ -37,8 +37,8 @@ class StepperMotor:
         # Setup limit switch pin if provided
         if self.limit_switch_pin is not None:
             GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-            GPIO.add_event_detect(self.limit_switch_pin, GPIO.RISING, callback=self.limit_switch_callback, bouncetime=200)
+            GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.add_event_detect(self.limit_switch_pin, GPIO.FALLING, callback=self.limit_switch_callback, bouncetime=200)
 
     def set_direction(self, direction):
         """
