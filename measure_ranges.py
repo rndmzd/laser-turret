@@ -7,7 +7,7 @@ def calibrate_motor(motor):
     input(f"Press any key to start calibration for {motor.name}.")
 
     # Move the motor 5 steps and ask the user for confirmation
-    motor.set_direction('CCW')
+    motor.set_direction('CW')
     motor.step(5, delay=0.05)
     user_response = input("Was this the direction towards the limit switch? (yes/no): ").strip().lower()
 
