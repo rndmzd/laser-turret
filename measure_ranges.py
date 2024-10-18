@@ -65,6 +65,8 @@ except Exception as e:
     print(f"An error occurred during calibration: {e}")
 
 finally:
-    motor_1.cleanup()
-    motor_2.cleanup()
+    if motor_1:
+        motor_1.cleanup()
+    if motor_2:
+        motor_2.cleanup()
     print("GPIO cleanup complete.")
