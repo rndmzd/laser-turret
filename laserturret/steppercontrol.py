@@ -32,6 +32,8 @@ class StepperMotor:
         self.motor_direction = None
         self.set_direction('CW')
 
+        self.position = 0
+
         # Setup limit switch pin if provided
         if self.limit_switch_pin is not None:
             GPIO.setmode(GPIO.BCM)
@@ -79,18 +81,22 @@ class StepperMotor:
         :param steps: Number of steps to move.
         :param delay: Delay between steps in seconds.
         """
+
         for _ in range(steps):
             if self.stop_flag:
                 print(f"{self.name}: Movement stopped due to limit detection.")
                 break
-            self.motor.onestep(direction=self.motor_direction, style=self.step_style)
+            self.position = self.motor.onestep(direction=self.motor_direction, style=self.step_style)
             time.sleep(delay)
+        
+        return self.position
 
     def release(self):
         """
         Release the motor to disable it and allow free movement.
         """
         self.motor.release()
+        self.position = 0
 
     def limit_switch_callback(self, channel):
         """
