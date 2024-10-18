@@ -52,8 +52,8 @@ def calibrate_motor(motor):
 
 try:
     # Initialize two motors for calibration using the steppercontrol module
-    motor_1 = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CW', name='Motor 1')
-    motor_2 = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='Motor 2')
+    motor_1 = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CCW', name='MotorX')
+    motor_2 = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='MotorY')
 
     # Calibrate both motors
     calibrate_motor(motor_1)
