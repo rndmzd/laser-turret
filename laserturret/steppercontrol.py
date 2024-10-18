@@ -107,9 +107,63 @@ class StepperMotor:
         """
         print(f"{self.name}: Travel limit reached.")
         self.stop_flag = True
+    
+    def confirm_limit_switch(self):
+        """
+        Confirm the limit switch direction after moving a few steps.
+        """
+        self.step(5, delay=0.05)
+        user_response = input(f"Was this the direction towards the limit switch? (yes/no): ").strip().lower()
+        if user_response == 'yes':
+            limit_direction_confirm = False
+            if self.limit_switch_direction == 'CW' and self.motor_direction == stepper.FORWARD:
+                limit_direction_confirm = True
+            elif self.limit_switch_direction == 'CCW' and self.motor_direction == stepper.BACKWARD:
+                limit_direction_confirm = True
+            
+            if limit_direction_confirm:
+                print(f"{self.name}: Direction confirmed. Proceeding.")
+            else:
+                print(f"{self.name}: Limit switch direction in init arguments must be changed.")
+                exit(1)
+        else:
+            print(f"{self.name}: Limit switch direction in init arguments must be changed.")
+            exit(1)
+    
+    def calibrate(self):
+        """
+        Calibrate the motor by moving towards the limit switch and counting steps.
+        """
+        if self.limit_switch_pin is None or self.limit_switch_direction is None:
+            raise ValueError("Limit switch pin and direction must be set for calibration.")
+        
+        print(f"{self.name}: Calibrating motor.")
+        self.set_direction(self.limit_switch_direction)
+        self.stop_flag = False
+        self.step(10000, delay=0.05)  # Move until the limit switch is triggered
+        self.set_direction('CW' if self.limit_switch_direction == 'CCW' else 'CCW')
+        self.step(5, delay=0.05)  # Move away from the limit switch
+        self.position = 0
+
+        print("Calibration complete.")
 
     def cleanup(self):
         """
         Clean up GPIO settings.
         """
         GPIO.cleanup()
+
+
+# Example usage:
+if __name__ == "__main__":
+    # Initialize two motors for calibration using the steppercontrol module
+    motor_x = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CCW', name='MotorX')
+    motor_y = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='MotorY')
+
+    # Calibrate both motors
+    motor_x.calibrate()
+    motor_y.calibrate()
+
+    # Clean up GPIO settings
+    motor_x.cleanup()
+    motor_y.cleanup()
