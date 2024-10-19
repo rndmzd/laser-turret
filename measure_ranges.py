@@ -72,7 +72,9 @@ except Exception as e:
 
 finally:
     if motor_x:
+        motor_x.release()
         motor_x.cleanup()
     if motor_y:
+        motor_y.release()
         motor_y.cleanup()
     print("GPIO cleanup complete.")
