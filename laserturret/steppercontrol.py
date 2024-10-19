@@ -41,6 +41,9 @@ class StepperMotor:
             GPIO.setmode(GPIO.BCM)
             GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
             GPIO.add_event_detect(self.limit_switch_pin, GPIO.FALLING, callback=self.limit_switch_callback, bouncetime=200)
+            if GPIO.input(self.limit_switch_pin) == 0:
+                print(f"{self.name}: Limit switch already triggered.")
+                self.position = 0
 
     def set_direction(self, direction):
         """
