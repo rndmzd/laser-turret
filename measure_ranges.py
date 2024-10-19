@@ -9,7 +9,7 @@ def calibrate_motor(motor):
     # Move the motor 5 steps and ask the user for confirmation
     # motor.set_direction('CW')
     motor.step(5, delay=0.05)
-    
+
     motor.set_microstepping('MICROSTEP')
     
     user_response = input("Was this the direction towards the limit switch? (yes/no): ").strip().lower()
@@ -50,7 +50,7 @@ def calibrate_motor(motor):
     # Move towards the limit switch and count steps
     motor.set_direction(motor.limit_switch_direction)
     motor.stop_flag = False
-    motor.step(10000, delay=0.005)  # Move until the limit switch is triggered
+    motor.step(10000)#, delay=0.005)  # Move until the limit switch is triggered
 
     print(f"{motor.name}: {motor.position} steps taken to reach the limit switch.")
 
