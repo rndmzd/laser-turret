@@ -9,6 +9,9 @@ def calibrate_motor(motor):
     # Move the motor 5 steps and ask the user for confirmation
     # motor.set_direction('CW')
     motor.step(5, delay=0.05)
+    
+    motor.set_microstepping('MICROSTEP')
+    
     user_response = input("Was this the direction towards the limit switch? (yes/no): ").strip().lower()
 
     print(f"motor.motor_direction: {motor.motor_direction}")
@@ -55,9 +58,6 @@ try:
     # Initialize two motors for calibration using the steppercontrol module
     motor_x = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CCW', name='MotorX')
     motor_y = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='MotorY')
-
-    motor_x.set_microstepping('MICROSTEP')
-    motor_y.set_microstepping('MICROSTEP')
 
     # Calibrate both motors
     calibrate_motor(motor_x)
