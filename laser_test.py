@@ -10,7 +10,8 @@ GPIO.setup(18, GPIO.OUT, initial=GPIO.LOW)
 try:
     while True:
         # Wait for user input
-        input("Press Enter to activate GPIO 18 for 1 second...")
+        input("Press Enter to activate GPIO 18 (laser) for 1 second.\
+              Make sure to wear safety goggles and point turret in a safe direction.")
         
         # Set GPIO 18 HIGH
         GPIO.output(18, GPIO.HIGH)
