@@ -56,6 +56,9 @@ try:
     motor_x = StepperMotor(motor_channel=1, limit_switch_pin=17, limit_switch_direction='CCW', name='MotorX')
     motor_y = StepperMotor(motor_channel=2, limit_switch_pin=27, limit_switch_direction='CW', name='MotorY')
 
+    motor_x.set_microstepping('MICROSTEP')
+    motor_y.set_microstepping('MICROSTEP')
+    
     # Calibrate both motors
     calibrate_motor(motor_x)
     calibrate_motor(motor_y)
