@@ -47,7 +47,7 @@ def calibrate_motor(motor):
     # Move towards the limit switch and count steps
     motor.set_direction(motor.limit_switch_direction)
     motor.stop_flag = False
-    motor.step(10000, delay=0.05)  # Move until the limit switch is triggered
+    motor.step(10000, delay=0.005)  # Move until the limit switch is triggered
 
     print(f"{motor.name}: {motor.position} steps taken to reach the limit switch.")
 
@@ -58,7 +58,7 @@ try:
 
     motor_x.set_microstepping('MICROSTEP')
     motor_y.set_microstepping('MICROSTEP')
-    
+
     # Calibrate both motors
     calibrate_motor(motor_x)
     calibrate_motor(motor_y)
