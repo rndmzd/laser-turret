@@ -39,6 +39,8 @@ class StepperMotor:
         self.stop_flag = False
         self.limit_backoff_steps = limit_backoff_steps
 
+        self.position = 0
+
         # Initialize MotorKit instance with microsteps
         self.kit = MotorKit(steppers_microsteps=microsteps)
         if motor_channel not in [1, 2]:
@@ -57,8 +59,6 @@ class StepperMotor:
         
         if perform_calibration:
             self.calibrate()
-
-        self.position = 0
 
         # Setup limit switch pin if provided
         if self.limit_switch_pin is not None:
