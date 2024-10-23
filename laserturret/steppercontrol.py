@@ -59,15 +59,17 @@ class StepperMotor:
             GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
             GPIO.add_event_detect(self.limit_switch_pin, GPIO.FALLING, callback=self.limit_switch_callback, bouncetime=200)
             if GPIO.input(self.limit_switch_pin) == 0:
-                logger.warn(f"[{self.name}] Limit switch already triggered.")
+                logger.warn(f"[{self.name}] Limit switch already triggered. Move away from limit switch and restart.")
+                self.release()
+                self.cleanup()
+                exit()
                 self.position = 0
         
-        # Initialize position
-        if not skip_direction_check:
-            self.confirm_limit_switch()
-        
-        if perform_calibration:
-            self.calibrate()
+            if not skip_direction_check:
+                self.confirm_limit_switch()
+            
+            if perform_calibration:
+                self.calibrate()
 
     def set_direction(self, direction):
         """
