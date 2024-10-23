@@ -10,8 +10,8 @@ MQTT_TOPIC = "laserturret"
 # Motor Configuration
 X_MOTOR_CHANNEL = 1
 Y_MOTOR_CHANNEL = 2
-X_LIMIT_SWITCH_PIN = 23
-Y_LIMIT_SWITCH_PIN = 24
+X_LIMIT_SWITCH_PIN = 17
+Y_LIMIT_SWITCH_PIN = 27
 STEPS_PER_REV = 200
 MICROSTEPS = 8
 
@@ -23,27 +23,27 @@ SPEED_SCALING = 0.05      # Adjust this to change movement sensitivity
 class TurretController:
     def __init__(self):
         # Initialize stepper motors
-        self.x_motor = StepperMotor(
+        self.motor_x = StepperMotor(
             motor_channel=X_MOTOR_CHANNEL,
             limit_switch_pin=X_LIMIT_SWITCH_PIN,
             limit_switch_direction='CCW',
             steps_per_rev=STEPS_PER_REV,
             microsteps=MICROSTEPS,
-            name="X-Motor"
+            name="MotorX"
         )
         
-        self.y_motor = StepperMotor(
+        self.motor_y = StepperMotor(
             motor_channel=Y_MOTOR_CHANNEL,
             limit_switch_pin=Y_LIMIT_SWITCH_PIN,
-            limit_switch_direction='CCW',
+            limit_switch_direction='CW',
             steps_per_rev=STEPS_PER_REV,
             microsteps=MICROSTEPS,
-            name="Y-Motor"
+            name="MotorY"
         )
         
         # Set microstepping mode for smooth movement
-        self.x_motor.set_microstepping('MICROSTEP')
-        self.y_motor.set_microstepping('MICROSTEP')
+        self.motor_x.set_microstepping('MICROSTEP')
+        self.motor_y.set_microstepping('MICROSTEP')
         
         # Initialize MQTT client
         self.client = mqtt.Client()
@@ -86,21 +86,21 @@ class TurretController:
             
             # Set motor directions based on step values
             if x_steps > 0:
-                self.x_motor.set_direction('CW')
+                self.motor_x.set_direction('CW')
             elif x_steps < 0:
-                self.x_motor.set_direction('CCW')
+                self.motor_x.set_direction('CCW')
             
             if y_steps > 0:
-                self.y_motor.set_direction('CW')
+                self.motor_y.set_direction('CW')
             elif y_steps < 0:
-                self.y_motor.set_direction('CCW')
+                self.motor_y.set_direction('CCW')
             
             # Move motors if steps are non-zero
             if x_steps != 0:
-                self.x_motor.step(abs(x_steps))
+                self.motor_x.step(abs(x_steps))
             
             if y_steps != 0:
-                self.y_motor.step(abs(y_steps))
+                self.motor_y.step(abs(y_steps))
             
             # Handle button press (you can customize this behavior)
             if self.button_pressed:
@@ -113,8 +113,8 @@ class TurretController:
     def calibrate(self):
         """Calibrate both motors"""
         print("Starting calibration...")
-        self.x_motor.calibrate()
-        self.y_motor.calibrate()
+        self.motor_x.calibrate()
+        self.motor_y.calibrate()
         print("Calibration complete!")
     
     def start(self):
@@ -132,10 +132,10 @@ class TurretController:
     
     def cleanup(self):
         """Clean up resources"""
-        self.x_motor.release()
-        self.y_motor.release()
-        self.x_motor.cleanup()
-        self.y_motor.cleanup()
+        self.motor_x.release()
+        self.motor_y.release()
+        self.motor_x.cleanup()
+        self.motor_y.cleanup()
         self.client.disconnect()
 
 if __name__ == "__main__":
