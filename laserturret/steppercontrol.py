@@ -19,7 +19,7 @@ class StepperMotor:
             microsteps=8,
             skip_direction_check=False,
             perform_calibration=True,
-            limit_backoff_steps=5,
+            limit_backoff_steps=1,
             name="Motor"):
         """
         Initialize the stepper motor using Adafruit MotorKit.
