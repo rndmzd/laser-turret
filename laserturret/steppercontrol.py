@@ -19,6 +19,7 @@ class StepperMotor:
             microsteps=8,
             skip_direction_check=False,
             perform_calibration=True,
+            limit_backoff_steps=5,
             name="Motor"):
         """
         Initialize the stepper motor using Adafruit MotorKit.
@@ -36,6 +37,7 @@ class StepperMotor:
         self.steps_per_rev = steps_per_rev
         self.name = name
         self.stop_flag = False
+        self.limit_backoff_steps = limit_backoff_steps
 
         # Initialize MotorKit instance with microsteps
         self.kit = MotorKit(steppers_microsteps=microsteps)
@@ -136,22 +138,34 @@ class StepperMotor:
         """
         Confirm the limit switch direction after moving a few steps.
         """
-        self.step(5, delay=0.05)
-        user_response = input(f"Was this the direction towards the limit switch? (yes/no): ").strip().lower()
-        if user_response == 'yes':
-            limit_direction_confirm = False
-            if self.limit_switch_direction == 'CW' and self.motor_direction == stepper.FORWARD:
-                limit_direction_confirm = True
-            elif self.limit_switch_direction == 'CCW' and self.motor_direction == stepper.BACKWARD:
-                limit_direction_confirm = True
+        while True:
+            self.step(5, delay=0.1)
+            user_response = input(f"Was this the direction towards the limit switch? (yes/no/move): ").strip().lower()
+            if user_response == 'yes':
+                limit_direction_confirm = False
+                if self.limit_switch_direction == 'CW' and self.motor_direction == stepper.FORWARD:
+                    limit_direction_confirm = True
+                elif self.limit_switch_direction == 'CCW' and self.motor_direction == stepper.BACKWARD:
+                    limit_direction_confirm = True
+                
+                if limit_direction_confirm:
+                    logger.info(f"{self.name}: Direction confirmed. Proceeding.")
+                    break
+                else:
+                    logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
+                    exit(1)
             
-            if limit_direction_confirm:
-                logger.info(f"{self.name}: Direction confirmed. Proceeding.")
+            elif user_response == 'move':
+                continue
+
             else:
                 logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
                 exit(1)
-        else:
-            logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
+        
+        print("Manually activate the limit switch to confirm.")
+        user_response = input("Was the correct limit switch activated? (yes/no): ").strip().lower()
+        if user_response != 'yes':
+            logger.error(f"{self.name}: Fix pin assignments then restart program.")
             exit(1)
     
     def calibrate(self):
@@ -166,7 +180,7 @@ class StepperMotor:
         self.stop_flag = False
         self.step(10000, delay=0.05)  # Move until the limit switch is triggered
         self.set_direction('CW' if self.limit_switch_direction == 'CCW' else 'CCW')
-        self.step(5, delay=0.05)  # Move away from the limit switch
+        self.step(self.limit_backoff_steps, delay=0.05)  # Move away from the limit switch
         self.position = 0
 
         logger.info("Calibration complete.")
