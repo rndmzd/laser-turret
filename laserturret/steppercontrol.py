@@ -52,13 +52,6 @@ class StepperMotor:
         
         self.motor_direction = None
         self.set_direction(limit_switch_direction if limit_switch_direction is not None else 'CW')
-        
-        # Initialize position
-        if not skip_direction_check:
-            self.confirm_limit_switch()
-        
-        if perform_calibration:
-            self.calibrate()
 
         # Setup limit switch pin if provided
         if self.limit_switch_pin is not None:
@@ -68,6 +61,13 @@ class StepperMotor:
             if GPIO.input(self.limit_switch_pin) == 0:
                 logger.warn(f"{self.name}: Limit switch already triggered.")
                 self.position = 0
+        
+        # Initialize position
+        if not skip_direction_check:
+            self.confirm_limit_switch()
+        
+        if perform_calibration:
+            self.calibrate()
 
     def set_direction(self, direction):
         """
