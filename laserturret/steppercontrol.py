@@ -1,10 +1,25 @@
 from adafruit_motorkit import MotorKit
 from adafruit_motor import stepper
+import logging
 import time
 import RPi.GPIO as GPIO
 
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
 class StepperMotor:
-    def __init__(self, motor_channel, limit_switch_pin=None, limit_switch_direction=None, steps_per_rev=200, microsteps=8, name="Motor"):
+    def __init__(
+            self,
+            motor_channel,
+            limit_switch_pin=None,
+            limit_switch_direction=None,
+            steps_per_rev=200,
+            microsteps=8,
+            skip_direction_check=False,
+            perform_calibration=True,
+            name="Motor"):
         """
         Initialize the stepper motor using Adafruit MotorKit.
 
@@ -33,6 +48,13 @@ class StepperMotor:
         
         self.motor_direction = None
         self.set_direction(limit_switch_direction if limit_switch_direction is not None else 'CW')
+        
+        # Initialize position
+        if not skip_direction_check:
+            self.confirm_limit_switch()
+        
+        if perform_calibration:
+            self.calibrate()
 
         self.position = 0
 
@@ -42,7 +64,7 @@ class StepperMotor:
             GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
             GPIO.add_event_detect(self.limit_switch_pin, GPIO.FALLING, callback=self.limit_switch_callback, bouncetime=200)
             if GPIO.input(self.limit_switch_pin) == 0:
-                print(f"{self.name}: Limit switch already triggered.")
+                logger.warn(f"{self.name}: Limit switch already triggered.")
                 self.position = 0
 
     def set_direction(self, direction):
@@ -89,7 +111,7 @@ class StepperMotor:
 
         for _ in range(steps):
             if self.stop_flag:
-                print(f"{self.name}: Movement stopped due to limit detection.")
+                logger.warning(f"{self.name}: Movement stopped due to limit detection.")
                 break
             self.position = self.motor.onestep(direction=self.motor_direction, style=self.step_style)
             time.sleep(delay)
@@ -108,7 +130,6 @@ class StepperMotor:
         """
         Callback function for limit detection.
         """
-        print(f"{self.name}: Travel limit reached.")
         self.stop_flag = True
     
     def confirm_limit_switch(self):
@@ -125,12 +146,12 @@ class StepperMotor:
                 limit_direction_confirm = True
             
             if limit_direction_confirm:
-                print(f"{self.name}: Direction confirmed. Proceeding.")
+                logger.info(f"{self.name}: Direction confirmed. Proceeding.")
             else:
-                print(f"{self.name}: Limit switch direction in init arguments must be changed.")
+                logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
                 exit(1)
         else:
-            print(f"{self.name}: Limit switch direction in init arguments must be changed.")
+            logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
             exit(1)
     
     def calibrate(self):
@@ -140,7 +161,7 @@ class StepperMotor:
         if self.limit_switch_pin is None or self.limit_switch_direction is None:
             raise ValueError("Limit switch pin and direction must be set for calibration.")
         
-        print(f"{self.name}: Calibrating motor.")
+        logger.info(f"{self.name}: Calibrating motor.")
         self.set_direction(self.limit_switch_direction)
         self.stop_flag = False
         self.step(10000, delay=0.05)  # Move until the limit switch is triggered
@@ -148,7 +169,7 @@ class StepperMotor:
         self.step(5, delay=0.05)  # Move away from the limit switch
         self.position = 0
 
-        print("Calibration complete.")
+        logger.info("Calibration complete.")
 
     def cleanup(self):
         """
