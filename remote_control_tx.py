@@ -121,7 +121,7 @@ def calibrate_joystick():
     print("Joystick calibration started! Press button to proceed.")
     wait_for_button_press()
     
-    # Farthest Left
+    # X-Minimum
     print("Press the button then move joystick to the farthest LEFT position within 5 seconds.")
     wait_for_button_press()
     print("Reading values...")
@@ -134,7 +134,7 @@ def calibrate_joystick():
         time.sleep(0.1)
     print("Complete.")
     calibration['left'] = x_min
-    print(f"Farthest LEFT recorded: {calibration['left']}")
+    print(f"X-Minimum: {calibration['left']}")
     
     # Farthest Up
     print("Press the button then move joystick to the farthest UP position within 5 seconds.")
@@ -149,7 +149,7 @@ def calibrate_joystick():
         time.sleep(0.1)
     print("Complete.")
     calibration['up'] = y_max
-    print(f"Farthest UP recorded: {calibration['up']}")
+    print(f"Y-Maximum: {calibration['up']}")
     
     # Farthest Right
     print("Press the button then move joystick to the farthest RIGHT position within 5 seconds.")
@@ -164,7 +164,7 @@ def calibrate_joystick():
         time.sleep(0.1)
     print("Complete.")
     calibration['right'] = x_max
-    print(f"Farthest RIGHT recorded: {calibration['right']}")
+    print(f"X-Maximum: {calibration['right']}")
     
     # Farthest Down
     print("Press the button then move joystick to the farthest DOWN position within 5 seconds.")
@@ -179,7 +179,7 @@ def calibrate_joystick():
         time.sleep(0.1)
     print("Complete.")
     calibration['down'] = y_min
-    print(f"Farthest DOWN recorded: {calibration['down']}")
+    print(f"Y-Minimum: {calibration['down']}")
     
     print("Calibration complete!")
     save_calibration()  # Save calibration data after completing
