@@ -133,6 +133,7 @@ class StepperMotor:
         Callback function for limit detection.
         """
         self.stop_flag = True
+        logger.info(f"{self.name}: Limit switch triggered.")
     
     def confirm_limit_switch(self):
         """
