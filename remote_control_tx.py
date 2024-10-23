@@ -8,9 +8,11 @@ from digitalio import DigitalInOut, Pull
 import json
 import microcontroller
 
+import config
+
 # Wi-Fi setup
-SSID = "***REMOVED***"
-PASSWORD = "***REMOVED***"
+SSID = config.WIFI_SSID
+PASSWORD = config.WIFI_PASSWORD
 
 # Max size of NVM data (255 bytes)
 NVM_SIZE = 255
