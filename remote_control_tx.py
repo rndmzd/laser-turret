@@ -180,6 +180,19 @@ def calibrate_joystick():
     print("Complete.")
     calibration['down'] = y_min
     print(f"Y-Minimum: {calibration['down']}")
+
+    # Center
+    print("Press the button then leave it at its CENTER position for 5 seconds.")
+    wait_for_button_press()
+    time.sleep(3)
+    print("Reading values...")
+    start_time = time.time()
+    x_center = joystick_x.value
+    y_center = joystick_y.value
+    print("Complete.")
+    calibration['x_center'] = x_center
+    calibration['y_center'] = y_center
+    print(f"Center: {calibration['x_center']}, {calibration['y_center']}")
     
     print("Calibration complete!")
     save_calibration()  # Save calibration data after completing
@@ -193,7 +206,7 @@ def wait_for_button_press():
     time.sleep(1)  # 1-second delay after button release
 
 # Mapping function to map joystick values to the usable range
-def map_joystick_values(x_val, y_val):
+"""def map_joystick_values(x_val, y_val):
     # Map X-axis values
     x_mapped = (x_val - calibration['left']) / (calibration['right'] - calibration['left']) * 65535
     x_mapped = max(0, min(65535, x_mapped))  # Ensure value stays in range
@@ -201,6 +214,35 @@ def map_joystick_values(x_val, y_val):
     # Map Y-axis values
     y_mapped = (y_val - calibration['down']) / (calibration['up'] - calibration['down']) * 65535
     y_mapped = max(0, min(65535, y_mapped))  # Ensure value stays in range
+    
+    return int(x_mapped), int(y_mapped)"""
+
+def map_joystick_values(x_val, y_val):
+    # Calculate the midpoints for each axis
+    # x_center = (calibration['left'] + calibration['right']) / 2
+    # y_center = (calibration['down'] + calibration['up']) / 2
+    x_center = calibration['x_center']
+    y_center = calibration['y_center']
+    
+    # Map X-axis values (-100 to +100)
+    if x_val < x_center:
+        # Left side (negative values)
+        x_mapped = (x_val - x_center) / (x_center - calibration['left']) * 100
+    else:
+        # Right side (positive values)
+        x_mapped = (x_val - x_center) / (calibration['right'] - x_center) * 100
+    
+    # Map Y-axis values (-100 to +100)
+    if y_val < y_center:
+        # Down side (negative values)
+        y_mapped = (y_val - y_center) / (y_center - calibration['down']) * 100
+    else:
+        # Up side (positive values)
+        y_mapped = (y_val - y_center) / (calibration['up'] - y_center) * 100
+    
+    # Clamp values between -100 and 100
+    x_mapped = max(-100, min(100, x_mapped))
+    y_mapped = max(-100, min(100, y_mapped))
     
     return int(x_mapped), int(y_mapped)
 
