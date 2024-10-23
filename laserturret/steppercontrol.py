@@ -59,7 +59,7 @@ class StepperMotor:
             GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
             GPIO.add_event_detect(self.limit_switch_pin, GPIO.FALLING, callback=self.limit_switch_callback, bouncetime=200)
             if GPIO.input(self.limit_switch_pin) == 0:
-                logger.warn(f"{self.name}: Limit switch already triggered.")
+                logger.warn(f"[{self.name}] Limit switch already triggered.")
                 self.position = 0
         
         # Initialize position
@@ -113,7 +113,7 @@ class StepperMotor:
 
         for _ in range(steps):
             if self.stop_flag:
-                logger.warning(f"{self.name}: Movement stopped due to limit detection.")
+                logger.warning(f"[{self.name}] Movement stopped due to limit detection.")
                 break
             self.position = self.motor.onestep(direction=self.motor_direction, style=self.step_style)
             logger.debug(f"[{self.name}] self.position: {self.position}")
@@ -134,7 +134,7 @@ class StepperMotor:
         Callback function for limit detection.
         """
         self.stop_flag = True
-        print(f"{self.name}: Limit switch triggered.")
+        logger.info(f"[{self.name}] Limit switch triggered.")
     
     def confirm_limit_switch(self):
         """
@@ -151,23 +151,23 @@ class StepperMotor:
                     limit_direction_confirm = True
                 
                 if limit_direction_confirm:
-                    logger.info(f"{self.name}: Direction confirmed. Proceeding.")
+                    logger.info(f"[{self.name}] Direction confirmed. Proceeding.")
                     break
                 else:
-                    logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
+                    logger.error(f"[{self.name}] Limit switch direction in init arguments must be changed.")
                     exit(1)
             
             elif user_response == 'move':
                 continue
 
             else:
-                logger.error(f"{self.name}: Limit switch direction in init arguments must be changed.")
+                logger.error(f"[{self.name}] Limit switch direction in init arguments must be changed.")
                 exit(1)
         
         print("Manually activate the limit switch to confirm.")
         user_response = input("Was the correct limit switch activated? (yes/no): ").strip().lower()
         if user_response != 'yes':
-            logger.error(f"{self.name}: Fix pin assignments then restart program.")
+            logger.error(f"[{self.name}] Fix pin assignments then restart program.")
             exit(1)
     
     def calibrate(self):
@@ -177,7 +177,7 @@ class StepperMotor:
         if self.limit_switch_pin is None or self.limit_switch_direction is None:
             raise ValueError("Limit switch pin and direction must be set for calibration.")
         
-        logger.info(f"{self.name}: Calibrating motor.")
+        logger.info(f"[{self.name}] Calibrating motor.")
         self.set_direction(self.limit_switch_direction)
         self.stop_flag = False
         self.step(10000, delay=0.05)  # Move until the limit switch is triggered
