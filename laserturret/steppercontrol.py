@@ -116,6 +116,7 @@ class StepperMotor:
                 logger.warning(f"{self.name}: Movement stopped due to limit detection.")
                 break
             self.position = self.motor.onestep(direction=self.motor_direction, style=self.step_style)
+            logger.debug(f"[{self.name}] self.position: {self.position}")
             time.sleep(delay)
         
         return self.position
