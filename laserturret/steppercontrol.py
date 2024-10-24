@@ -179,6 +179,9 @@ class StepperMotor:
         if self.limit_switch_pin is None or self.limit_switch_direction is None:
             raise ValueError("Limit switch pin and direction must be set for calibration.")
         
+        self.release()
+        input("Move motor to furthest position from limit switch and press Enter to continue...")
+        
         logger.info(f"[{self.name}] Calibrating motor.")
         self.set_direction(self.limit_switch_direction)
         self.stop_flag = False
