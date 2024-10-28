@@ -13,8 +13,8 @@ class StepperMotor:
     def __init__(
             self,
             motor_channel,
-            limit_switch_pin=None,
-            limit_switch_direction=None,
+            cw_limit_switch_pin=None,
+            ccw_limit_switch_pin=None,
             steps_per_rev=200,
             microsteps=8,
             skip_direction_check=False,
@@ -25,21 +25,23 @@ class StepperMotor:
         Initialize the stepper motor using Adafruit MotorKit.
 
         :param motor_channel: The motor channel (1 or 2) on the Adafruit Motor HAT.
-        :param limit_switch_pin: GPIO pin for the limit switch to detect travel limit.
-        :param limit_switch_direction: 'CW' or 'CCW' indicating the direction towards the limit switch.
+        :param cw_limit_switch_pin: GPIO pin for the clockwise limit switch.
+        :param ccw_limit_switch_pin: GPIO pin for the counter-clockwise limit switch.
         :param steps_per_rev: Number of steps per revolution for the stepper motor.
         :param microsteps: Number of microsteps to set for the motor.
         :param name: Name of the motor (for identification in prints).
         """
         self.motor_channel = motor_channel
-        self.limit_switch_pin = limit_switch_pin
-        self.limit_switch_direction = limit_switch_direction
+        self.cw_limit_switch_pin = cw_limit_switch_pin
+        self.ccw_limit_switch_pin = ccw_limit_switch_pin
         self.steps_per_rev = steps_per_rev
         self.name = name
         self.stop_flag = False
         self.limit_backoff_steps = limit_backoff_steps
+        self.triggered_limit = None  # Tracks which limit switch was triggered
 
         self.position = 0
+        self.total_travel_steps = None  # Will be set during calibration
 
         # Initialize MotorKit instance with microsteps
         self.kit = MotorKit(steppers_microsteps=microsteps)
@@ -51,25 +53,42 @@ class StepperMotor:
         self.step_style = stepper.SINGLE
         
         self.motor_direction = None
-        self.set_direction(limit_switch_direction if limit_switch_direction is not None else 'CW')
+        self.set_direction('CW')  # Default direction
 
-        # Setup limit switch pin if provided
-        if self.limit_switch_pin is not None:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(self.limit_switch_pin, GPIO.FALLING, callback=self.limit_switch_callback, bouncetime=200)
-            if GPIO.input(self.limit_switch_pin) == 0:
-                logger.warn(f"[{self.name}] Limit switch already triggered. Move away from limit switch and restart.")
-                self.release()
-                self.cleanup()
-                exit()
-                self.position = 0
+        # Setup limit switch pins if provided
+        GPIO.setmode(GPIO.BCM)
         
-            if not skip_direction_check:
-                self.confirm_limit_switch()
+        if self.cw_limit_switch_pin is not None:
+            GPIO.setup(self.cw_limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.add_event_detect(self.cw_limit_switch_pin, GPIO.FALLING, 
+                                callback=lambda channel: self.limit_switch_callback(channel, 'CW'), 
+                                bouncetime=200)
             
-            if perform_calibration:
-                self.calibrate()
+        if self.ccw_limit_switch_pin is not None:
+            GPIO.setup(self.ccw_limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.add_event_detect(self.ccw_limit_switch_pin, GPIO.FALLING, 
+                                callback=lambda channel: self.limit_switch_callback(channel, 'CCW'), 
+                                bouncetime=200)
+
+        # Check if either limit switch is already triggered
+        if self._check_initial_limits():
+            logger.warn(f"[{self.name}] Limit switch already triggered. Move away from limit switches and restart.")
+            self.release()
+            self.cleanup()
+            exit()
+        
+        if not skip_direction_check:
+            self.confirm_limit_switches()
+        
+        if perform_calibration:
+            self.calibrate()
+
+    def _check_initial_limits(self):
+        """Check if either limit switch is triggered on startup."""
+        if (self.cw_limit_switch_pin and GPIO.input(self.cw_limit_switch_pin) == 0) or \
+           (self.ccw_limit_switch_pin and GPIO.input(self.ccw_limit_switch_pin) == 0):
+            return True
+        return False
 
     def set_direction(self, direction):
         """
@@ -77,33 +96,123 @@ class StepperMotor:
 
         :param direction: 'CW' for clockwise, 'CCW' for counter-clockwise.
         """
-        if direction == 'CW':
-            self.motor_direction = stepper.FORWARD
-            if self.limit_switch_direction == 'CCW' and self.stop_flag == True:
-                self.stop_flag = False  # Reset stop flag if moving away from limit
-        elif direction == 'CCW':
-            self.motor_direction = stepper.BACKWARD
-            if self.limit_switch_direction == 'CW' and self.stop_flag == True:
-                self.stop_flag = False  # Reset stop flag if moving away from limit
-        else:
+        if direction not in ['CW', 'CCW']:
             raise ValueError("Invalid direction. Use 'CW' or 'CCW'.")
+            
+        # Only allow movement if we're not moving toward a triggered limit
+        if (direction == 'CW' and self.triggered_limit == 'CW') or \
+           (direction == 'CCW' and self.triggered_limit == 'CCW'):
+            logger.warning(f"[{self.name}] Cannot move {direction}, limit switch triggered.")
+            return False
+            
+        self.motor_direction = stepper.FORWARD if direction == 'CW' else stepper.BACKWARD
+        
+        # Reset stop flag if moving away from triggered limit
+        if ((direction == 'CCW' and self.triggered_limit == 'CW') or 
+            (direction == 'CW' and self.triggered_limit == 'CCW')):
+            self.stop_flag = False
+            self.triggered_limit = None
+            
+        return True
 
-    def set_microstepping(self, style):
+    def limit_switch_callback(self, channel, direction):
         """
-        Set the microstepping mode.
+        Callback function for limit detection.
 
-        :param style: One of 'SINGLE', 'DOUBLE', 'INTERLEAVE', 'MICROSTEP'.
+        :param channel: GPIO channel that triggered the callback
+        :param direction: 'CW' or 'CCW' indicating which limit switch was triggered
         """
-        styles = {
-            'SINGLE': stepper.SINGLE,
-            'DOUBLE': stepper.DOUBLE,
-            'INTERLEAVE': stepper.INTERLEAVE,
-            'MICROSTEP': stepper.MICROSTEP
-        }
-        if style in styles:
-            self.step_style = styles[style]
-        else:
-            raise ValueError("Invalid microstepping style. Choose from 'SINGLE', 'DOUBLE', 'INTERLEAVE', 'MICROSTEP'.")
+        self.stop_flag = True
+        self.triggered_limit = direction
+        logger.info(f"[{self.name}] {direction} limit switch triggered.")
+
+    def confirm_limit_switches(self):
+        """
+        Confirm both limit switches are working correctly.
+        """
+        print(f"\n[{self.name}] Testing limit switches...")
+        
+        # Test CW direction
+        print("Testing clockwise movement...")
+        self.set_direction('CW')
+        self.step(5, delay=0.1)
+        
+        user_response = input("Did the motor move clockwise? (yes/no): ").strip().lower()
+        if user_response != 'yes':
+            logger.error(f"[{self.name}] Motor direction incorrect. Check wiring.")
+            exit(1)
+        
+        # Test both limit switches
+        print("\nPlease trigger each limit switch to confirm they're working:")
+        
+        if self.cw_limit_switch_pin:
+            print("1. Trigger the CW limit switch...")
+            while not self.triggered_limit:
+                time.sleep(0.1)
+            if self.triggered_limit != 'CW':
+                logger.error(f"[{self.name}] Wrong limit switch triggered. Check wiring.")
+                exit(1)
+            self.triggered_limit = None
+            self.stop_flag = False
+            
+        if self.ccw_limit_switch_pin:
+            print("2. Trigger the CCW limit switch...")
+            while not self.triggered_limit:
+                time.sleep(0.1)
+            if self.triggered_limit != 'CCW':
+                logger.error(f"[{self.name}] Wrong limit switch triggered. Check wiring.")
+                exit(1)
+            self.triggered_limit = None
+            self.stop_flag = False
+        
+        print("Limit switch testing complete.")
+
+    def calibrate(self):
+        """
+        Calibrate the motor by measuring the total travel distance between limit switches.
+        """
+        if not (self.cw_limit_switch_pin and self.ccw_limit_switch_pin):
+            raise ValueError("Both limit switch pins must be set for calibration.")
+        
+        self.release()
+        logger.info(f"[{self.name}] Starting calibration...")
+        
+        # Move to CCW limit
+        self.set_direction('CCW')
+        self.stop_flag = False
+        self.triggered_limit = None
+        step_count = 0
+        while not self.stop_flag:
+            self.step(1, delay=0.01)
+            step_count += 1
+            if step_count > 10000:  # Safety limit
+                logger.error(f"[{self.name}] Calibration failed: CCW limit not found")
+                return
+        
+        # Move away from CCW limit
+        self.set_direction('CW')
+        self.step(self.limit_backoff_steps, delay=0.01)
+        
+        # Move to CW limit while counting steps
+        self.stop_flag = False
+        self.triggered_limit = None
+        step_count = 0
+        while not self.stop_flag:
+            self.step(1, delay=0.01)
+            step_count += 1
+            if step_count > 10000:  # Safety limit
+                logger.error(f"[{self.name}] Calibration failed: CW limit not found")
+                return
+        
+        # Store total travel distance
+        self.total_travel_steps = step_count
+        
+        # Move to center position
+        self.set_direction('CCW')
+        self.step(step_count // 2, delay=0.01)
+        self.position = 0  # Set center position as zero
+        
+        logger.info(f"[{self.name}] Calibration complete. Total travel: {self.total_travel_steps} steps")
 
     def step(self, steps, delay=0.00001):
         """
@@ -112,16 +221,20 @@ class StepperMotor:
         :param steps: Number of steps to move.
         :param delay: Delay between steps in seconds.
         """
-
+        actual_steps = 0
         for _ in range(steps):
             if self.stop_flag:
                 logger.warning(f"[{self.name}] Movement stopped due to limit detection.")
                 break
-            self.position = self.motor.onestep(direction=self.motor_direction, style=self.step_style)
-            logger.debug(f"[{self.name}] self.position: {self.position}")
+            self.motor.onestep(direction=self.motor_direction, style=self.step_style)
+            if self.motor_direction == stepper.FORWARD:
+                self.position += 1
+            else:
+                self.position -= 1
+            actual_steps += 1
             time.sleep(delay)
         
-        return self.position
+        return actual_steps
 
     def release(self):
         """
@@ -130,70 +243,13 @@ class StepperMotor:
         self.motor.release()
         self.position = 0
         self.stop_flag = False
-
-    def limit_switch_callback(self, channel):
-        """
-        Callback function for limit detection.
-        """
-        self.stop_flag = True
-        logger.info(f"[{self.name}] Limit switch triggered.")
-    
-    def confirm_limit_switch(self):
-        """
-        Confirm the limit switch direction after moving a few steps.
-        """
-        while True:
-            self.step(5, delay=0.1)
-            user_response = input(f"Was this the direction towards the limit switch? (yes/no/move): ").strip().lower()
-            if user_response == 'yes':
-                limit_direction_confirm = False
-                if self.limit_switch_direction == 'CW' and self.motor_direction == stepper.FORWARD:
-                    limit_direction_confirm = True
-                elif self.limit_switch_direction == 'CCW' and self.motor_direction == stepper.BACKWARD:
-                    limit_direction_confirm = True
-                
-                if limit_direction_confirm:
-                    logger.info(f"[{self.name}] Direction confirmed. Proceeding.")
-                    break
-                else:
-                    logger.error(f"[{self.name}] Limit switch direction in init arguments must be changed.")
-                    exit(1)
-            
-            elif user_response == 'move':
-                continue
-
-            else:
-                logger.error(f"[{self.name}] Limit switch direction in init arguments must be changed.")
-                exit(1)
-        
-        print("Manually activate the limit switch to confirm.")
-        user_response = input("Was the correct limit switch activated? (yes/no): ").strip().lower()
-        if user_response != 'yes':
-            logger.error(f"[{self.name}] Fix pin assignments then restart program.")
-            exit(1)
-    
-    def calibrate(self):
-        """
-        Calibrate the motor by moving towards the limit switch and counting steps.
-        """
-        if self.limit_switch_pin is None or self.limit_switch_direction is None:
-            raise ValueError("Limit switch pin and direction must be set for calibration.")
-        
-        self.release()
-        input("Move motor to furthest position from limit switch and press Enter to continue...")
-        
-        logger.info(f"[{self.name}] Calibrating motor.")
-        self.set_direction(self.limit_switch_direction)
-        self.stop_flag = False
-        self.step(10000, delay=0.05)  # Move until the limit switch is triggered
-        self.set_direction('CW' if self.limit_switch_direction == 'CCW' else 'CCW')
-        self.step(self.limit_backoff_steps, delay=0.05)  # Move away from the limit switch
-        self.position = 0
-
-        logger.info("Calibration complete.")
+        self.triggered_limit = None
 
     def cleanup(self):
         """
         Clean up GPIO settings.
         """
-        GPIO.cleanup()
+        if self.cw_limit_switch_pin:
+            GPIO.cleanup(self.cw_limit_switch_pin)
+        if self.ccw_limit_switch_pin:
+            GPIO.cleanup(self.ccw_limit_switch_pin)
