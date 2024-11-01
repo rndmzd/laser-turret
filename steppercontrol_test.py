@@ -6,8 +6,8 @@ import time
 from laserturret import StepperMotor
 
 # Define GPIO pins for limit switches
-CW_LIMIT_SWITCH_PIN = 27 # or 22
-CCW_LIMIT_SWITCH_PIN = 17 # or 23
+CW_LIMIT_SWITCH_PIN = 23#27 # or 22
+CCW_LIMIT_SWITCH_PIN = 22#17 # or 23
 
 # Configure logging to display outputs from the StepperMotor module
 logging.basicConfig(level=logging.DEBUG)
