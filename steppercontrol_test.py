@@ -17,7 +17,7 @@ def main():
     try:
         # Instantiate the StepperMotor class
         motor = StepperMotor(
-            motor_channel=1,
+            motor_channel=2,
             cw_limit_switch_pin=CW_LIMIT_SWITCH_PIN,
             ccw_limit_switch_pin=CCW_LIMIT_SWITCH_PIN,
             steps_per_rev=200,
