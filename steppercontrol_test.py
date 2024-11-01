@@ -3,7 +3,11 @@ import time
 
 # Import the StepperMotor class from your module
 # Assuming the class code is saved in a file named stepper_motor.py
-from stepper_motor import StepperMotor
+from laserturret import StepperMotor
+
+# Define GPIO pins for limit switches
+CW_LIMIT_SWITCH_PIN = 17
+CCW_LIMIT_SWITCH_PIN = 27
 
 # Configure logging to display outputs from the StepperMotor module
 logging.basicConfig(level=logging.DEBUG)
@@ -11,10 +15,6 @@ logger = logging.getLogger(__name__)
 
 def main():
     try:
-        # Define GPIO pins for limit switches
-        CW_LIMIT_SWITCH_PIN = 17    # Replace with your actual GPIO pin number
-        CCW_LIMIT_SWITCH_PIN = 27   # Replace with your actual GPIO pin number
-
         # Instantiate the StepperMotor class
         motor = StepperMotor(
             motor_channel=1,

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class StepperMotor:
+class StepperMotorOld:
     def __init__(
             self,
             motor_channel,
