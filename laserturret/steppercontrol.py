@@ -17,6 +17,7 @@ COUNTER_CLOCKWISE = 'CCW'
 
 class MotorStatus(Enum):
     """Enum for motor status"""
+    INITIALIZING = "initializing"
     IDLE = "idle"
     MOVING = "moving"
     ERROR = "error"
@@ -50,20 +51,21 @@ class MotorState:
 
 class StepperMotor:
     def __init__(
-            self,
-            motor_channel: int,
-            cw_limit_switch_pin: Optional[int] = None,
-            ccw_limit_switch_pin: Optional[int] = None,
-            steps_per_rev: int = 200,
-            microsteps: int = 8,
-            skip_direction_check: bool = False,
-            perform_calibration: bool = True,
-            limit_backoff_steps: int = 1,
-            name: str = "Motor",
-            calibration_timeout: int = 30,
-            movement_timeout: int = 10,
-            kit: Optional[MotorKit] = None,
-            interactive_test_mode: bool = False):
+        self,
+        motor_channel: int,
+        cw_limit_switch_pin: Optional[int] = None,
+        ccw_limit_switch_pin: Optional[int] = None,
+        steps_per_rev: int = 200,
+        microsteps: int = 8,
+        skip_direction_check: bool = False,
+        perform_calibration: bool = True,
+        limit_backoff_steps: int = 1,
+        name: str = "Motor",
+        calibration_timeout: int = 30,
+        movement_timeout: int = 10,
+        direction_timeout: int = 30,
+        kit: Optional[MotorKit] = None,
+        interactive_test_mode: bool = False):
         """
         Initialize the stepper motor with improved error checking and thread safety.
 
@@ -117,7 +119,7 @@ class StepperMotor:
 
         # Initialize basic attributes
         self.lock = threading.Lock()
-        self.state = MotorState()
+        self.state = MotorState(status=MotorStatus.INITIALIZING)
         self.motor_channel = motor_channel
         self.cw_limit_switch_pin = cw_limit_switch_pin
         self.ccw_limit_switch_pin = ccw_limit_switch_pin
@@ -145,7 +147,10 @@ class StepperMotor:
         
         if not interactive_test_mode:
             try:
-                self.confirm_limit_switches(skip_direction_check=skip_direction_check)
+                self.confirm_limit_switches(
+                    skip_direction_check=skip_direction_check, 
+                    timeout=direction_timeout
+                )
             except Exception as e:
                 logger.error(f"[{self.name}] Error during limit switch confirmation: {e}")
                 self.release()
@@ -229,43 +234,71 @@ class StepperMotor:
         with self.lock:
             return self.state
     
-    def confirm_motor_direction(self) -> None:
-        # Test CW direction
-        logger.info("Testing clockwise movement...")
-        self.set_direction(CLOCKWISE)
-        self.step(5, delay=0.1)
+    def confirm_motor_direction(self, timeout: Optional[float] = None) -> None:
+        """Test motor direction with user confirmation and timeout
+        
+        Args:
+            timeout: Optional timeout in seconds for user response
+        
+        Raises:
+            ConfigurationError: If direction is incorrect or confirmation times out
+        """
+        try:
+            with self.lock:
+                self.state.status = MotorStatus.INITIALIZING
+                
+            logger.info("Testing clockwise movement...")
+            self.set_direction(CLOCKWISE)
+            self.step(5, delay=0.1)
 
-        user_response = input("Did the motor move clockwise? (yes/no): ").strip().lower()
-        if user_response != 'yes':
-            error_msg = f"[{self.name}] Motor direction incorrect. Check wiring."
-            logger.error(error_msg)
-            raise ConfigurationError(error_msg)
+            start_time = time.time()
+            while True:
+                user_response = input("Did the motor move clockwise? (yes/no): ").strip().lower()
+                if timeout and (time.time() - start_time > timeout):
+                    error_msg = f"[{self.name}] Direction confirmation timeout."
+                    logger.error(error_msg)
+                    raise ConfigurationError(error_msg)
+                    
+                if user_response in ['yes', 'no']:
+                    break
+                print("Please answer 'yes' or 'no'")
+
+            if user_response != 'yes':
+                error_msg = f"[{self.name}] Motor direction incorrect. Check wiring."
+                logger.error(error_msg)
+                raise ConfigurationError(error_msg)
+                
+        except KeyboardInterrupt:
+            logger.info(f"[{self.name}] Direction confirmation interrupted by user.")
+            self.release()
+            raise
+            
+        except Exception as e:
+            with self.lock:
+                self.state.status = MotorStatus.ERROR
+                self.state.error_message = str(e)
+            raise
+            
+        finally:
+            with self.lock:
+                if self.state.status != MotorStatus.ERROR:
+                    self.state.status = MotorStatus.IDLE
     
-    def confirm_limit_switches(self, skip_direction_check: bool = False) -> None:
+    def confirm_limit_switches(self, skip_direction_check: bool = False, timeout: Optional[float] = None) -> None:
         """
         Confirm both limit switches are working correctly.
         This is an interactive method that requires user input.
         
         Args:
             skip_direction_check: If True, skips the initial direction verification
+            timeout: Optional timeout in seconds for user responses
         """
         logger.info(f"\n[{self.name}] Testing limit switches...")
 
         if not skip_direction_check:
-            self.confirm_motor_direction()
+            self.confirm_motor_direction(timeout=timeout)
             
         logger.info(f"\n[{self.name}] Testing limit switches...")
-
-        # Test CW direction
-        logger.info("Testing clockwise movement...")
-        self.set_direction(CLOCKWISE)
-        self.step(5, delay=0.1)
-
-        user_response = input("Did the motor move clockwise? (yes/no): ").strip().lower()
-        if user_response != 'yes':
-            error_msg = f"[{self.name}] Motor direction incorrect. Check wiring."
-            logger.error(error_msg)
-            raise ConfigurationError(error_msg)
 
         # Test both limit switches
         logger.info("\nPlease trigger each limit switch to confirm they're working:")
