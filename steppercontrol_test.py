@@ -259,7 +259,7 @@ def interactive_test_mode() -> None:
                 motor.set_direction(CLOCKWISE)
                 try:
                     steps = motor.step(50, delay=TEST_CONFIG['SAFE_DELAY'])
-                    print(f"Moved {steps} steps clockwise.")
+                    print(f"\nMoved {steps} steps clockwise.")
                 except KeyboardInterrupt:
                     print("\nMovement stopped by user.")
             
@@ -267,35 +267,35 @@ def interactive_test_mode() -> None:
                 motor.set_direction(COUNTER_CLOCKWISE)
                 try:
                     steps = motor.step(50, delay=TEST_CONFIG['SAFE_DELAY'])
-                    print(f"Moved {steps} steps counter-clockwise.")
+                    print(f"\nMoved {steps} steps counter-clockwise.")
                 except KeyboardInterrupt:
                     print("\nMovement stopped by user.")
             
             elif choice == '3':
                 cw_limit, ccw_limit = motor.get_limit_switch_states()
-                print(f"CW Limit: {cw_limit}, CCW Limit: {ccw_limit}")
+                print(f"\nCW Limit: {cw_limit}, CCW Limit: {ccw_limit}")
             
             elif choice == '4':
                 status = motor.get_status()
-                print(f"Motor Status: {status}")
+                print(f"\nMotor Status: {status}")
             
             elif choice == '5':
                 try:
                     motor.calibrate()
-                    print("Calibration complete.")
+                    print("\nCalibration complete.")
                 except KeyboardInterrupt:
                     print("\nCalibration stopped by user.")
                 except Exception as e:
-                    print(f"Calibration failed: {e}")
+                    print(f"\nCalibration failed: {e}")
             
             elif choice == '6':
                 try:
                     motor.confirm_motor_direction(timeout=TEST_CONFIG['MOVEMENT_TIMEOUT'])
-                    print("Motor direction confirmed correct.")
+                    print("\nMotor direction confirmed correct.")
                 except KeyboardInterrupt:
                     print("\nDirection test interrupted by user.")
                 except Exception as e:
-                    print(f"Direction test failed: {e}")
+                    print(f"\nDirection test failed: {e}")
             
             elif choice == '7':
                 try:
@@ -303,17 +303,17 @@ def interactive_test_mode() -> None:
                         skip_direction_check=True,
                         timeout=TEST_CONFIG['MOVEMENT_TIMEOUT']
                     )
-                    print("Limit switches confirmed working correctly.")
+                    print("\nLimit switches confirmed working correctly.")
                 except KeyboardInterrupt:
                     print("\nLimit switch test interrupted by user.")
                 except Exception as e:
-                    print(f"Limit switch test failed: {e}")
+                    print(f"\nLimit switch test failed: {e}")
             
             elif choice == '8':
                 break
             
             else:
-                print("Invalid choice.")
+                print("\nInvalid choice. Please enter a number from 1-8.")
                 
     except KeyboardInterrupt:
         print("\nExiting interactive test mode...")
