@@ -1,4 +1,3 @@
-from .steppercontrol import StepperMotorOld
-from .lasercontrol import LaserControl
-
-from .steppercontrol_new import StepperMotor
+#from .lasercontrol import LaserControl
+#from .steppercontrol import StepperMotor
+#from . import lasercontrol, steppercontrol
