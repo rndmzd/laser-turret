@@ -249,10 +249,11 @@ def interactive_test_mode() -> None:
             print("4. Get motor status")
             print("5. Perform calibration")
             print("6. Test motor direction")
-            print("7. Exit")
+            print("7. Test limit switches")
+            print("8. Exit")
             print("Press Ctrl+C at any time to stop motor movement or exit.")
             
-            choice = input("Enter choice (1-7): ").strip()
+            choice = input("Enter choice (1-8): ").strip()
             
             if choice == '1':
                 motor.set_direction(CLOCKWISE)
@@ -297,6 +298,18 @@ def interactive_test_mode() -> None:
                     print(f"Direction test failed: {e}")
             
             elif choice == '7':
+                try:
+                    motor.confirm_limit_switches(
+                        skip_direction_check=True,
+                        timeout=TEST_CONFIG['MOVEMENT_TIMEOUT']
+                    )
+                    print("Limit switches confirmed working correctly.")
+                except KeyboardInterrupt:
+                    print("\nLimit switch test interrupted by user.")
+                except Exception as e:
+                    print(f"Limit switch test failed: {e}")
+            
+            elif choice == '8':
                 break
             
             else:

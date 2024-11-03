@@ -157,8 +157,8 @@ class StepperMotor:
                 self.cleanup()
                 raise
         
-        if perform_calibration:
-            self.calibrate()
+            if perform_calibration:
+                self.calibrate()
 
     def _validate_config(self, motor_channel: int, cw_pin: Optional[int],
                         ccw_pin: Optional[int], steps_per_rev: int,
