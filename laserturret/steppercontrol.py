@@ -293,18 +293,17 @@ class StepperMotor:
             skip_direction_check: If True, skips the initial direction verification
             timeout: Optional timeout in seconds for user responses
         """
-        logger.info(f"\n[{self.name}] Testing limit switches...")
-
         if not skip_direction_check:
             self.confirm_motor_direction(timeout=timeout)
             
         logger.info(f"\n[{self.name}] Testing limit switches...")
 
         # Test both limit switches
-        logger.info("\nPlease trigger each limit switch to confirm they're working:")
+        print("\nPlease trigger each limit switch to confirm they're working:")
 
         if self.cw_limit_switch_pin:
-            logger.info("1. Trigger the CW limit switch...")
+            logger.info("Requesting CW limit switch trigger...")
+            print("1. Trigger the CW limit switch...")
             trigger_time = time.time()
             while not self.state.triggered_limit:
                 time.sleep(0.1)
@@ -316,12 +315,17 @@ class StepperMotor:
                 error_msg = f"[{self.name}] Wrong limit switch triggered. Check wiring."
                 logger.error(error_msg)
                 raise ConfigurationError(error_msg)
+            logger.info(f"[{self.name}] CW limit switch triggered.")
             with self.lock:
                 self.state.triggered_limit = None
                 self.state.status = MotorStatus.IDLE
+        
+        # Debounce before testing the other limit switch
+        time.sleep(1000)
 
         if self.ccw_limit_switch_pin:
-            logger.info("2. Trigger the CCW limit switch...")
+            logger.info("Requesting CCW limit switch trigger...")
+            print("2. Trigger the CCW limit switch...")
             trigger_time = time.time()
             while not self.state.triggered_limit:
                 time.sleep(0.1)
@@ -333,6 +337,7 @@ class StepperMotor:
                 error_msg = f"[{self.name}] Wrong limit switch triggered. Check wiring."
                 logger.error(error_msg)
                 raise ConfigurationError(error_msg)
+            logger.info(f"[{self.name}] CCW limit switch triggered.")
             with self.lock:
                 self.state.triggered_limit = None
                 self.state.status = MotorStatus.IDLE
