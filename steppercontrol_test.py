@@ -25,17 +25,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Test configuration
-TEST_CONFIG = {
+TEST_CONFIG_X = {
     'CW_LIMIT_SWITCH_PIN': 27,
     'CCW_LIMIT_SWITCH_PIN': 17,
     'MOTOR_CHANNEL': 2,
     'STEPS_PER_REV': 200,
     'MICROSTEPS': 8,
-    'SAFE_DELAY': 0.01,
-    'TEST_STEPS': 50,
+    'SAFE_DELAY': 0.001,
+    'TEST_STEPS': 5,
     'CALIBRATION_TIMEOUT': 30,
     'MOVEMENT_TIMEOUT': 10
 }
+
+# Test configuration
+TEST_CONFIG_Y = {
+    'CW_LIMIT_SWITCH_PIN': 22,
+    'CCW_LIMIT_SWITCH_PIN': 23,
+    'MOTOR_CHANNEL': 1,
+    'STEPS_PER_REV': 200,
+    'MICROSTEPS': 8,
+    'SAFE_DELAY': 0.001,
+    'TEST_STEPS': 5,
+    'CALIBRATION_TIMEOUT': 30,
+    'MOVEMENT_TIMEOUT': 10
+}
+
+TEST_CONFIG = TEST_CONFIG_Y
 
 @contextmanager
 def motor_context(**kwargs) -> Generator[StepperMotor, None, None]:
@@ -120,47 +135,88 @@ class MotorTester:
         logger.info("Basic movement tests passed.")
 
     def test_limit_switches(self, motor: StepperMotor) -> None:
-        """Test limit switch functionality"""
+        """Test limit switch functionality with proper state management and error handling"""
         logger.info("=== Testing Limit Switches ===")
         
-        # Test limit switch states
-        cw_limit, ccw_limit = motor.get_limit_switch_states()
-        logger.info(f"Initial limit switch states - CW: {cw_limit}, CCW: {ccw_limit}")
+        def wait_for_limit(expected_direction: str, timeout: float = 10.0) -> bool:
+            """Wait for specific limit switch to trigger with timeout"""
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                status = motor.get_status()
+                if (status.status == MotorStatus.LIMIT_REACHED and 
+                    status.triggered_limit == expected_direction):
+                    return True
+                time.sleep(0.1)
+            return False
         
-        # Start monitoring thread
-        monitor_thread = Thread(target=self._monitor_motor_status, args=(motor,))
-        monitor_thread.start()
-        
+        test_passed = True
         try:
+            # Start monitoring thread
+            monitor_thread = Thread(target=self._monitor_motor_status, args=(motor,))
+            monitor_thread.start()
+
             # Test CW limit
-            logger.info("Testing CW limit approach...")
+            logger.info("Testing CW limit switch...")
             motor.set_direction(CLOCKWISE)
-            steps_moved = motor.step(1000, delay=self.config['SAFE_DELAY'])
-            logger.info(f"Moved {steps_moved} steps toward CW limit.")
+            steps_moved = 0
             
-            # Check if limit was reached
-            status = motor.get_status()
-            if status.status == MotorStatus.LIMIT_REACHED:
-                logger.info("CW limit successfully reached.")
+            try:
+                steps_moved = motor.step(1000, delay=self.config['SAFE_DELAY'])
+                logger.info(f"Moved {steps_moved} steps before CW limit triggered")
+                
+                if wait_for_limit(CLOCKWISE):
+                    logger.info("CW limit successfully triggered and stopped movement")
+                else:
+                    logger.error("CW limit switch test failed: Movement stopped but limit not triggered")
+                    test_passed = False
+                    
+            except LimitSwitchError as e:
+                logger.info(f"CW Movement stopped by limit switch: {e}")
             
+            # Clear the triggered state and back off
+            time.sleep(0.5)
+            motor.set_direction(COUNTER_CLOCKWISE)
+            motor.step(10, delay=self.config['SAFE_DELAY'])
             time.sleep(0.5)
             
             # Test CCW limit
-            logger.info("Testing CCW limit approach...")
+            logger.info("Testing CCW limit switch...")
             motor.set_direction(COUNTER_CLOCKWISE)
-            steps_moved = motor.step(1000, delay=self.config['SAFE_DELAY'])
-            logger.info(f"Moved {steps_moved} steps toward CCW limit.")
+            steps_moved = 0
             
-            # Check if limit was reached
-            status = motor.get_status()
-            if status.status == MotorStatus.LIMIT_REACHED:
-                logger.info("CCW limit successfully reached.")
+            try:
+                steps_moved = motor.step(1000, delay=self.config['SAFE_DELAY'])
+                logger.info(f"Moved {steps_moved} steps before CCW limit triggered")
                 
+                if wait_for_limit(COUNTER_CLOCKWISE):
+                    logger.info("CCW limit successfully triggered and stopped movement")
+                else:
+                    logger.error("CCW limit switch test failed: Movement stopped but limit not triggered")
+                    test_passed = False
+                    
+            except LimitSwitchError as e:
+                logger.info(f"CCW Movement stopped by limit switch: {e}")
+            
+            # Return to center if test passed
+            if test_passed:
+                time.sleep(0.5)
+                motor.set_direction(CLOCKWISE)
+                motor.step(steps_moved // 2, delay=self.config['SAFE_DELAY'])
+            
+            if not test_passed:
+                raise LimitSwitchError("One or more limit switch tests failed")
+                
+        except Exception as e:
+            logger.error(f"Error during limit switch testing: {e}")
+            raise
         finally:
             self.stop_event.set()
             monitor_thread.join()
+            motor.release()
         
-        logger.info("Limit switch tests completed.")
+        logger.info("Limit switch tests completed successfully" if test_passed else 
+                    "Limit switch tests failed")
+        return test_passed
 
     def test_movement_timeout(self, motor: StepperMotor) -> None:
         """Test movement timeout functionality"""
@@ -225,108 +281,137 @@ class MotorTester:
             logger.error(f"Unexpected error during testing: {e}")
             sys.exit(1)
 
+def test_motor_direction(motor: StepperMotor) -> None:
+    """Test that motor moves in expected direction when commanded"""
+    print("\nTesting motor direction...")
+    print("This test will move the motor a small amount in each direction.")
+    print("Please observe the motor movement and confirm if directions are correct.")
+    
+    try:
+        # Test clockwise
+        input("\nPress Enter to test CLOCKWISE movement...")
+        print("Moving clockwise...")
+        motor.set_direction(CLOCKWISE)
+        motor.step(20, delay=TEST_CONFIG['SAFE_DELAY'])
+        response = input("Did the motor move clockwise? (y/n): ").lower().strip()
+        cw_correct = response == 'y'
+        
+        time.sleep(0.5)
+        
+        # Test counter-clockwise
+        input("\nPress Enter to test COUNTER-CLOCKWISE movement...")
+        print("Moving counter-clockwise...")
+        motor.set_direction(COUNTER_CLOCKWISE)
+        motor.step(20, delay=TEST_CONFIG['SAFE_DELAY'])
+        response = input("Did the motor move counter-clockwise? (y/n): ").lower().strip()
+        ccw_correct = response == 'y'
+        
+        # Report results
+        print("\nDirection Test Results:")
+        print(f"Clockwise movement: {'CORRECT' if cw_correct else 'INCORRECT'}")
+        print(f"Counter-clockwise movement: {'CORRECT' if ccw_correct else 'INCORRECT'}")
+        
+        if not (cw_correct and ccw_correct):
+            print("\nRECOMMENDATION: If directions are reversed, you may need to:")
+            print("1. Check motor wiring")
+            print("2. Swap motor coil connections")
+            print("3. Or update software direction definitions")
+    
+    except Exception as e:
+        print(f"Error during direction test: {e}")
+    finally:
+        motor.release()
+
 def interactive_test_mode() -> None:
     """Interactive testing mode for manual verification"""
     logger.info("=== Starting Interactive Test Mode ===")
-    motor = None
     
     try:
-        motor = StepperMotor(
+        with motor_context(
             motor_channel=TEST_CONFIG['MOTOR_CHANNEL'],
             cw_limit_switch_pin=TEST_CONFIG['CW_LIMIT_SWITCH_PIN'],
             ccw_limit_switch_pin=TEST_CONFIG['CCW_LIMIT_SWITCH_PIN'],
             steps_per_rev=TEST_CONFIG['STEPS_PER_REV'],
             microsteps=TEST_CONFIG['MICROSTEPS'],
+            skip_direction_check=True,
             name="TestMotor",
             interactive_test_mode=True
-        )
-        
-        while True:
-            print("\nInteractive Test Menu:")
-            print("1. Move CW (50 steps)")
-            print("2. Move CCW (50 steps)")
-            print("3. Check limit switch states")
-            print("4. Get motor status")
-            print("5. Perform calibration")
-            print("6. Test motor direction")
-            print("7. Test limit switches")
-            print("8. Exit")
-            print("Press Ctrl+C at any time to stop motor movement or exit.")
-            
-            choice = input("Enter choice (1-8): ").strip()
-            
-            if choice == '1':
-                motor.set_direction(CLOCKWISE)
-                try:
-                    steps = motor.step(50, delay=TEST_CONFIG['SAFE_DELAY'])
+        ) as motor:
+            while True:
+                print("\nInteractive Test Menu:")
+                print("1. Move CW (50 steps)")
+                print("2. Move CCW (50 steps)")
+                print("3. Check limit switch states")
+                print("4. Get motor status")
+                print("5. Perform calibration")
+                print("6. Test limit switches (manual trigger)")
+                print("7. Test limit switches (using motor)")
+                print("8. Test motor direction")
+                print("9. Exit")
+                
+                choice = input("Enter choice (1-9): ").strip()
+                
+                if choice == '1':
+                    motor.set_direction(CLOCKWISE)
+                    steps = motor.step(TEST_CONFIG['TEST_STEPS'], delay=TEST_CONFIG['SAFE_DELAY'])
                     print(f"\nMoved {steps} steps clockwise.")
-                except KeyboardInterrupt:
-                    print("\nMovement stopped by user.")
-            
-            elif choice == '2':
-                motor.set_direction(COUNTER_CLOCKWISE)
-                try:
-                    steps = motor.step(50, delay=TEST_CONFIG['SAFE_DELAY'])
+                
+                elif choice == '2':
+                    motor.set_direction(COUNTER_CLOCKWISE)
+                    steps = motor.step(TEST_CONFIG['TEST_STEPS'], delay=TEST_CONFIG['SAFE_DELAY'])
                     print(f"\nMoved {steps} steps counter-clockwise.")
-                except KeyboardInterrupt:
-                    print("\nMovement stopped by user.")
-            
-            elif choice == '3':
-                cw_limit, ccw_limit = motor.get_limit_switch_states()
-                print(f"\nCW Limit: {cw_limit}, CCW Limit: {ccw_limit}")
-            
-            elif choice == '4':
-                status = motor.get_status()
-                print(f"\nMotor Status: {status}")
-            
-            elif choice == '5':
-                try:
-                    motor.calibrate()
-                    print("\nCalibration complete.")
-                except KeyboardInterrupt:
-                    print("\nCalibration stopped by user.")
-                except Exception as e:
-                    print(f"\nCalibration failed: {e}")
-            
-            elif choice == '6':
-                try:
-                    motor.confirm_motor_direction(timeout=TEST_CONFIG['MOVEMENT_TIMEOUT'])
-                    print("\nMotor direction confirmed correct.")
-                except KeyboardInterrupt:
-                    print("\nDirection test interrupted by user.")
-                except Exception as e:
-                    print(f"\nDirection test failed: {e}")
-            
-            elif choice == '7':
-                try:
-                    motor.confirm_limit_switches(
-                        skip_direction_check=True,
-                        timeout=TEST_CONFIG['MOVEMENT_TIMEOUT']
-                    )
-                    print("\nLimit switches confirmed working correctly.")
-                except KeyboardInterrupt:
-                    print("\nLimit switch test interrupted by user.")
-                except Exception as e:
-                    print(f"\nLimit switch test failed: {e}")
-            
-            elif choice == '8':
-                break
-            
-            else:
-                print("\nInvalid choice. Please enter a number from 1-8.")
+                
+                elif choice == '3':
+                    cw_limit, ccw_limit = motor.get_limit_switch_states()
+                    print(f"\nCW Limit: {cw_limit}, CCW Limit: {ccw_limit}")
+                
+                elif choice == '4':
+                    status = motor.get_status()
+                    print(f"\nMotor Status: {status}")
+                
+                elif choice == '5':
+                    try:
+                        motor.calibrate()
+                        print("\nCalibration complete.")
+                    except Exception as e:
+                        print(f"\nCalibration failed: {e}")
+                
+                elif choice == '6':
+                    try:
+                        print("\nStarting manual limit switch test...")
+                        motor.confirm_limit_switches()
+                        print("\nManual limit switch test completed successfully.")
+                    except Exception as e:
+                        print(f"\nManual limit switch test failed: {e}")
+                
+                elif choice == '7':
+                    try:
+                        print("\nStarting motorized limit switch test...")
+                        tester = MotorTester(TEST_CONFIG)
+                        tester.test_limit_switches(motor)
+                        print("\nMotorized limit switch test completed successfully.")
+                    except Exception as e:
+                        print(f"\nMotorized limit switch test failed: {e}")
+                
+                elif choice == '8':
+                    test_motor_direction(motor)
+                
+                elif choice == '9':
+                    break
+                
+                else:
+                    print("\nInvalid choice. Please try again.")
+                
+                # Give time for status to settle and user to read output
+                time.sleep(0.5)
                 
     except KeyboardInterrupt:
-        print("\nExiting interactive test mode...")
+        logger.info("Interactive test mode terminated by user.")
     except Exception as e:
         logger.error(f"Error during interactive testing: {e}")
+        raise
     finally:
-        if motor:
-            logger.info("Releasing motor...")
-            try:
-                motor.release()
-                motor.cleanup()
-            except Exception as e:
-                logger.error(f"Error during cleanup: {e}")
+        logger.info("Exiting interactive test mode.")
 
 def main():
     """Main entry point"""
