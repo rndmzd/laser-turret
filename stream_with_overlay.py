@@ -72,7 +72,7 @@ class CameraOverlay:
         # Configure camera
         preview_config = self.picam2.create_preview_configuration(
             main={"size": (1920, 1080)},
-            transform=Transform(hflip=1, vflip=1)  # Flip image if needed
+            transform=Transform(hflip=0, vflip=0)  # Flip image if needed
         )
         self.picam2.configure(preview_config)
         
