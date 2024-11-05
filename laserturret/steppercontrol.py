@@ -435,12 +435,12 @@ class StepperMotor:
             Calculated delay in seconds, or None if in deadzone
         """
         # Tuned delay bounds (in seconds)
-        # MIN_DELAY = 0.00015  # Maximum speed: ~6667 steps/sec
-        # MAX_DELAY = 0.002    # Minimum speed: ~500 steps/sec
-        # DEADZONE = 8         # Increased deadzone for better control
-        MIN_DELAY = 0.001
-        MAX_DELAY = 0.01
-        DEADZONE = 5
+        MIN_DELAY = 0.00015  # Maximum speed: ~6667 steps/sec
+        MAX_DELAY = 0.002    # Minimum speed: ~500 steps/sec
+        DEADZONE = 8         # Increased deadzone for better control
+        # MIN_DELAY = 0.001
+        # MAX_DELAY = 0.01
+        # DEADZONE = 5
         
         # Check deadzone
         abs_value = abs(command_value)
