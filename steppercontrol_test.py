@@ -161,7 +161,7 @@ class MotorTester:
             steps_moved = 0
             
             try:
-                steps_moved = motor.step(1000, delay=self.config['SAFE_DELAY'])
+                steps_moved = motor.step(10000, delay=self.config['SAFE_DELAY'])
                 logger.info(f"Moved {steps_moved} steps before CW limit triggered")
                 
                 if wait_for_limit(CLOCKWISE):
@@ -185,7 +185,7 @@ class MotorTester:
             steps_moved = 0
             
             try:
-                steps_moved = motor.step(1000, delay=self.config['SAFE_DELAY'])
+                steps_moved = motor.step(10000, delay=self.config['SAFE_DELAY'])
                 logger.info(f"Moved {steps_moved} steps before CCW limit triggered")
                 
                 if wait_for_limit(COUNTER_CLOCKWISE):
