@@ -322,6 +322,29 @@ def test_motor_direction(motor: StepperMotor) -> None:
     finally:
         motor.release()
 
+def test_motor_response():
+    # Test various command values
+    test_values = [
+        0,    # Deadzone
+        10,   # Just above deadzone
+        25,   # First threshold
+        50,   # Mid-range
+        75,   # High threshold
+        100,  # Maximum
+        -50,  # Negative mid-range
+        -100  # Negative maximum
+    ]
+    
+    for value in test_values:
+        print(f"\nTesting command value: {value}")
+        # Calculate delay
+        delay = motor._calculate_step_delay(value)
+        if delay:
+            print(f"Calculated delay: {delay:.6f} seconds")
+            print(f"Steps per second: {1/delay:.1f}")
+        else:
+            print("In deadzone - no movement.")
+
 def interactive_test_mode() -> None:
     """Interactive testing mode for manual verification"""
     logger.info("=== Starting Interactive Test Mode ===")
