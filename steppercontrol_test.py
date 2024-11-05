@@ -322,7 +322,7 @@ def test_motor_direction(motor: StepperMotor) -> None:
     finally:
         motor.release()
 
-def test_motor_response():
+def test_motor_response(motor: StepperMotor) -> None:
     # Test various command values
     test_values = [
         0,    # Deadzone
@@ -370,7 +370,8 @@ def interactive_test_mode() -> None:
                 print("6. Test limit switches (manual trigger)")
                 print("7. Test limit switches (using motor)")
                 print("8. Test motor direction")
-                print("9. Exit")
+                print("9. Test motor response")
+                print("10. Exit")
                 
                 choice = input("Enter choice (1-9): ").strip()
                 
@@ -420,6 +421,9 @@ def interactive_test_mode() -> None:
                     test_motor_direction(motor)
                 
                 elif choice == '9':
+                    test_motor_response(motor)
+                
+                elif choice == '10':
                     break
                 
                 else:
