@@ -163,7 +163,7 @@ class TurretController:
             x_val, y_val, button = message.payload.decode().split(',')
             x_val = float(x_val)    # Now between -100 and +100
             y_val = float(y_val)    # Now between -100 and +100
-            self.button_pressed = int(button) == 1  # Convert numeric button value to boolean
+            self.button_pressed = button.strip().lower() == 'true'  # Convert 'True'/'False' string to boolean
             
             # Process commands for each axis
             self.motor_x.process_command(x_val)
