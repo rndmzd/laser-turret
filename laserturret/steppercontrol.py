@@ -423,10 +423,123 @@ class StepperMotor:
             self.state.triggered_limit = direction
             self.state.status = MotorStatus.LIMIT_REACHED
             logger.info(f"[{self.name}] {direction} limit switch triggered")
+    
+    def _calculate_step_delay(self, command_value: float) -> Optional[float]:
+        """
+        Calculate step delay based on command value magnitude with tuned parameters.
+        
+        Args:
+            command_value: Input value from -100 to +100
+            
+        Returns:
+            Calculated delay in seconds, or None if in deadzone
+        """
+        # Tuned delay bounds (in seconds)
+        MIN_DELAY = 0.00015  # Maximum speed: ~6667 steps/sec
+        MAX_DELAY = 0.002    # Minimum speed: ~500 steps/sec
+        DEADZONE = 8         # Increased deadzone for better control
+        
+        # Check deadzone
+        abs_value = abs(command_value)
+        if abs_value < DEADZONE:
+            return None
+            
+        # Use exponential mapping for finer control at low speeds
+        command_range = 100 - DEADZONE
+        normalized_command = (abs_value - DEADZONE) / command_range
+        
+        # Exponential curve for smoother acceleration
+        exponential_factor = 2.0  # Adjust for desired curve steepness
+        speed_multiplier = pow(normalized_command, exponential_factor)
+        
+        # Calculate delay with exponential curve
+        delay_range = MAX_DELAY - MIN_DELAY
+        delay = MAX_DELAY - (speed_multiplier * delay_range)
+        
+        return max(MIN_DELAY, min(MAX_DELAY, delay))
+
+    def process_command(self, command_value: float) -> None:
+        """
+        Process a movement command with improved speed control and safety features.
+        
+        Args:
+            command_value: Input value from -100 to +100
+        """
+        # Validate and normalize input
+        command_value = max(-100, min(100, command_value))
+        
+        # Calculate delay for this movement
+        delay = self._calculate_step_delay(command_value)
+        
+        # If in deadzone, release motor smoothly
+        if delay is None:
+            self.release()
+            return
+            
+        # Set direction based on command sign
+        direction = CLOCKWISE if command_value > 0 else COUNTER_CLOCKWISE
+        try:
+            # If changing direction, add a small delay for safety
+            if self.state.direction and self.state.direction != direction:
+                self.release()
+                time.sleep(0.01)  # 10ms delay when changing directions
+            
+            self.set_direction(direction)
+        except LimitSwitchError:
+            self.release()
+            return
+            
+        # Calculate steps with improved scaling
+        abs_value = abs(command_value)
+        
+        # Progressive steps calculation:
+        # - Below 25%: 1 step per update
+        # - 25-50%: 2 steps per update
+        # - 50-75%: 3 steps per update 
+        # - 75-100%: 4 steps per update
+        if abs_value < 25:
+            steps = 1
+        elif abs_value < 50:
+            steps = 2
+        elif abs_value < 75:
+            steps = 3
+        else:
+            steps = 4
+            
+        # Add movement monitoring
+        start_position = self.state.position
+        last_movement_time = time.time()
+        
+        # Move the motor with stall detection
+        try:
+            actual_steps = self.step(steps, delay=delay)
+            
+            # Stall detection
+            if actual_steps == 0 and not self.state.triggered_limit:
+                current_time = time.time()
+                if current_time - last_movement_time > 1.0:  # 1 second timeout
+                    logger.warning(f"[{self.name}] Possible motor stall detected")
+                    self.state.status = MotorStatus.ERROR
+                    self.state.error_message = "Motor stall detected"
+                    self.release()
+                    return
+                    
+            last_movement_time = time.time()
+            
+        except (LimitSwitchError, MotorError) as e:
+            logger.warning(f"[{self.name}] Movement stopped: {str(e)}")
+            self.release()
 
     def step(self, steps: int, delay: float = 0.0001) -> int:
         """
-        Move motor with quick stop on limit switch trigger.
+        Move motor with variable speed control and limit switch detection.
+        
+        Args:
+            steps: Number of steps to move
+            delay: Delay between steps in seconds
+            
+        Returns:
+            Number of steps actually moved
         """
         if steps < 0:
             raise ValueError("Steps must be positive")
@@ -435,7 +548,7 @@ class StepperMotor:
         actual_steps = 0
         
         try:
-            # Check initial limit state without full lock
+            # Check initial limit state
             if ((self.state.direction == CLOCKWISE and 
                 self.state.triggered_limit == CLOCKWISE) or
                 (self.state.direction == COUNTER_CLOCKWISE and 
@@ -447,11 +560,11 @@ class StepperMotor:
             self.state.status = MotorStatus.MOVING
             
             for _ in range(steps):
-                # Quick check for timeout
+                # Check for timeout
                 if time.time() - start_time > self.movement_timeout:
                     raise MotorError("Movement operation timed out")
                 
-                # Quick check for limit switch without lock
+                # Check for limit switch
                 if self.state.triggered_limit:
                     logger.info(
                         f"[{self.name}] Stopping movement: "
@@ -459,13 +572,13 @@ class StepperMotor:
                     )
                     break
                 
-                # Single step without delay
+                # Single step
                 self.motor.onestep(
                     direction=self.motor_direction,
                     style=self.step_style
                 )
                 
-                # Update position (no lock needed as we're the only writer)
+                # Update position
                 if self.motor_direction == stepper.FORWARD:
                     self.state.position += 1
                 else:
@@ -473,7 +586,7 @@ class StepperMotor:
                 
                 actual_steps += 1
                 
-                # Only apply delay if specified and no limit hit
+                # Apply delay if specified and no limit hit
                 if delay and not self.state.triggered_limit:
                     time.sleep(delay)
                 
