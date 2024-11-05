@@ -92,7 +92,7 @@ class TurretController:
         
         logger.info("Turret Controller initialized successfully")
     
-    def map_value_to_steps(self, value):
+    '''def map_value_to_steps(self, value):
         """
         Map joystick value (-100 to +100) to motor steps with deadzone handling.
         
@@ -108,7 +108,8 @@ class TurretController:
         
         # Map to steps with speed scaling
         steps = value * speed_scaling * max_steps_per_update
-        return int(max(-max_steps_per_update, min(max_steps_per_update, steps)))
+        return int(max(-max_steps_per_update, min(max_steps_per_update, steps)))'''
+    
     
     def on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback when connected to MQTT broker."""
@@ -160,26 +161,20 @@ class TurretController:
         try:
             # Parse the message (format: "x_val,y_val,button")
             x_val, y_val, button = message.payload.decode().split(',')
-            x_val = int(x_val)  # Now between -100 and +100
-            y_val = int(y_val)  # Now between -100 and +100
-            self.button_pressed = button.lower() == 'true'
+            x_val = float(x_val)    # Now between -100 and +100
+            y_val = float(y_val)    # Now between -100 and +100
+            self.button_pressed = int(button) == 1  # Convert numeric button value to boolean
             
-            # Calculate steps for each axis
-            x_steps = self.map_value_to_steps(x_val)
-            logger.debug(f"x_steps: {x_steps}")
-            y_steps = self.map_value_to_steps(y_val)
-            logger.debug(f"y_steps: {y_steps}")
-            
-            # Move motors
-            self.move_motor(self.motor_x, x_steps)
-            self.move_motor(self.motor_y, y_steps)
+            # Process commands for each axis
+            self.motor_x.process_command(x_val)
+            self.motor_y.process_command(y_val)
             
             # Handle button press
             if self.button_pressed:
                 self.laser.on(power_level=laser_max_power)
             else:
                 self.laser.off()
-            
+                
         except Exception as e:
             logger.error(f"Error processing message: {e}")
     
