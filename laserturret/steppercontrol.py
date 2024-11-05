@@ -590,8 +590,8 @@ class StepperMotor:
                 actual_steps += 1
                 
                 # Apply delay if specified and no limit hit
-                if delay and not self.state.triggered_limit:
-                    time.sleep(delay)
+                #if delay and not self.state.triggered_limit:
+                #    time.sleep(delay)
                 
         except Exception as e:
             self.state.status = MotorStatus.ERROR
