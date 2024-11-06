@@ -43,6 +43,10 @@ def gen_frames():
 def index():
     return render_template('index.html')
 
+@app.route('/calibrate')
+def calibrate():
+    return render_template('calibrate.html')
+
 @app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(),

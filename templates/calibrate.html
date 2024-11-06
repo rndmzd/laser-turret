@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Calibration</title>
+</head>
+<body>
+    <video id="stream" autoplay></video>
+    <script>
+        const video = document.getElementById('stream');
+        // video.src = 'http://<Raspberry_Pi_IP>:<Port>/video_feed'; // Replace with your MJPEG stream URL
+            <video id="stream" autoplay src="{{ url_for('video_feed') }}"></video>
+
+        video.addEventListener('click', function(event) {
+            const rect = video.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            // Send coordinates to the server
+            fetch('/click', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ x, y }),
+            });
+        });
+    </script>
+</body>
+</html>
