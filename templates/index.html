@@ -1,31 +1,84 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>Video Stream</title>
+    <title>Pi Camera Stream</title>
     <style>
-        img {
-            border: 1px solid #ddd;
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .video-container {
+            margin-top: 20px;
+            background: #000;
+            padding: 10px;
+            border-radius: 8px;
+            display: inline-block;
+            position: relative;
+        }
+
+        #video-stream {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
             cursor: crosshair;
+        }
+
+        .coordinates {
+            margin-top: 10px;
+            font-family: monospace;
+            color: #333;
         }
     </style>
 </head>
+
 <body>
-    <h1>Video Stream</h1>
-    <img id="video" src="{{ url_for('video_feed') }}" onclick="getCursorPosition(event)">
+    <div class="container">
+        <h1>Pi Camera Stream</h1>
+        <div class="video-container">
+            <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+        </div>
+        <div class="coordinates">
+            Crosshair position: <span id="position">Center</span>
+        </div>
+    </div>
+
     <script>
-        function getCursorPosition(event) {
-            const img = document.getElementById('video');
-            const rect = img.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            fetch('/click', {
+        document.getElementById('video-stream').addEventListener('click', function (e) {
+            const rect = e.target.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Calculate actual coordinates based on image/video dimensions
+            const actualX = Math.round((x / e.target.clientWidth) * 640);  // Assuming 640x480 camera resolution
+            const actualY = Math.round((y / e.target.clientHeight) * 480);
+
+            // Update display
+            document.getElementById('position').textContent =
+                `X: ${actualX}, Y: ${actualY}`;
+
+            // Send to server
+            fetch('/update_crosshair', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Type': 'application/json',
                 },
-                body: `x=${x}&y=${y}`
+                body: JSON.stringify({
+                    x: actualX,
+                    y: actualY
+                })
             });
-        }
+        });
     </script>
 </body>
+
 </html>
