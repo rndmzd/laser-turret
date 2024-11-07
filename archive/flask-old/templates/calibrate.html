@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Calibration</title>
 </head>
+
 <body>
     <video id="stream" autoplay></video>
     <script>
         const video = document.getElementById('stream');
         // video.src = 'http://<Raspberry_Pi_IP>:<Port>/video_feed'; // Replace with your MJPEG stream URL
-            <video id="stream" autoplay src="{{ url_for('video_feed') }}"></video>
+        // video.src = "{{ url_for('video_feed') }}";
+        video.src = "http://192.168.1.137:5000/video_feed";
 
-        video.addEventListener('click', function(event) {
+        video.addEventListener('click', function (event) {
             const rect = video.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
@@ -26,4 +29,5 @@
         });
     </script>
 </body>
+
 </html>
