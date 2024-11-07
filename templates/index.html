@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>Pi Camera Stream</title>
+    <title>Laser Turret</title>
     <style>
         body {
             margin: 0;
@@ -10,13 +9,11 @@
             background: #f0f0f0;
             font-family: Arial, sans-serif;
         }
-
         .container {
-            max-width: 800px;
+            max-width: 1920px;
             margin: 0 auto;
             text-align: center;
         }
-
         .video-container {
             margin-top: 20px;
             background: #000;
@@ -24,49 +21,77 @@
             border-radius: 8px;
             display: inline-block;
             position: relative;
-        }
-
-        #video-stream {
             max-width: 100%;
+        }
+        #video-stream {
+            width: 100%;
             height: auto;
             border-radius: 4px;
             cursor: crosshair;
         }
-
+        .stats-container {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+            display: inline-block;
+            min-width: 300px;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            font-family: monospace;
+            font-size: 16px;
+        }
+        .stat-item {
+            padding: 5px 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
         .coordinates {
             margin-top: 10px;
-            font-family: monospace;
             color: #333;
         }
     </style>
 </head>
-
 <body>
     <div class="container">
-        <h1>Pi Camera Stream</h1>
+        <h1>Pi Camera Stream (1080p)</h1>
         <div class="video-container">
             <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
         </div>
-        <div class="coordinates">
-            Crosshair position: <span id="position">Center</span>
+        <div class="stats-container">
+            <div class="stats">
+                <div class="stat-item">
+                    Resolution: 1920x1080
+                </div>
+                <div class="stat-item">
+                    FPS: <span id="fps">--</span>
+                </div>
+                <div class="stat-item coordinates">
+                    Position: <span id="position">Center</span>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        document.getElementById('video-stream').addEventListener('click', function (e) {
+        const CAMERA_WIDTH = 1920;
+        const CAMERA_HEIGHT = 1080;
+        
+        // Handle click events for crosshair positioning
+        document.getElementById('video-stream').addEventListener('click', function(e) {
             const rect = e.target.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-
-            // Calculate actual coordinates based on image/video dimensions
-            const actualX = Math.round((x / e.target.clientWidth) * 640);  // Assuming 640x480 camera resolution
-            const actualY = Math.round((y / e.target.clientHeight) * 480);
-
-            // Update display
-            document.getElementById('position').textContent =
+            
+            const actualX = Math.round((x / e.target.clientWidth) * CAMERA_WIDTH);
+            const actualY = Math.round((y / e.target.clientHeight) * CAMERA_HEIGHT);
+            
+            document.getElementById('position').textContent = 
                 `X: ${actualX}, Y: ${actualY}`;
-
-            // Send to server
+            
             fetch('/update_crosshair', {
                 method: 'POST',
                 headers: {
@@ -78,7 +103,19 @@
                 })
             });
         });
+
+        // Update FPS display
+        function updateFPS() {
+            fetch('/get_fps')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('fps').textContent = data.fps;
+                })
+                .catch(error => console.error('Error fetching FPS:', error));
+        }
+
+        // Update FPS every second
+        setInterval(updateFPS, 1000);
     </script>
 </body>
-
 </html>
