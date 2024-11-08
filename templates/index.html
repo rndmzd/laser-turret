@@ -29,48 +29,57 @@
             border-radius: 4px;
             cursor: crosshair;
         }
-        .stats-container {
-            margin-top: 10px;
-            padding: 10px;
+        .controls {
+            margin-top: 20px;
+            padding: 15px;
             background: #fff;
             border-radius: 8px;
             display: inline-block;
             min-width: 300px;
         }
-        .stats {
-            display: flex;
-            justify-content: space-around;
-            font-family: monospace;
-            font-size: 16px;
-        }
-        .stat-item {
-            padding: 5px 10px;
+        .control-group {
+            margin: 10px 0;
+            padding: 10px;
             background: #f8f8f8;
             border-radius: 4px;
-            margin: 0 5px;
         }
-        .coordinates {
-            margin-top: 10px;
-            color: #333;
+        .exposure-stats {
+            font-family: monospace;
+            margin: 10px 0;
+            text-align: left;
+            display: inline-block;
+        }
+        .exposure-value {
+            font-weight: bold;
+            color: #444;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Pi Camera Stream (1080p)</h1>
+        <h1>Laser Turret</h1>
         <div class="video-container">
             <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
         </div>
-        <div class="stats-container">
-            <div class="stats">
-                <div class="stat-item">
-                    Resolution: 1920x1080
-                </div>
-                <div class="stat-item">
-                    FPS: <span id="fps">--</span>
-                </div>
-                <div class="stat-item coordinates">
-                    Position: <span id="position">Center</span>
+        <div class="controls">
+            <div class="control-group">
+                <h3>Camera Stats</h3>
+                <div class="exposure-stats">
+                    <div>Crosshair: <span id="position" class="exposure-value">Center</span></div>
+                    <div>Exposure: <span id="exp-time" class="exposure-value">--</span></div>
+                    <div>Gain: <span id="gain" class="exposure-value">--</span></div>
                 </div>
             </div>
         </div>
@@ -82,40 +91,59 @@
         
         // Handle click events for crosshair positioning
         document.getElementById('video-stream').addEventListener('click', function(e) {
-            const rect = e.target.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const rect = this.getBoundingClientRect();
+            const scaleX = CAMERA_WIDTH / this.offsetWidth;
+            const scaleY = CAMERA_HEIGHT / this.offsetHeight;
             
-            const actualX = Math.round((x / e.target.clientWidth) * CAMERA_WIDTH);
-            const actualY = Math.round((y / e.target.clientHeight) * CAMERA_HEIGHT);
+            // Calculate click position relative to the image
+            const clickX = (e.clientX - rect.left);
+            const clickY = (e.clientY - rect.top);
             
+            // Convert to camera coordinates
+            const cameraX = Math.round(clickX * scaleX);
+            const cameraY = Math.round(clickY * scaleY);
+            
+            // Update position display
             document.getElementById('position').textContent = 
-                `X: ${actualX}, Y: ${actualY}`;
+                `X: ${cameraX}, Y: ${cameraY}`;
             
+            // Send to server
             fetch('/update_crosshair', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    x: actualX,
-                    y: actualY
+                    x: cameraX,
+                    y: cameraY
                 })
             });
         });
 
-        // Update FPS display
-        function updateFPS() {
-            fetch('/get_fps')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('fps').textContent = data.fps;
-                })
-                .catch(error => console.error('Error fetching FPS:', error));
+        function adjustBrightness(adjustment) {
+            fetch('/adjust_brightness', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ adjustment: adjustment })
+            });
         }
 
-        // Update FPS every second
-        setInterval(updateFPS, 1000);
+        function updateExposureStats() {
+            fetch('/exposure_stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('exp-time').textContent = 
+                        `${(data.exposure_time/1000).toFixed(1)}ms`;
+                    document.getElementById('gain').textContent = 
+                        `${data.analogue_gain.toFixed(1)}x`;
+                })
+                .catch(error => console.error('Error fetching exposure stats:', error));
+        }
+
+        // Update exposure stats every second
+        setInterval(updateExposureStats, 1000);
     </script>
 </body>
 </html>
