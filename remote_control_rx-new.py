@@ -77,8 +77,8 @@ class TurretController:
         
         # Control variables
         self.last_update_time = time.time()
-        self.fire_button_pressed = False
-        self.aux_button_pressed = False
+        self.joystic_button_pressed = False
+        self.laser_button_pressed = False
         self.laser_power = 100  # Default max power
         
         logger.info("Turret Controller initialized successfully")
@@ -101,7 +101,7 @@ class TurretController:
     def on_message(self, client, userdata, message):
         """Handle incoming MQTT messages"""
         try:
-            # Parse the message (format: "x_val,y_val,fire_button,aux_button,pot_value")
+            # Parse the message (format: "x_val,y_val,joystick_button,laser_button,pot_value")
             parts = message.payload.decode().split(',')
             if len(parts) != 5:
                 logger.error(f"Invalid message format. Expected 5 values, got {len(parts)}")
@@ -109,8 +109,8 @@ class TurretController:
 
             x_val = float(parts[0])          # Between -100 and +100
             y_val = float(parts[1])          # Between -100 and +100
-            self.fire_button_pressed = parts[2].strip().lower() == 'true'
-            self.aux_button_pressed = parts[3].strip().lower() == 'true'
+            self.joystic_button_pressed = parts[2].strip().lower() == 'true'
+            self.laser_button_pressed = parts[3].strip().lower() == 'true'
             self.laser_power = float(parts[4])  # Between 0 and 100
             
             # Process commands for each axis
@@ -118,16 +118,15 @@ class TurretController:
             self.motor_y.process_command(y_val)
             
             # Handle laser control with variable power
-            if self.fire_button_pressed:
+            if self.joystic_button_pressed:
+                logger.debug("Joystick button pressed")
+                
+            # Handle auxiliary button (you can add custom functionality here)
+            if self.laser_button_pressed:
                 power_level = min(100, max(0, self.laser_power))
                 self.laser.on(power_level=power_level)
             else:
                 self.laser.off()
-                
-            # Handle auxiliary button (you can add custom functionality here)
-            if self.aux_button_pressed:
-                logger.debug("Auxiliary button pressed")
-                # Add custom functionality for aux button here
                 
         except Exception as e:
             logger.error(f"Error processing message: {e}")

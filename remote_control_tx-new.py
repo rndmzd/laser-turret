@@ -42,8 +42,8 @@ joystick_button.switch_to_input(pull=Pull.UP)
 potentiometer = AnalogIn(board.IO10)
 
 # New tactile button with pull-up on IO11
-aux_button = DigitalInOut(board.IO11)
-aux_button.switch_to_input(pull=Pull.UP)
+laser_button = DigitalInOut(board.IO11)
+laser_button.switch_to_input(pull=Pull.UP)
 
 # Max size of NVM data (255 bytes)
 NVM_SIZE = 255
@@ -71,18 +71,23 @@ def save_calibration(calibration_data):
             return
         
         # Clear NVM first by writing zeros
+        print("Clearing NVM...")
         for i in range(NVM_SIZE):
             microcontroller.nvm[i] = 0
+        print(*"NVM cleared.")
             
         # Write the data to NVM
+        print("Writing calibration data to NVM...")
         nvm_bytes = bytes(calibration_string, "utf-8")
         for i, b in enumerate(nvm_bytes):
             microcontroller.nvm[i] = b
-            
-        print("Calibration saved successfully!")
+        print("Calibration data saved successfully!")
+
+        return
         
     except Exception as e:
         print(f"Failed to save calibration: {e}")
+        return
 
 def load_calibration():
     try:
@@ -347,7 +352,7 @@ while True:
         x_val = joystick_x.value
         y_val = joystick_y.value
         joystick_btn_pressed = not joystick_button.value
-        aux_btn_pressed = not aux_button.value
+        laser_btn_pressed = not laser_button.value
         pot_val = map_pot_value(potentiometer.value)
         
         # Map joystick values
@@ -357,11 +362,11 @@ while True:
         update_led_from_movement(x_mapped, y_mapped)
         
         # Create payload with all control values
-        payload = f"{x_mapped},{y_mapped},{joystick_btn_pressed},{aux_btn_pressed},{pot_val}"
+        payload = f"{x_mapped},{y_mapped},{joystick_btn_pressed},{laser_btn_pressed},{pot_val}"
         mqtt_client.publish(config.MQTT_TOPIC, payload)
 
         # Show button press with white flash
-        if joystick_btn_pressed or aux_btn_pressed:
+        if joystick_btn_pressed or laser_btn_pressed:
             pixel.fill(COLOR_ACTIVE)
         
         time.sleep(0.25)
