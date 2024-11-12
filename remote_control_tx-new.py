@@ -9,7 +9,7 @@ import json
 import microcontroller
 import neopixel
 
-import config
+import secrets
 
 # Neopixel setup
 pixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.3)  # Set initial brightness to 30%
@@ -24,8 +24,8 @@ COLOR_ERROR = (255, 0, 0)              # Red
 COLOR_ACTIVE = (255, 255, 255)         # White
 
 # Wi-Fi setup
-SSID = config.WIFI_SSID
-PASSWORD = config.WIFI_PASSWORD
+SSID = secrets.WIFI_SSID
+PASSWORD = secrets.WIFI_PASSWORD
 
 # Initialize hardware and connections
 pool = socketpool.SocketPool(wifi.radio)
@@ -327,7 +327,7 @@ connect_to_wifi()
 
 # Setup MQTT
 mqtt_client = MQTT.MQTT(
-    broker=config.MQTT_BROKER,
+    broker=secrets.MQTT_BROKER,
     socket_pool=pool,
     is_ssl=False
 )
@@ -363,7 +363,7 @@ while True:
         
         # Create payload with all control values
         payload = f"{x_mapped},{y_mapped},{joystick_btn_pressed},{laser_btn_pressed},{pot_val}"
-        mqtt_client.publish(config.MQTT_TOPIC, payload)
+        mqtt_client.publish(secrets.MQTT_TOPIC, payload)
 
         # Show button press with white flash
         if joystick_btn_pressed or laser_btn_pressed:
