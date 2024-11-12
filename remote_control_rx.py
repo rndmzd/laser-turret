@@ -92,25 +92,6 @@ class TurretController:
         
         logger.info("Turret Controller initialized successfully")
     
-    '''def map_value_to_steps(self, value):
-        """
-        Map joystick value (-100 to +100) to motor steps with deadzone handling.
-        
-        Args:
-            value: Input value from joystick (-100 to +100)
-            
-        Returns:
-            Number of steps to move (-max_steps_per_update to +max_steps_per_update)
-        """
-        # Apply deadzone
-        if abs(value) < control_deadzone:
-            return 0
-        
-        # Map to steps with speed scaling
-        steps = value * speed_scaling * max_steps_per_update
-        return int(max(-max_steps_per_update, min(max_steps_per_update, steps)))'''
-    
-    
     def on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback when connected to MQTT broker."""
         if rc == 0:
@@ -163,7 +144,7 @@ class TurretController:
             x_val, y_val, button = message.payload.decode().split(',')
             x_val = float(x_val)    # Now between -100 and +100
             y_val = float(y_val)    # Now between -100 and +100
-            self.button_pressed = button.strip().lower() == 'true'  # Convert 'True'/'False' string to boolean
+            self.button_pressed = button.strip().lower() == 'true'
             
             # Process commands for each axis
             self.motor_x.process_command(x_val)
