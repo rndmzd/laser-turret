@@ -6,6 +6,8 @@ from laserturret.steppercontrol import StepperMotor, MotorStatus, MotorError
 from laserturret.lasercontrol import LaserControl
 import RPi.GPIO as GPIO
 
+import secrets
+
 # Configure logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -15,8 +17,8 @@ config = configparser.ConfigParser()
 config.read('laserturret.conf')
 
 # MQTT Configuration
-mqtt_broker = config.MQTT_BROKER
-mqtt_topic = config.MQTT_TOPIC
+mqtt_broker = secrets.MQTT_BROKER
+mqtt_topic = secrets.MQTT_TOPIC
 
 # Motor Configuration
 x_motor_channel = int(config['Motor']['x_motor_channel'])

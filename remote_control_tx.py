@@ -9,7 +9,7 @@ import json
 import microcontroller
 import neopixel
 
-import config
+import secrets
 
 # Neopixel setup
 pixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.3)  # Set initial brightness to 30%
@@ -24,8 +24,8 @@ COLOR_ERROR = (255, 0, 0)              # Red
 COLOR_ACTIVE = (255, 255, 255)         # White
 
 # Wi-Fi setup
-SSID = config.WIFI_SSID
-PASSWORD = config.WIFI_PASSWORD
+SSID = secrets.WIFI_SSID
+PASSWORD = secrets.WIFI_PASSWORD
 
 # Max size of NVM data (255 bytes)
 NVM_SIZE = 255
