@@ -7,6 +7,7 @@ import threading
 from typing import Optional, Tuple, List
 from enum import Enum
 from dataclasses import dataclass
+import queue
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class MotorStatus(Enum):
     ERROR = "error"
     LIMIT_REACHED = "limit_reached"
     CALIBRATING = "calibrating"
+    HOLDING = "holding"
 
 class MotorError(Exception):
     """Base exception for motor errors"""
@@ -57,13 +59,14 @@ class StepperMotor:
         ccw_limit_switch_pin: Optional[int] = None,
         steps_per_rev: int = 200,
         microsteps: int = 8,
+        step_style: Optional[str] = "MICROSTEP",
         skip_direction_check: bool = False,
         perform_calibration: bool = True,
         limit_backoff_steps: int = 1,
         name: str = "Motor",
         calibration_timeout: int = 30,
         movement_timeout: int = 10,
-        direction_timeout: int = 30,
+        deadzone: int = 10,
         kit: Optional[MotorKit] = None,
         interactive_test_mode: bool = False):
         """
@@ -129,6 +132,18 @@ class StepperMotor:
         self.total_travel_steps = None
         self.calibration_timeout = calibration_timeout
         self.movement_timeout = movement_timeout
+        self.deadzone = deadzone
+
+        if step_style not in ["SINGLE", "DOUBLE", "INTERLEAVE", "MICROSTEP"]:
+            raise ConfigurationError("Invalid step style. Must be SINGLE, DOUBLE, INTERLEAVE, or MICROSTEP.")
+        if step_style == "SINGLE":
+            self.step_style = stepper.SINGLE
+        elif step_style == "DOUBLE":
+            self.step_style = stepper.DOUBLE
+        elif step_style == "INTERLEAVE":
+            self.step_style = stepper.INTERLEAVE
+        else:
+            self.step_style = stepper.MICROSTEP
 
         # Initialize MotorKit
         try:
@@ -137,25 +152,31 @@ class StepperMotor:
         except Exception as e:
             raise ConfigurationError(f"Failed to initialize MotorKit: {str(e)}")
 
-        # self.step_style = stepper.SINGLE
-        self.step_style = stepper.MICROSTEP
-        # self.step_style = stepper.INTERLEAVE
-        # self.step_style = stepper.DOUBLE
-        
         # Initialize GPIO
         try:
             self._setup_gpio()
         except Exception as e:
             raise ConfigurationError(f"Failed to setup GPIO: {str(e)}")
         
+        # Add command processing thread components
+        self.command_queue = queue.Queue(maxsize=1)  # Only keep latest command
+        self.running = True
+        self.last_command = 0
+        self.command_thread = threading.Thread(
+            target=self._process_command_queue,
+            name=f"{name}_command_thread",
+            daemon=True
+        )
+        self.command_thread.start()
+
+        # Continue with existing initialization (calibration etc.)
         if not interactive_test_mode and not skip_direction_check:
             try:
-                self.confirm_limit_switches(
-                    #skip_direction_check=skip_direction_check,
-                    #timeout=direction_timeout
-                )
+                self.confirm_limit_switches()
             except Exception as e:
                 logger.error(f"[{self.name}] Error during limit switch confirmation: {e}")
+                self.running = False
+                self.command_thread.join(timeout=1.0)
                 self.release()
                 self.cleanup()
                 raise
@@ -269,7 +290,7 @@ class StepperMotor:
                     
                 if user_response in ['yes', 'no']:
                     break
-                print("Please answer 'yes' or 'no'")
+                print("Please answer 'yes' or 'no'.")
 
             if user_response != 'yes':
                 error_msg = f"[{self.name}] Motor direction incorrect. Check wiring."
@@ -301,7 +322,7 @@ class StepperMotor:
             LimitSwitchError: If switches don't trigger within timeout or wrong switch triggered
         """
         if not (self.cw_limit_switch_pin or self.ccw_limit_switch_pin):
-            logger.info(f"[{self.name}] No limit switches configured, skipping verification")
+            logger.info(f"[{self.name}] No limit switches configured, skipping verification.")
             return
             
         logger.info(f"\n[{self.name}] Testing limit switches...")
@@ -426,123 +447,126 @@ class StepperMotor:
     
     def _calculate_step_delay(self, command_value: float) -> Optional[float]:
         """
-        Calculate step delay based on command value magnitude with tuned parameters.
-        
-        Args:
-            command_value: Input value from -100 to +100
-            
-        Returns:
-            Calculated delay in seconds, or None if in deadzone
+        Calculate step delay based on command value magnitude with smoother control.
         """
         # Tuned delay bounds (in seconds)
-        MIN_DELAY = 0.00015  # Maximum speed: ~6667 steps/sec
-        MAX_DELAY = 0.002    # Minimum speed: ~500 steps/sec
-        DEADZONE = 8         # Increased deadzone for better control
-        # MIN_DELAY = 0.001
-        # MAX_DELAY = 0.01
-        # DEADZONE = 5
+        MIN_DELAY = 0.00005  # Maximum speed
+        MAX_DELAY = 0.1   # Minimum speed
+        # DEADZONE = 5         # Smaller deadzone for more responsive control
         
         # Check deadzone
         abs_value = abs(command_value)
-        if abs_value < DEADZONE:
+        if abs_value < self.deadzone:
             return None
             
-        # Use exponential mapping for finer control at low speeds
-        command_range = 100 - DEADZONE
-        normalized_command = (abs_value - DEADZONE) / command_range
+        # Use cubic mapping for smoother acceleration
+        command_range = 100 - self.deadzone
+        normalized_command = (abs_value - self.deadzone) / command_range
         
-        # Exponential curve for smoother acceleration
-        exponential_factor = 2.0  # Adjust for desired curve steepness
+        # Cubic curve for even smoother acceleration
+        exponential_factor = 1.0  # Exponential scaling factor
         speed_multiplier = pow(normalized_command, exponential_factor)
         
-        # Calculate delay with exponential curve
+        # Calculate delay with cubic curve
         delay_range = MAX_DELAY - MIN_DELAY
         delay = MAX_DELAY - (speed_multiplier * delay_range)
         
         return max(MIN_DELAY, min(MAX_DELAY, delay))
+    
+    def _process_command_queue(self):
+        """
+        Continuously process motor commands in separate thread.
+        """
+        while self.running:
+            try:
+                # Get latest command value, discard old ones
+                try:
+                    while True:
+                        command = self.command_queue.get_nowait()
+                        self.last_command = command
+                except queue.Empty:
+                    command = self.last_command
+
+                # Process the command
+                if abs(command) < self.deadzone:  # Deadzone
+                    with self.lock:
+                        if self.state.status not in [MotorStatus.ERROR, MotorStatus.LIMIT_REACHED]:
+                            self.state.status = MotorStatus.HOLDING
+                    time.sleep(0.001)  # Short sleep when idle
+                    continue
+
+                # Set direction
+                direction = CLOCKWISE if command > 0 else COUNTER_CLOCKWISE
+                
+                # Check if we need to change direction
+                if self.state.direction != direction:
+                    try:
+                        self.set_direction(direction)
+                        time.sleep(0.001)  # Brief pause for direction change
+                    except LimitSwitchError:
+                        continue
+
+                # Check limit switches
+                if ((direction == CLOCKWISE and self.state.triggered_limit == CLOCKWISE) or
+                    (direction == COUNTER_CLOCKWISE and self.state.triggered_limit == COUNTER_CLOCKWISE)):
+                    time.sleep(0.001)
+                    continue
+
+                # Calculate delay based on command magnitude with better low-speed control
+                abs_value = abs(command)
+                min_delay = 0.00001   # 10 microseconds at full speed
+                max_delay = 0.001     # 1000 microseconds (1ms) at minimum speed
+                # Exponential scaling for better low-speed control
+                speed_factor = pow(abs_value / 100.0, 3)  # Cubic scaling gives more granularity at low speeds
+                delay = max_delay - (speed_factor * (max_delay - min_delay))
+                
+                # Update status
+                with self.lock:
+                    self.state.status = MotorStatus.MOVING
+
+                # Single step with calculated delay
+                self.motor.onestep(direction=self.motor_direction, style=self.step_style)
+                
+                # Update position
+                with self.lock:
+                    if self.motor_direction == stepper.FORWARD:
+                        self.state.position += 1
+                    else:
+                        self.state.position -= 1
+
+                # Apply delay for speed control
+                time.sleep(delay)
+
+                # Log movement occasionally (every 100 steps)
+                if self.state.position % 100 == 0:
+                    logger.debug(f"[{self.name}] Command: {command:.1f}, "
+                        f"Speed factor: {speed_factor:.3f}, "
+                        f"Delay: {delay*1e6:.1f}µs, "
+                        f"Direction: {direction}")
+
+            except Exception as e:
+                logger.error(f"[{self.name}] Error in command thread: {str(e)}")
+                time.sleep(0.1)  # Prevent tight error loop
 
     def process_command(self, command_value: float) -> None:
         """
-        Process a movement command with improved speed control and safety features.
-        
-        Args:
-            command_value: Input value from -100 to +100
+        Queue new command for processing.
+        Overwrites any existing command in queue.
         """
-        # Validate and normalize input
-        command_value = max(-100, min(100, command_value))
-        
-        # Calculate delay for this movement
-        delay = self._calculate_step_delay(command_value)
-        
-        # If in deadzone, release motor smoothly
-        if delay is None:
-            self.release()
-            return
-            
-        # Set direction based on command sign
-        direction = CLOCKWISE if command_value > 0 else COUNTER_CLOCKWISE
         try:
-            # If changing direction, add a small delay for safety
-            if self.state.direction and self.state.direction != direction:
-                self.release()
-                time.sleep(0.01)  # 10ms delay when changing directions
-            
-            self.set_direction(direction)
-        except LimitSwitchError:
-            self.release()
-            return
-            
-        # Calculate steps with improved scaling
-        abs_value = abs(command_value)
-        
-        # Progressive steps calculation:
-        # - Below 25%: 1 step per update
-        # - 25-50%: 2 steps per update
-        # - 50-75%: 3 steps per update 
-        # - 75-100%: 4 steps per update
-        if abs_value < 25:
-            steps = 1
-        elif abs_value < 50:
-            steps = 2
-        elif abs_value < 75:
-            steps = 3
-        else:
-            steps = 4
-            
-        # Add movement monitoring
-        start_position = self.state.position
-        last_movement_time = time.time()
-        
-        # Move the motor with stall detection
-        try:
-            actual_steps = self.step(steps, delay=delay)
-            
-            # Stall detection
-            if actual_steps == 0 and not self.state.triggered_limit:
-                current_time = time.time()
-                if current_time - last_movement_time > 1.0:  # 1 second timeout
-                    logger.warning(f"[{self.name}] Possible motor stall detected")
-                    self.state.status = MotorStatus.ERROR
-                    self.state.error_message = "Motor stall detected"
-                    self.release()
-                    return
-                    
-            last_movement_time = time.time()
-            
-        except (LimitSwitchError, MotorError) as e:
-            logger.warning(f"[{self.name}] Movement stopped: {str(e)}")
-            self.release()
+            # Clear queue and add new command
+            while not self.command_queue.empty():
+                try:
+                    self.command_queue.get_nowait()
+                except queue.Empty:
+                    break
+            self.command_queue.put(command_value)
+        except Exception as e:
+            logger.error(f"[{self.name}] Error queueing command: {str(e)}")
 
     def step(self, steps: int, delay: float = 0.0001) -> int:
         """
-        Move motor with variable speed control and limit switch detection.
-        
-        Args:
-            steps: Number of steps to move
-            delay: Delay between steps in seconds
-            
-        Returns:
-            Number of steps actually moved
+        Move motor with smoother motion control.
         """
         if steps < 0:
             raise ValueError("Steps must be positive")
@@ -562,6 +586,9 @@ class StepperMotor:
             
             self.state.status = MotorStatus.MOVING
             
+            # Distribute steps evenly over time
+            step_delay = delay / max(1, steps)  # Distribute delay across steps
+            
             for _ in range(steps):
                 # Check for timeout
                 if time.time() - start_time > self.movement_timeout:
@@ -569,10 +596,6 @@ class StepperMotor:
                 
                 # Check for limit switch
                 if self.state.triggered_limit:
-                    logger.info(
-                        f"[{self.name}] Stopping movement: "
-                        f"{self.state.triggered_limit} limit reached"
-                    )
                     break
                 
                 # Single step
@@ -589,9 +612,8 @@ class StepperMotor:
                 
                 actual_steps += 1
                 
-                # Apply delay if specified and no limit hit
-                #if delay and not self.state.triggered_limit:
-                #    time.sleep(delay)
+                # Use the distributed delay
+                time.sleep(step_delay)
                 
         except Exception as e:
             self.state.status = MotorStatus.ERROR
@@ -627,7 +649,7 @@ class StepperMotor:
             while not self.state.triggered_limit:
                 if time.time() - start_time > self.calibration_timeout:
                     raise CalibrationError("Calibration timed out waiting for CCW limit")
-                steps = self.step(5, delay=0.0005)  # Move in smaller increments
+                steps = self.step(1, delay=0.0005)  # Move in smaller increments
                 logger.info(f"[{self.name}] Moved {steps} steps toward CCW limit")
                 if steps == 0:  # If we couldn't move, might be at limit already
                     break
@@ -652,7 +674,7 @@ class StepperMotor:
             while not self.state.triggered_limit:
                 if time.time() - start_time > self.calibration_timeout:
                     raise CalibrationError("Calibration timed out waiting for CW limit")
-                steps = self.step(5, delay=0.0005)  # Move in smaller increments
+                steps = self.step(1, delay=0.0005)  # Move in smaller increments
                 total_steps += steps
                 logger.info(f"[{self.name}] Moved {steps} steps toward CW limit (Total: {total_steps})")
                 if steps == 0:  # If we couldn't move, might be at limit
@@ -696,8 +718,25 @@ class StepperMotor:
             self.state.status = MotorStatus.IDLE
             self.state.triggered_limit = None
 
-    def cleanup(self) -> None:
-        """Cleanup specific GPIO pins only"""
+    def hold_position(self) -> None:
+        """Hold motor in current position"""
+        with self.lock:
+            if self.state.status not in [MotorStatus.ERROR, MotorStatus.LIMIT_REACHED]:
+                self.state.status = MotorStatus.HOLDING
+
+    def cleanup(self):
+        """Enhanced cleanup with thread shutdown."""
+        logger.info(f"[{self.name}] Starting cleanup...")
+        
+        # Stop command processing thread
+        self.running = False
+        if hasattr(self, 'command_thread'):
+            self.command_thread.join(timeout=1.0)
+        
+        # Release motor
+        self.release()
+        
+        # Cleanup GPIO
         pins_to_cleanup = []
         if self.cw_limit_switch_pin:
             pins_to_cleanup.append(self.cw_limit_switch_pin)
@@ -714,4 +753,4 @@ class StepperMotor:
             except:
                 pass
                 
-        logger.info(f"[{self.name}] GPIO cleanup complete.")
+        logger.info(f"[{self.name}] Cleanup complete.")
