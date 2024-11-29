@@ -50,7 +50,7 @@ TEST_CONFIG_Y = {
     'MOVEMENT_TIMEOUT': 10
 }
 
-TEST_CONFIG = TEST_CONFIG_X
+TEST_CONFIG = TEST_CONFIG_Y
 
 @contextmanager
 def motor_context(**kwargs) -> Generator[StepperMotor, None, None]:
