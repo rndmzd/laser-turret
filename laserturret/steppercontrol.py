@@ -64,7 +64,7 @@ class MotorState:
     triggered_limit: Optional[str] = None
     error_message: Optional[str] = None
 
-class A4988StepperMotor:
+class StepperMotor:
     def __init__(
         self,
         step_pin: int,
