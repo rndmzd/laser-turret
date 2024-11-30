@@ -61,7 +61,7 @@ TEST_CONFIG_Y = {
 }
 
 # Default to Y-axis configuration for testing
-TEST_CONFIG = TEST_CONFIG_Y
+TEST_CONFIG = TEST_CONFIG_X
 
 @contextmanager
 def motor_context(**kwargs) -> Generator[StepperMotor, None, None]:
