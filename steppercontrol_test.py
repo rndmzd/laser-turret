@@ -26,16 +26,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Test configuration for X-axis
 TEST_CONFIG_X = {
-    'CW_LIMIT_SWITCH_PIN': Pins.X_CW_LIMIT.value,
-    'CCW_LIMIT_SWITCH_PIN': Pins.X_CCW_LIMIT.value,
     'STEP_PIN': Pins.X_STEP.value,
     'DIR_PIN': Pins.X_DIR.value,
     'ENABLE_PIN': Pins.X_ENABLE.value,
     'MS1_PIN': Pins.MS1.value,
     'MS2_PIN': Pins.MS2.value,
     'MS3_PIN': Pins.MS3.value,
+    'CW_LIMIT_SWITCH_PIN': Pins.X_CW_LIMIT.value,
+    'CCW_LIMIT_SWITCH_PIN': Pins.X_CCW_LIMIT.value,
     'STEPS_PER_REV': 200,
     'MICROSTEPS': 8,
     'SAFE_DELAY': 0.001,
@@ -44,16 +43,15 @@ TEST_CONFIG_X = {
     'MOVEMENT_TIMEOUT': 10
 }
 
-# Test configuration for Y-axis
 TEST_CONFIG_Y = {
-    'CW_LIMIT_SWITCH_PIN': Pins.Y_CW_LIMIT.value,
-    'CCW_LIMIT_SWITCH_PIN': Pins.Y_CCW_LIMIT.value,
     'STEP_PIN': Pins.Y_STEP.value,
     'DIR_PIN': Pins.Y_DIR.value,
     'ENABLE_PIN': Pins.Y_ENABLE.value,
     'MS1_PIN': Pins.MS1.value,
     'MS2_PIN': Pins.MS2.value,
     'MS3_PIN': Pins.MS3.value,
+    'CW_LIMIT_SWITCH_PIN': Pins.Y_CW_LIMIT.value,
+    'CCW_LIMIT_SWITCH_PIN': Pins.Y_CCW_LIMIT.value,
     'STEPS_PER_REV': 200,
     'MICROSTEPS': 8,
     'SAFE_DELAY': 0.001,
@@ -303,8 +301,8 @@ class MotorTester:
                 ms1_pin=self.config['MS1_PIN'],
                 ms2_pin=self.config['MS2_PIN'],
                 ms3_pin=self.config['MS3_PIN'],
-                cw_limit_switch_pin=self.config['CW_LIMIT_PIN'],
-                ccw_limit_switch_pin=self.config['CCW_LIMIT_PIN'],
+                cw_limit_switch_pin=self.config['CW_LIMIT_SWITCH_PIN'],
+                ccw_limit_switch_pin=self.config['CCW_LIMIT_SWITCH_PIN'],
                 steps_per_rev=self.config['STEPS_PER_REV'],
                 microsteps=self.config['MICROSTEPS'],
                 skip_direction_check=False,
