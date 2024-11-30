@@ -80,9 +80,44 @@ def motor_context(**kwargs) -> Generator[StepperMotor, None, None]:
             motor.cleanup()
 
 class MotorTester:
-    """Class to manage motor testing"""
+    """Class to manage motor testing
+    
+    Test configurations should include:
+        STEP_PIN: GPIO pin for step signal
+        DIR_PIN: GPIO pin for direction signal
+        ENABLE_PIN: GPIO pin for enable signal
+        MS1_PIN: GPIO pin for microstep config 1
+        MS2_PIN: GPIO pin for microstep config 2
+        MS3_PIN: GPIO pin for microstep config 3
+        CW_LIMIT_SWITCH_PIN: GPIO pin for clockwise limit switch
+        CCW_LIMIT_SWITCH_PIN: GPIO pin for counter-clockwise limit switch
+        STEPS_PER_REV: Steps per full revolution
+        MICROSTEPS: Microstep resolution (1, 2, 4, 8, or 16)
+        SAFE_DELAY: Default step delay for testing
+        TEST_STEPS: Number of steps for basic movement tests
+        CALIBRATION_TIMEOUT: Maximum time for calibration
+        MOVEMENT_TIMEOUT: Maximum time for movement operations
+    """
     
     def __init__(self, config: dict):
+        """Initialize tester with configuration
+        
+        Args:
+            config: Dictionary containing pin assignments and test parameters
+        """
+        required_keys = {
+            'STEP_PIN', 'DIR_PIN', 'ENABLE_PIN',
+            'MS1_PIN', 'MS2_PIN', 'MS3_PIN',
+            'CW_LIMIT_SWITCH_PIN', 'CCW_LIMIT_SWITCH_PIN',
+            'STEPS_PER_REV', 'MICROSTEPS',
+            'SAFE_DELAY', 'TEST_STEPS',
+            'CALIBRATION_TIMEOUT', 'MOVEMENT_TIMEOUT'
+        }
+        
+        missing_keys = required_keys - set(config.keys())
+        if missing_keys:
+            raise ValueError(f"Missing required configuration keys: {missing_keys}")
+            
         self.config = config
         self.stop_event = Event()
 
