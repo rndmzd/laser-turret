@@ -92,24 +92,58 @@ class MotorTester:
         """Test configuration validation"""
         logger.info("=== Testing Configuration Validation ===")
         
-        # Test invalid motor channel
-        with pytest.raises(ConfigurationError):
-            StepperMotor(motor_channel=3)
-        
-        # Test invalid GPIO pin
+        # Test invalid GPIO pin (above Raspberry Pi's valid range)
         with pytest.raises(ConfigurationError):
             StepperMotor(
-                motor_channel=1,
-                cw_limit_switch_pin=100
+                step_pin=self.config['STEP_PIN'],
+                dir_pin=self.config['DIR_PIN'],
+                enable_pin=40,  # Invalid pin
+                ms1_pin=self.config['MS1_PIN'],
+                ms2_pin=self.config['MS2_PIN'],
+                ms3_pin=self.config['MS3_PIN']
             )
         
         # Test duplicate GPIO pins
         with pytest.raises(ConfigurationError):
             StepperMotor(
-                motor_channel=1,
-                cw_limit_switch_pin=23,
-                ccw_limit_switch_pin=23
+                step_pin=self.config['STEP_PIN'],
+                dir_pin=self.config['DIR_PIN'],
+                enable_pin=self.config['ENABLE_PIN'],
+                ms1_pin=self.config['MS1_PIN'],
+                ms2_pin=self.config['MS1_PIN'],  # Duplicate pin
+                ms3_pin=self.config['MS3_PIN']
             )
+        
+        # Test invalid microstep resolution
+        with pytest.raises(ConfigurationError):
+            StepperMotor(
+                step_pin=self.config['STEP_PIN'],
+                dir_pin=self.config['DIR_PIN'],
+                enable_pin=self.config['ENABLE_PIN'],
+                ms1_pin=self.config['MS1_PIN'],
+                ms2_pin=self.config['MS2_PIN'],
+                ms3_pin=self.config['MS3_PIN'],
+                microsteps=3  # Invalid: must be 1, 2, 4, 8, or 16
+            )
+            
+        # Test valid full configuration
+        try:
+            motor = StepperMotor(
+                step_pin=self.config['STEP_PIN'],
+                dir_pin=self.config['DIR_PIN'],
+                enable_pin=self.config['ENABLE_PIN'],
+                ms1_pin=self.config['MS1_PIN'],
+                ms2_pin=self.config['MS2_PIN'],
+                ms3_pin=self.config['MS3_PIN'],
+                cw_limit_switch_pin=self.config['CW_LIMIT_SWITCH_PIN'],
+                ccw_limit_switch_pin=self.config['CCW_LIMIT_SWITCH_PIN'],
+                microsteps=8,
+                skip_direction_check=True,
+                perform_calibration=False
+            )
+            motor.cleanup()
+        except Exception as e:
+            raise AssertionError(f"Valid configuration failed: {str(e)}")
         
         logger.info("Configuration validation tests passed")
 
@@ -358,27 +392,28 @@ def test_motor_response(motor: StepperMotor) -> None:
         else:
             print("In deadzone - no movement.")
 
-def interactive_test_mode(self) -> None:
+def interactive_test_mode() -> None:
     """Interactive testing mode for manual verification"""
     logger.info("=== Starting Interactive Test Mode ===")
     
     try:
         with motor_context(
-            step_pin=self.config['STEP_PIN'],
-            dir_pin=self.config['DIR_PIN'],
-            enable_pin=self.config['ENABLE_PIN'],
-            ms1_pin=self.config['MS1_PIN'],
-            ms2_pin=self.config['MS2_PIN'],
-            ms3_pin=self.config['MS3_PIN'],
-            cw_limit_switch_pin=self.config['CW_LIMIT_PIN'],
-            ccw_limit_switch_pin=self.config['CCW_LIMIT_PIN'],
-            steps_per_rev=self.config['STEPS_PER_REV'],
-            microsteps=self.config['MICROSTEPS'],
-            skip_direction_check=False,
-            perform_calibration=True,
-            calibration_timeout=self.config['CALIBRATION_TIMEOUT'],
-            movement_timeout=self.config['MOVEMENT_TIMEOUT'],
-            name="TestMotor"
+            step_pin=TEST_CONFIG['STEP_PIN'],
+            dir_pin=TEST_CONFIG['DIR_PIN'],
+            enable_pin=TEST_CONFIG['ENABLE_PIN'],
+            ms1_pin=TEST_CONFIG['MS1_PIN'],
+            ms2_pin=TEST_CONFIG['MS2_PIN'],
+            ms3_pin=TEST_CONFIG['MS3_PIN'],
+            cw_limit_switch_pin=TEST_CONFIG['CW_LIMIT_SWITCH_PIN'],
+            ccw_limit_switch_pin=TEST_CONFIG['CCW_LIMIT_SWITCH_PIN'],
+            steps_per_rev=TEST_CONFIG['STEPS_PER_REV'],
+            microsteps=TEST_CONFIG['MICROSTEPS'],
+            skip_direction_check=True,
+            perform_calibration=False,
+            calibration_timeout=TEST_CONFIG['CALIBRATION_TIMEOUT'],
+            movement_timeout=TEST_CONFIG['MOVEMENT_TIMEOUT'],
+            name="TestMotor",
+            interactive_test_mode=True
         ) as motor:
             while True:
                 print("\nInteractive Test Menu:")
@@ -390,10 +425,11 @@ def interactive_test_mode(self) -> None:
                 print("6. Test limit switches (manual trigger)")
                 print("7. Test limit switches (using motor)")
                 print("8. Test motor direction")
-                print("9. Test motor response curves")
-                print("10. Exit")
+                print("9. Test motor response")
+                print("10. Test A4988 driver settings")
+                print("11. Exit")
                 
-                choice = input("Enter choice (1-10): ").strip()
+                choice = input("Enter choice (1-11): ").strip()
                 
                 if choice == '1':
                     motor.set_direction(CLOCKWISE)
@@ -443,8 +479,19 @@ def interactive_test_mode(self) -> None:
                 
                 elif choice == '9':
                     test_motor_response(motor)
-                
+                    
                 elif choice == '10':
+                    print("\nA4988 Driver Settings:")
+                    print(f"Microsteps: {TEST_CONFIG['MICROSTEPS']}")
+                    print(f"Step Pin: {TEST_CONFIG['STEP_PIN']}")
+                    print(f"Direction Pin: {TEST_CONFIG['DIR_PIN']}")
+                    print(f"Enable Pin: {TEST_CONFIG['ENABLE_PIN']}")
+                    print(f"MS1 Pin: {TEST_CONFIG['MS1_PIN']}")
+                    print(f"MS2 Pin: {TEST_CONFIG['MS2_PIN']}")
+                    print(f"MS3 Pin: {TEST_CONFIG['MS3_PIN']}")
+                    print("\nPlease verify these match your physical connections.")
+                
+                elif choice == '11':
                     break
                 
                 else:
