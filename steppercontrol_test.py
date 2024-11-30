@@ -362,6 +362,7 @@ def test_motor_direction(motor: StepperMotor) -> None:
             print("2. Swap motor coil connections")
             print("3. Update DIR pin logic in software")
             print("4. Or check A4988 driver configuration")
+            print(f"Current DIR pin: {TEST_CONFIG['DIR_PIN']}")
     
     except Exception as e:
         print(f"Error during direction test: {e}")
@@ -381,6 +382,11 @@ def test_motor_response(motor: StepperMotor) -> None:
         -100  # Negative maximum
     ]
     
+    print("\nA4988 Configuration:")
+    print(f"Step Pin: {TEST_CONFIG['STEP_PIN']}")
+    print(f"Microsteps: {TEST_CONFIG['MICROSTEPS']}")
+    print(f"Base delay: {TEST_CONFIG['SAFE_DELAY']} seconds")
+    
     for value in test_values:
         print(f"\nTesting command value: {value}")
         delay = motor._calculate_step_delay(value)
@@ -388,7 +394,7 @@ def test_motor_response(motor: StepperMotor) -> None:
             print(f"Calculated delay: {delay:.6f} seconds")
             print(f"Steps per second: {1/delay:.1f}")
         else:
-            print("In deadzone - no movement.")
+            print("In deadzone - no movement.")                
 
 def interactive_test_mode() -> None:
     """Interactive testing mode for manual verification"""
@@ -431,12 +437,14 @@ def interactive_test_mode() -> None:
                 
                 if choice == '1':
                     motor.set_direction(CLOCKWISE)
-                    steps = motor.step(TEST_CONFIG['TEST_STEPS'], delay=TEST_CONFIG['SAFE_DELAY'])
+                    steps = motor.step(TEST_CONFIG['TEST_STEPS'], 
+                                     delay=TEST_CONFIG['SAFE_DELAY'])
                     print(f"\nMoved {steps} steps clockwise.")
                 
                 elif choice == '2':
                     motor.set_direction(COUNTER_CLOCKWISE)
-                    steps = motor.step(TEST_CONFIG['TEST_STEPS'], delay=TEST_CONFIG['SAFE_DELAY'])
+                    steps = motor.step(TEST_CONFIG['TEST_STEPS'], 
+                                     delay=TEST_CONFIG['SAFE_DELAY'])
                     print(f"\nMoved {steps} steps counter-clockwise.")
                 
                 elif choice == '3':
@@ -478,15 +486,20 @@ def interactive_test_mode() -> None:
                 elif choice == '9':
                     test_motor_response(motor)
                     
-                elif choice == '10':
+                elif choice == '10':  # A4988 settings display
                     print("\nA4988 Driver Settings:")
-                    print(f"Microsteps: {TEST_CONFIG['MICROSTEPS']}")
                     print(f"Step Pin: {TEST_CONFIG['STEP_PIN']}")
                     print(f"Direction Pin: {TEST_CONFIG['DIR_PIN']}")
                     print(f"Enable Pin: {TEST_CONFIG['ENABLE_PIN']}")
                     print(f"MS1 Pin: {TEST_CONFIG['MS1_PIN']}")
                     print(f"MS2 Pin: {TEST_CONFIG['MS2_PIN']}")
                     print(f"MS3 Pin: {TEST_CONFIG['MS3_PIN']}")
+                    print(f"CW Limit Switch: {TEST_CONFIG['CW_LIMIT_SWITCH_PIN']}")
+                    print(f"CCW Limit Switch: {TEST_CONFIG['CCW_LIMIT_SWITCH_PIN']}")
+                    print(f"\nConfiguration:")
+                    print(f"Microsteps: {TEST_CONFIG['MICROSTEPS']}")
+                    print(f"Steps per Revolution: {TEST_CONFIG['STEPS_PER_REV']}")
+                    print(f"Safe Delay: {TEST_CONFIG['SAFE_DELAY']} seconds")
                     print("\nPlease verify these match your physical connections.")
                 
                 elif choice == '11':
