@@ -380,4 +380,204 @@ class StepperMotor:
                     break
             self.command_queue.put(command_value)
         except Exception as e:
-            logger.error
+            logger.error(f"[{self.name}] Error queueing command: {str(e)}")
+    
+    def release(self) -> None:
+        """Release the motor and reset state"""
+        self.disable()  # Disable motor driver
+        with self.lock:
+            self.state.status = MotorStatus.IDLE
+            self.state.triggered_limit = None
+
+    def cleanup(self) -> None:
+        """Clean up GPIO and threads"""
+        logger.info(f"[{self.name}] Starting cleanup...")
+        
+        # Stop command processing thread
+        self.running = False
+        if hasattr(self, 'command_thread'):
+            self.command_thread.join(timeout=1.0)
+        
+        # Release motor
+        self.release()
+        
+        # Clean up GPIO
+        pins_to_cleanup = [self.step_pin, self.dir_pin, self.enable_pin]
+        pins_to_cleanup.extend(self.ms_pins)
+        if self.cw_limit_switch_pin:
+            try:
+                GPIO.remove_event_detect(self.cw_limit_switch_pin)
+                pins_to_cleanup.append(self.cw_limit_switch_pin)
+            except:
+                pass
+        if self.ccw_limit_switch_pin:
+            try:
+                GPIO.remove_event_detect(self.ccw_limit_switch_pin)
+                pins_to_cleanup.append(self.ccw_limit_switch_pin)
+            except:
+                pass
+                
+        for pin in pins_to_cleanup:
+            try:
+                GPIO.cleanup(pin)
+            except:
+                pass
+                
+        logger.info(f"[{self.name}] Cleanup complete.")
+
+    def confirm_limit_switches(self) -> None:
+        """
+        Verify limit switch functionality by requesting manual confirmation.
+        Used during initialization to ensure switches are properly connected and working.
+        """
+        if not (self.cw_limit_switch_pin or self.ccw_limit_switch_pin):
+            logger.info(f"[{self.name}] No limit switches configured, skipping verification.")
+            return
+            
+        logger.info(f"\n[{self.name}] Testing limit switches...")
+        logger.info("Please trigger each limit switch to confirm they're working:")
+        
+        timeout = 30  # seconds
+        switches_to_test = []
+        
+        if self.cw_limit_switch_pin:
+            switches_to_test.append((CLOCKWISE, "CW"))
+        if self.ccw_limit_switch_pin:
+            switches_to_test.append((COUNTER_CLOCKWISE, "CCW"))
+        
+        for direction, name in switches_to_test:
+            start_time = time.time()
+            logger.info(f"Trigger the {name} limit switch...")
+            
+            # Wait for correct switch to trigger
+            while True:
+                if time.time() - start_time > timeout:
+                    raise LimitSwitchError(
+                        f"Timeout waiting for {name} limit switch confirmation"
+                    )
+                    
+                with self.lock:
+                    if self.state.triggered_limit == direction:
+                        logger.info(f"[{self.name}] {name} limit switch verified")
+                        # Reset the triggered state
+                        self.state.triggered_limit = None
+                        self.state.status = MotorStatus.IDLE
+                        break
+                    elif self.state.triggered_limit:
+                        raise LimitSwitchError(
+                            f"Wrong limit switch triggered: expected {name}, "
+                            f"got {self.state.triggered_limit}"
+                        )
+                        
+                time.sleep(0.1)
+        
+        logger.info(f"[{self.name}] All limit switches verified!")
+
+    def calibrate(self) -> None:
+        """Calibrate by finding limits and centering"""
+        if not (self.cw_limit_switch_pin and self.ccw_limit_switch_pin):
+            raise CalibrationError("Both limit switches required for calibration")
+        
+        start_time = time.time()
+        
+        try:
+            logger.info(f"[{self.name}] Starting calibration...")
+            
+            # Clear any previous state
+            self.state.triggered_limit = None
+            self.state.status = MotorStatus.CALIBRATING
+            self.release()
+            
+            # First move to CCW limit
+            logger.info(f"[{self.name}] Moving to CCW limit...")
+            self.set_direction(COUNTER_CLOCKWISE)
+            while not self.state.triggered_limit:
+                if time.time() - start_time > self.calibration_timeout:
+                    raise CalibrationError("Calibration timed out waiting for CCW limit")
+                steps = self.step(1, delay=0.0005)  # Move in smaller increments
+                logger.debug(f"[{self.name}] Moved {steps} steps toward CCW limit")
+                if steps == 0:  # If we couldn't move, might be at limit already
+                    break
+            
+            if not self.state.triggered_limit:
+                raise CalibrationError("Failed to reach CCW limit")
+            
+            logger.info(f"[{self.name}] Reached CCW limit")
+            
+            # Move away from CCW limit
+            logger.info(f"[{self.name}] Backing off from CCW limit...")
+            self.state.triggered_limit = None  # Clear the limit state
+            self.set_direction(CLOCKWISE)
+            backoff_steps = self.step(self.limit_backoff_steps, delay=0.0005)
+            logger.debug(f"[{self.name}] Backed off {backoff_steps} steps from CCW limit")
+            
+            # Now move to CW limit while counting steps
+            logger.info(f"[{self.name}] Moving to CW limit...")
+            self.set_direction(CLOCKWISE)
+            total_steps = 0
+            
+            while not self.state.triggered_limit:
+                if time.time() - start_time > self.calibration_timeout:
+                    raise CalibrationError("Calibration timed out waiting for CW limit")
+                steps = self.step(1, delay=0.0005)  # Move in smaller increments
+                total_steps += steps
+                logger.debug(f"[{self.name}] Moved {steps} steps toward CW limit (Total: {total_steps})")
+                if steps == 0:  # If we couldn't move, might be at limit
+                    break
+            
+            if not self.state.triggered_limit:
+                raise CalibrationError("Failed to reach CW limit")
+            
+            logger.info(f"[{self.name}] Reached CW limit. Total travel: {total_steps} steps")
+            
+            # Store total travel distance
+            self.total_travel_steps = total_steps
+            
+            # Move to center position
+            logger.info(f"[{self.name}] Moving to center position...")
+            self.state.triggered_limit = None  # Clear the limit state
+            self.set_direction(COUNTER_CLOCKWISE)
+            center_steps = self.step(total_steps // 2, delay=0.0005)
+            logger.info(f"[{self.name}] Moved {center_steps} steps to center")
+            
+            # Reset position counter to 0 at center
+            self.state.position = 0
+            self.state.status = MotorStatus.IDLE
+            
+            logger.info(
+                f"[{self.name}] Calibration complete. "
+                f"Total travel: {self.total_travel_steps} steps"
+            )
+            
+        except Exception as e:
+            logger.error(f"[{self.name}] Calibration failed: {str(e)}")
+            self.state.status = MotorStatus.ERROR
+            self.state.error_message = str(e)
+            self.release()
+            raise CalibrationError(f"Calibration failed: {str(e)}")
+
+    def get_status(self) -> MotorState:
+        """Get current motor status"""
+        with self.lock:
+            return self.state
+
+    def get_limit_switch_states(self) -> Tuple[Optional[bool], Optional[bool]]:
+        """Get the current state of both limit switches"""
+        with self.lock:
+            def read_switch_with_verification(pin: Optional[int]) -> Optional[bool]:
+                if pin is None:
+                    return None
+                    
+                # Take multiple readings over a short period
+                readings = []
+                for _ in range(5):
+                    readings.append(GPIO.input(pin) == 0)
+                    time.sleep(0.001)
+                    
+                # Return True only if majority of readings indicate switch is pressed
+                return sum(readings) >= 3
+            
+            cw_state = read_switch_with_verification(self.cw_limit_switch_pin)
+            ccw_state = read_switch_with_verification(self.ccw_limit_switch_pin)
+            
+            return (cw_state, ccw_state)
