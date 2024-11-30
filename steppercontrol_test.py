@@ -6,6 +6,8 @@ from typing import Generator, Optional
 import pytest
 from threading import Thread, Event
 
+from laserturret import Pins
+
 from laserturret.steppercontrol import (
     StepperMotor,
     MotorStatus,
@@ -26,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 # Test configuration for X-axis
 TEST_CONFIG_X = {
-    'MOTOR_CHANNEL': 2,            # Maps to the X-axis pin configuration
-    'CW_LIMIT_SWITCH_PIN': 27,
-    'CCW_LIMIT_SWITCH_PIN': 17,
+    'CW_LIMIT_SWITCH_PIN': Pins.X_CW_LIMIT.value,
+    'CCW_LIMIT_SWITCH_PIN': Pins.X_CCW_LIMIT.value,
+    'STEP_PIN': Pins.X_STEP.value,
+    'DIR_PIN': Pins.X_DIR.value,
+    'ENABLE_PIN': Pins.X_ENABLE.value,
+    'MS1_PIN': Pins.MS1.value,
+    'MS2_PIN': Pins.MS2.value,
+    'MS3_PIN': Pins.MS3.value,
     'STEPS_PER_REV': 200,
     'MICROSTEPS': 8,
     'SAFE_DELAY': 0.001,
@@ -39,9 +46,14 @@ TEST_CONFIG_X = {
 
 # Test configuration for Y-axis
 TEST_CONFIG_Y = {
-    'MOTOR_CHANNEL': 1,            # Maps to the Y-axis pin configuration
-    'CW_LIMIT_SWITCH_PIN': 22,
-    'CCW_LIMIT_SWITCH_PIN': 23,
+    'CW_LIMIT_SWITCH_PIN': Pins.Y_CW_LIMIT.value,
+    'CCW_LIMIT_SWITCH_PIN': Pins.Y_CCW_LIMIT.value,
+    'STEP_PIN': Pins.Y_STEP.value,
+    'DIR_PIN': Pins.Y_DIR.value,
+    'ENABLE_PIN': Pins.Y_ENABLE.value,
+    'MS1_PIN': Pins.MS1.value,
+    'MS2_PIN': Pins.MS2.value,
+    'MS3_PIN': Pins.MS3.value,
     'STEPS_PER_REV': 200,
     'MICROSTEPS': 8,
     'SAFE_DELAY': 0.001,
@@ -251,9 +263,14 @@ class MotorTester:
             self.test_configuration()
             
             with motor_context(
-                motor_channel=self.config['MOTOR_CHANNEL'],
-                cw_limit_switch_pin=self.config['CW_LIMIT_SWITCH_PIN'],
-                ccw_limit_switch_pin=self.config['CCW_LIMIT_SWITCH_PIN'],
+                step_pin=self.config['STEP_PIN'],
+                dir_pin=self.config['DIR_PIN'],
+                enable_pin=self.config['ENABLE_PIN'],
+                ms1_pin=self.config['MS1_PIN'],
+                ms2_pin=self.config['MS2_PIN'],
+                ms3_pin=self.config['MS3_PIN'],
+                cw_limit_switch_pin=self.config['CW_LIMIT_PIN'],
+                ccw_limit_switch_pin=self.config['CCW_LIMIT_PIN'],
                 steps_per_rev=self.config['STEPS_PER_REV'],
                 microsteps=self.config['MICROSTEPS'],
                 skip_direction_check=False,
@@ -341,20 +358,27 @@ def test_motor_response(motor: StepperMotor) -> None:
         else:
             print("In deadzone - no movement.")
 
-def interactive_test_mode() -> None:
+def interactive_test_mode(self) -> None:
     """Interactive testing mode for manual verification"""
     logger.info("=== Starting Interactive Test Mode ===")
     
     try:
         with motor_context(
-            motor_channel=TEST_CONFIG['MOTOR_CHANNEL'],
-            cw_limit_switch_pin=TEST_CONFIG['CW_LIMIT_SWITCH_PIN'],
-            ccw_limit_switch_pin=TEST_CONFIG['CCW_LIMIT_SWITCH_PIN'],
-            steps_per_rev=TEST_CONFIG['STEPS_PER_REV'],
-            microsteps=TEST_CONFIG['MICROSTEPS'],
-            skip_direction_check=True,
-            name="TestMotor",
-            interactive_test_mode=True
+            step_pin=self.config['STEP_PIN'],
+            dir_pin=self.config['DIR_PIN'],
+            enable_pin=self.config['ENABLE_PIN'],
+            ms1_pin=self.config['MS1_PIN'],
+            ms2_pin=self.config['MS2_PIN'],
+            ms3_pin=self.config['MS3_PIN'],
+            cw_limit_switch_pin=self.config['CW_LIMIT_PIN'],
+            ccw_limit_switch_pin=self.config['CCW_LIMIT_PIN'],
+            steps_per_rev=self.config['STEPS_PER_REV'],
+            microsteps=self.config['MICROSTEPS'],
+            skip_direction_check=False,
+            perform_calibration=True,
+            calibration_timeout=self.config['CALIBRATION_TIMEOUT'],
+            movement_timeout=self.config['MOVEMENT_TIMEOUT'],
+            name="TestMotor"
         ) as motor:
             while True:
                 print("\nInteractive Test Menu:")
