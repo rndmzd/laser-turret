@@ -309,7 +309,7 @@ Error Detection Points:
 |-----------|--------------|----------|
 | Web Server | Port (5001) | `gpio_monitor.py:264` |
 | Update Rate | 100ms | `gpio_monitor.py:184` |
-| GPIO Chip | gpiochip4 | `gpio_monitor.py:71` |
+| GPIO Chip | gpiochip0 | `gpio_monitor.py:87` |
 | Pin Mapping | PI5_PINOUT | `gpio_monitor.py:24-61` |
 | Colors | CSS classes | `gpio_monitor.html:50-100` |
 
