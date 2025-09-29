@@ -126,7 +126,7 @@ If port 5001 is already in use, either:
 
 ### GPIO Chip Not Found
 
-The Raspberry Pi 5 uses `gpiochip4`. If you get an error, verify the chip exists:
+The Raspberry Pi 5 typically uses `gpiochip0` (pinctrl-rp1). If you get an error, verify the chip exists:
 
 ```bash
 gpiodetect
@@ -135,7 +135,7 @@ gpiodetect
 If the chip has a different name, update it in `gpio_monitor.py`:
 
 ```python
-self.chip = gpiod.Chip('gpiochip4')  # Change if needed
+self.chip = gpiod.Chip('gpiochip0')  # Change if needed
 ```
 
 ## Safety Notes
