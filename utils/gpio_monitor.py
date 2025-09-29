@@ -12,6 +12,7 @@ import os
 # Try to import gpiod (modern library for Pi 5)
 try:
     import gpiod
+    from gpiod.line import Direction, Value
     GPIO_AVAILABLE = True
 except ImportError:
     print("Warning: gpiod not available. Running in simulation mode.")
@@ -77,49 +78,46 @@ class GPIOMonitor:
     
     def __init__(self):
         self.chip = None
-        self.lines = {}
+        self.request = None
         self.pin_states = {}
         self.running = False
         
         if GPIO_AVAILABLE:
             try:
                 # Open GPIO chip (gpiochip0 for Pi 5 - pinctrl-rp1)
-                self.chip = gpiod.Chip('gpiochip0')
+                # gpiod v2.x API
+                self.chip = gpiod.Chip('/dev/gpiochip0')
+                
+                # Request all GPIO lines as inputs
+                line_config = {
+                    line: gpiod.LineSettings(direction=Direction.INPUT)
+                    for line in GPIO_PINS
+                }
+                
+                self.request = self.chip.request_lines(
+                    consumer="gpio-monitor",
+                    config=line_config
+                )
                 print("GPIO chip opened successfully")
             except Exception as e:
                 print(f"Error opening GPIO chip: {e}")
                 print("Running in simulation mode")
+                self.chip = None
+                self.request = None
         
         self.initialize_pins()
     
     def initialize_pins(self):
         """Initialize all GPIO pins for monitoring"""
         for bcm in GPIO_PINS:
-            try:
-                if self.chip:
-                    # Request line for input with pull-down
-                    line = self.chip.get_line(bcm)
-                    line.request(consumer="gpio-monitor", type=gpiod.LINE_REQ_DIR_IN)
-                    self.lines[bcm] = line
-                
-                # Initialize state
-                self.pin_states[bcm] = {
-                    'bcm': bcm,
-                    'value': 0,
-                    'direction': 'input',
-                    'function': self.get_pin_function(bcm),
-                    'pull': 'down'
-                }
-            except Exception as e:
-                print(f"Error initializing GPIO {bcm}: {e}")
-                # Initialize with default values for simulation
-                self.pin_states[bcm] = {
-                    'bcm': bcm,
-                    'value': 0,
-                    'direction': 'unknown',
-                    'function': self.get_pin_function(bcm),
-                    'pull': 'none'
-                }
+            # Initialize state
+            self.pin_states[bcm] = {
+                'bcm': bcm,
+                'value': 0,
+                'direction': 'input',
+                'function': self.get_pin_function(bcm),
+                'pull': 'none'
+            }
     
     def get_pin_function(self, bcm):
         """Get the special function name for a BCM pin"""
@@ -136,18 +134,21 @@ class GPIOMonitor:
     
     def read_pin_states(self):
         """Read current state of all GPIO pins"""
-        for bcm in GPIO_PINS:
+        if self.request:
+            # Real GPIO reading with gpiod v2.x API
             try:
-                if bcm in self.lines:
-                    value = self.lines[bcm].get_value()
-                    self.pin_states[bcm]['value'] = value
-                else:
-                    # Simulation mode - generate random states
-                    import random
-                    if random.random() > 0.95:  # Occasionally change state
-                        self.pin_states[bcm]['value'] = 1 - self.pin_states[bcm]['value']
+                for bcm in GPIO_PINS:
+                    value = self.request.get_value(bcm)
+                    # Convert Value enum to int (0 or 1)
+                    self.pin_states[bcm]['value'] = 1 if value == Value.ACTIVE else 0
             except Exception as e:
-                print(f"Error reading GPIO {bcm}: {e}")
+                print(f"Error reading GPIO: {e}")
+        else:
+            # Simulation mode - generate random states
+            import random
+            for bcm in GPIO_PINS:
+                if random.random() > 0.95:  # Occasionally change state
+                    self.pin_states[bcm]['value'] = 1 - self.pin_states[bcm]['value']
         
         return self.pin_states
     
@@ -207,10 +208,10 @@ class GPIOMonitor:
         """Stop monitoring"""
         self.running = False
         
-        # Release GPIO lines
-        for line in self.lines.values():
+        # Release GPIO request (gpiod v2.x)
+        if self.request:
             try:
-                line.release()
+                self.request.release()
             except:
                 pass
         
