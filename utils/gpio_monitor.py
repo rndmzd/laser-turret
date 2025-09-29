@@ -83,8 +83,8 @@ class GPIOMonitor:
         
         if GPIO_AVAILABLE:
             try:
-                # Open GPIO chip (gpiochip4 for Pi 5)
-                self.chip = gpiod.Chip('gpiochip4')
+                # Open GPIO chip (gpiochip0 for Pi 5 - pinctrl-rp1)
+                self.chip = gpiod.Chip('gpiochip0')
                 print("GPIO chip opened successfully")
             except Exception as e:
                 print(f"Error opening GPIO chip: {e}")
