@@ -248,15 +248,15 @@ class GPIOMonitor:
                 for bcm in changed_pins:
                     pin_data = self.get_pin_data_for_bcm(bcm)
                     if pin_data:
-                        # Use broadcast=True for background threads
-                        socketio.emit('gpio_pin_change', pin_data, broadcast=True)
+                        # Emit to all connected clients (namespace defaults to '/')
+                        socketio.emit('gpio_pin_change', pin_data, namespace='/')
                         print(f"  Emitted change for pin {pin_data['physical']} (BCM {bcm}): value={pin_data['value']}")
             
             # Emit full update periodically (every 100 cycles = 1 second)
             full_update_counter += 1
             if full_update_counter >= 100:
                 pinout_data = self.get_pinout_data()
-                socketio.emit('gpio_update', pinout_data, broadcast=True)
+                socketio.emit('gpio_update', pinout_data, namespace='/')
                 print("Emitted full update")
                 full_update_counter = 0
             
