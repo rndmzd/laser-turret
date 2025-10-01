@@ -312,6 +312,7 @@
 
         // Handle individual pin changes for instant updates
         socket.on('gpio_pin_change', (pinData) => {
+            console.log('Received pin change:', pinData);
             updateSinglePin(pinData);
             lastUpdateTime = new Date();
             document.getElementById('updateTime').textContent = 

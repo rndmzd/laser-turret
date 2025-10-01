@@ -20,7 +20,7 @@ except ImportError:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'gpio-monitor-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True)
 
 # Raspberry Pi 5 GPIO Pin mapping (BCM numbers)
 # Physical pin number -> BCM GPIO number mapping
@@ -244,16 +244,20 @@ class GPIOMonitor:
             
             # Immediately emit updates for changed pins
             if changed_pins:
+                print(f"Emitting changes for {len(changed_pins)} pins: {changed_pins}")
                 for bcm in changed_pins:
                     pin_data = self.get_pin_data_for_bcm(bcm)
                     if pin_data:
-                        socketio.emit('gpio_pin_change', pin_data)
+                        # Use broadcast=True for background threads
+                        socketio.emit('gpio_pin_change', pin_data, broadcast=True)
+                        print(f"  Emitted change for pin {pin_data['physical']} (BCM {bcm}): value={pin_data['value']}")
             
-            # Emit full update periodically (every 10 cycles = 1 second)
+            # Emit full update periodically (every 100 cycles = 1 second)
             full_update_counter += 1
-            if full_update_counter >= 10:
+            if full_update_counter >= 100:
                 pinout_data = self.get_pinout_data()
-                socketio.emit('gpio_update', pinout_data)
+                socketio.emit('gpio_update', pinout_data, broadcast=True)
+                print("Emitted full update")
                 full_update_counter = 0
             
             time.sleep(0.01)  # Poll every 10ms for fast response
