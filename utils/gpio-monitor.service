@@ -1,0 +1,16 @@
+[Unit]
+Description=Raspberry Pi 5 GPIO Monitor Web Application
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/laser-turret/utils
+ExecStart=/usr/bin/python3 /home/pi/laser-turret/utils/gpio_monitor.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
