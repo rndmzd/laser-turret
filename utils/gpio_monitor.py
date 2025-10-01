@@ -123,8 +123,45 @@ class GPIOMonitor:
         if self.chip:
             self.update_pin_configurations()
     
+    def parse_boot_config(self):
+        """Parse /boot/firmware/config.txt to detect pull-up/pull-down settings"""
+        pull_config = {}
+        config_paths = ['/boot/firmware/config.txt', '/boot/config.txt']
+        
+        for config_path in config_paths:
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            # Look for gpio=XX=ip,pu or gpio=XX=op,dl etc
+                            if line.startswith('gpio='):
+                                parts = line.split('=')
+                                if len(parts) >= 3:
+                                    try:
+                                        gpio_num = int(parts[1])
+                                        config = parts[2].lower()
+                                        
+                                        # Check for pull-up or pull-down
+                                        if 'pu' in config:
+                                            pull_config[gpio_num] = 'up'
+                                        elif 'pd' in config:
+                                            pull_config[gpio_num] = 'down'
+                                    except ValueError:
+                                        pass
+                except Exception as e:
+                    print(f"Could not read {config_path}: {e}")
+                break
+        
+        return pull_config
+    
     def update_pin_configurations(self):
         """Read actual pin configurations (direction, bias) from the chip"""
+        # First, try to get pull resistor info from boot config
+        boot_pull_config = self.parse_boot_config()
+        if boot_pull_config:
+            print(f"Found pull resistor config from boot: {boot_pull_config}")
+        
         try:
             from gpiod.line import Bias
             
@@ -132,15 +169,6 @@ class GPIOMonitor:
             for bcm in GPIO_PINS:
                 try:
                     line_info = self.chip.get_line_info(bcm)
-                    
-                    # Debug: Print what we got for first few pins
-                    if bcm in [17, 22, 23, 27, 18]:
-                        print(f"GPIO {bcm} line_info attributes: {dir(line_info)}")
-                        print(f"  direction: {line_info.direction}")
-                        if hasattr(line_info, 'bias'):
-                            print(f"  bias: {line_info.bias}")
-                        if hasattr(line_info, 'flags'):
-                            print(f"  flags: {line_info.flags}")
                     
                     # Determine direction
                     if line_info.direction == Direction.OUTPUT:
@@ -151,7 +179,10 @@ class GPIOMonitor:
                         self.pin_states[bcm]['direction'] = 'unknown'
                     
                     # Determine pull resistor configuration
-                    if hasattr(line_info, 'bias'):
+                    # First check boot config (more reliable for Raspberry Pi)
+                    if bcm in boot_pull_config:
+                        self.pin_states[bcm]['pull'] = boot_pull_config[bcm]
+                    elif hasattr(line_info, 'bias'):
                         bias = line_info.bias
                         if bias == Bias.PULL_UP:
                             self.pin_states[bcm]['pull'] = 'up'
@@ -159,23 +190,16 @@ class GPIOMonitor:
                             self.pin_states[bcm]['pull'] = 'down'
                         elif bias == Bias.DISABLED:
                             self.pin_states[bcm]['pull'] = 'none'
-                        elif bias == Bias.UNKNOWN:
-                            self.pin_states[bcm]['pull'] = 'none'  # Treat unknown as none
                         else:
-                            self.pin_states[bcm]['pull'] = f'unknown({bias})'
-                            print(f"GPIO {bcm}: Unexpected bias value: {bias}")
+                            # Bias.UNKNOWN - don't display anything
+                            self.pin_states[bcm]['pull'] = 'none'
                     else:
-                        # No bias attribute, assume no pull resistor
                         self.pin_states[bcm]['pull'] = 'none'
                         
                 except Exception as e:
                     print(f"Could not read config for GPIO {bcm}: {e}")
-                    import traceback
-                    traceback.print_exc()
         except Exception as e:
             print(f"Error reading pin configurations: {e}")
-            import traceback
-            traceback.print_exc()
     
     def get_pin_function(self, bcm):
         """Get the special function name for a BCM pin"""
