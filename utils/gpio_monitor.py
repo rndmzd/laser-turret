@@ -133,23 +133,27 @@ class GPIOMonitor:
         return functions.get(bcm, f'GPIO{bcm}')
     
     def read_pin_states(self):
-        """Read current state of all GPIO pins"""
+        """Read current state of all GPIO pins and return list of changed pins"""
+        changed_pins = []
+        
         if self.request:
             # Real GPIO reading with gpiod v2.x API
             try:
                 # Read all values at once for better performance
                 values = self.request.get_values(GPIO_PINS)
                 
-                # Update pin states
-                for i, bcm in enumerate(GPIO_PINS):
+                # Update pin states and track changes
+                for bcm in GPIO_PINS:
                     # Convert Value enum to int (0 or 1)
                     new_value = 1 if values[bcm] == Value.ACTIVE else 0
                     
-                    # Debug: print changes
+                    # Check if value changed
                     if self.pin_states[bcm]['value'] != new_value:
                         print(f"GPIO {bcm} changed: {self.pin_states[bcm]['value']} -> {new_value}")
-                    
-                    self.pin_states[bcm]['value'] = new_value
+                        self.pin_states[bcm]['value'] = new_value
+                        changed_pins.append(bcm)
+                    else:
+                        self.pin_states[bcm]['value'] = new_value
             except Exception as e:
                 print(f"Error reading GPIO: {e}")
                 import traceback
@@ -159,9 +163,35 @@ class GPIOMonitor:
             import random
             for bcm in GPIO_PINS:
                 if random.random() > 0.95:  # Occasionally change state
-                    self.pin_states[bcm]['value'] = 1 - self.pin_states[bcm]['value']
+                    old_value = self.pin_states[bcm]['value']
+                    new_value = 1 - old_value
+                    self.pin_states[bcm]['value'] = new_value
+                    changed_pins.append(bcm)
         
-        return self.pin_states
+        return changed_pins
+    
+    def get_pin_data_for_bcm(self, bcm):
+        """Get data for a specific GPIO pin by BCM number"""
+        # Find physical pin number for this BCM
+        physical_pin = None
+        for phys, bcm_num in PI5_PINOUT.items():
+            if bcm_num == bcm:
+                physical_pin = phys
+                break
+        
+        if physical_pin is None:
+            return None
+        
+        state = self.pin_states.get(bcm, {})
+        return {
+            'physical': physical_pin,
+            'bcm': bcm,
+            'type': 'GPIO',
+            'value': state.get('value', 0),
+            'direction': state.get('direction', 'unknown'),
+            'function': state.get('function', f'GPIO{bcm}'),
+            'pull': state.get('pull', 'none')
+        }
     
     def get_pinout_data(self):
         """Get complete pinout data including power/ground pins"""
@@ -206,14 +236,27 @@ class GPIOMonitor:
     
     def _monitor_loop(self):
         """Background monitoring loop"""
+        full_update_counter = 0
+        
         while self.running:
-            self.read_pin_states()
-            pinout_data = self.get_pinout_data()
+            # Read GPIO states and get list of changed pins
+            changed_pins = self.read_pin_states()
             
-            # Emit update via SocketIO
-            socketio.emit('gpio_update', pinout_data)
+            # Immediately emit updates for changed pins
+            if changed_pins:
+                for bcm in changed_pins:
+                    pin_data = self.get_pin_data_for_bcm(bcm)
+                    if pin_data:
+                        socketio.emit('gpio_pin_change', pin_data)
             
-            time.sleep(0.1)  # Update every 100ms
+            # Emit full update periodically (every 10 cycles = 1 second)
+            full_update_counter += 1
+            if full_update_counter >= 10:
+                pinout_data = self.get_pinout_data()
+                socketio.emit('gpio_update', pinout_data)
+                full_update_counter = 0
+            
+            time.sleep(0.01)  # Poll every 10ms for fast response
     
     def stop_monitoring(self):
         """Stop monitoring"""

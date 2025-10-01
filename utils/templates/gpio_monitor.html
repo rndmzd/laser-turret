@@ -310,6 +310,14 @@
                 `Last updated: ${lastUpdateTime.toLocaleTimeString()}`;
         });
 
+        // Handle individual pin changes for instant updates
+        socket.on('gpio_pin_change', (pinData) => {
+            updateSinglePin(pinData);
+            lastUpdateTime = new Date();
+            document.getElementById('updateTime').textContent = 
+                `Last updated: ${lastUpdateTime.toLocaleTimeString()}`;
+        });
+
         function getPinClass(pin) {
             if (pin.type === '3V3') return 'pin-3v3';
             if (pin.type === '5V') return 'pin-5v';
@@ -346,6 +354,29 @@
                 </div>
                 <div class="pin-details">${details}</div>
             `;
+        }
+
+        function updateSinglePin(pinData) {
+            // Find the existing pin element by physical pin number
+            const pinElements = document.querySelectorAll('.pin');
+            
+            for (let element of pinElements) {
+                const pinNumberElement = element.querySelector('.pin-number');
+                if (pinNumberElement && parseInt(pinNumberElement.textContent) === pinData.physical) {
+                    // Update the pin's class for color change
+                    const newClass = getPinClass(pinData);
+                    element.className = pinData.physical % 2 === 1 
+                        ? `pin pin-left ${newClass}`
+                        : `pin pin-right ${newClass}`;
+                    
+                    // Update the pin info content
+                    const pinInfoElement = element.querySelector('.pin-info');
+                    if (pinInfoElement) {
+                        pinInfoElement.innerHTML = formatPinInfo(pinData);
+                    }
+                    break;
+                }
+            }
         }
 
         function updateGPIODisplay(pinoutData) {
