@@ -133,6 +133,15 @@ class GPIOMonitor:
                 try:
                     line_info = self.chip.get_line_info(bcm)
                     
+                    # Debug: Print what we got for first few pins
+                    if bcm in [17, 22, 23, 27, 18]:
+                        print(f"GPIO {bcm} line_info attributes: {dir(line_info)}")
+                        print(f"  direction: {line_info.direction}")
+                        if hasattr(line_info, 'bias'):
+                            print(f"  bias: {line_info.bias}")
+                        if hasattr(line_info, 'flags'):
+                            print(f"  flags: {line_info.flags}")
+                    
                     # Determine direction
                     if line_info.direction == Direction.OUTPUT:
                         self.pin_states[bcm]['direction'] = 'output'
@@ -143,18 +152,30 @@ class GPIOMonitor:
                     
                     # Determine pull resistor configuration
                     if hasattr(line_info, 'bias'):
-                        if line_info.bias == Bias.PULL_UP:
+                        bias = line_info.bias
+                        if bias == Bias.PULL_UP:
                             self.pin_states[bcm]['pull'] = 'up'
-                        elif line_info.bias == Bias.PULL_DOWN:
+                        elif bias == Bias.PULL_DOWN:
                             self.pin_states[bcm]['pull'] = 'down'
-                        elif line_info.bias == Bias.DISABLED:
+                        elif bias == Bias.DISABLED:
                             self.pin_states[bcm]['pull'] = 'none'
+                        elif bias == Bias.UNKNOWN:
+                            self.pin_states[bcm]['pull'] = 'none'  # Treat unknown as none
                         else:
-                            self.pin_states[bcm]['pull'] = 'unknown'
+                            self.pin_states[bcm]['pull'] = f'unknown({bias})'
+                            print(f"GPIO {bcm}: Unexpected bias value: {bias}")
+                    else:
+                        # No bias attribute, assume no pull resistor
+                        self.pin_states[bcm]['pull'] = 'none'
+                        
                 except Exception as e:
                     print(f"Could not read config for GPIO {bcm}: {e}")
+                    import traceback
+                    traceback.print_exc()
         except Exception as e:
             print(f"Error reading pin configurations: {e}")
+            import traceback
+            traceback.print_exc()
     
     def get_pin_function(self, bcm):
         """Get the special function name for a BCM pin"""
