@@ -137,12 +137,23 @@ class GPIOMonitor:
         if self.request:
             # Real GPIO reading with gpiod v2.x API
             try:
-                for bcm in GPIO_PINS:
-                    value = self.request.get_value(bcm)
+                # Read all values at once for better performance
+                values = self.request.get_values(GPIO_PINS)
+                
+                # Update pin states
+                for i, bcm in enumerate(GPIO_PINS):
                     # Convert Value enum to int (0 or 1)
-                    self.pin_states[bcm]['value'] = 1 if value == Value.ACTIVE else 0
+                    new_value = 1 if values[bcm] == Value.ACTIVE else 0
+                    
+                    # Debug: print changes
+                    if self.pin_states[bcm]['value'] != new_value:
+                        print(f"GPIO {bcm} changed: {self.pin_states[bcm]['value']} -> {new_value}")
+                    
+                    self.pin_states[bcm]['value'] = new_value
             except Exception as e:
                 print(f"Error reading GPIO: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             # Simulation mode - generate random states
             import random
