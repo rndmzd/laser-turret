@@ -110,7 +110,7 @@ class GPIOMonitor:
     def initialize_pins(self):
         """Initialize all GPIO pins for monitoring"""
         for bcm in GPIO_PINS:
-            # Initialize state
+            # Initialize state with default values
             self.pin_states[bcm] = {
                 'bcm': bcm,
                 'value': 0,
@@ -118,6 +118,43 @@ class GPIOMonitor:
                 'function': self.get_pin_function(bcm),
                 'pull': 'none'
             }
+        
+        # Read actual configuration from the chip
+        if self.chip:
+            self.update_pin_configurations()
+    
+    def update_pin_configurations(self):
+        """Read actual pin configurations (direction, bias) from the chip"""
+        try:
+            from gpiod.line import Bias
+            
+            # Get line info for each GPIO pin
+            for bcm in GPIO_PINS:
+                try:
+                    line_info = self.chip.get_line_info(bcm)
+                    
+                    # Determine direction
+                    if line_info.direction == Direction.OUTPUT:
+                        self.pin_states[bcm]['direction'] = 'output'
+                    elif line_info.direction == Direction.INPUT:
+                        self.pin_states[bcm]['direction'] = 'input'
+                    else:
+                        self.pin_states[bcm]['direction'] = 'unknown'
+                    
+                    # Determine pull resistor configuration
+                    if hasattr(line_info, 'bias'):
+                        if line_info.bias == Bias.PULL_UP:
+                            self.pin_states[bcm]['pull'] = 'up'
+                        elif line_info.bias == Bias.PULL_DOWN:
+                            self.pin_states[bcm]['pull'] = 'down'
+                        elif line_info.bias == Bias.DISABLED:
+                            self.pin_states[bcm]['pull'] = 'none'
+                        else:
+                            self.pin_states[bcm]['pull'] = 'unknown'
+                except Exception as e:
+                    print(f"Could not read config for GPIO {bcm}: {e}")
+        except Exception as e:
+            print(f"Error reading pin configurations: {e}")
     
     def get_pin_function(self, bcm):
         """Get the special function name for a BCM pin"""

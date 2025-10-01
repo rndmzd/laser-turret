@@ -348,6 +348,14 @@
                 details += ` | ${pin.direction.toUpperCase()}`;
             }
             
+            // Add pull resistor info
+            if (pin.pull && pin.pull !== 'none') {
+                const pullText = pin.pull === 'up' ? '↑ PULL-UP' : 
+                                 pin.pull === 'down' ? '↓ PULL-DOWN' : 
+                                 pin.pull.toUpperCase();
+                details += ` | ${pullText}`;
+            }
+            
             return `
                 <div class="pin-label">
                     ${pin.function}
