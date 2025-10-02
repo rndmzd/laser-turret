@@ -33,7 +33,7 @@ fps_lock = threading.Lock()
 # Exposure monitoring
 exposure_stats = {
     'exposure_time': 0,
-    'analogue_gain': 0
+    'analog_gain': 0
 }
 exposure_lock = threading.Lock()
 
@@ -105,7 +105,7 @@ def monitor_exposure():
             metadata = picam2.capture_metadata()
             with exposure_lock:
                 exposure_stats['exposure_time'] = metadata.get('ExposureTime', 0)
-                exposure_stats['analogue_gain'] = metadata.get('AnalogueGain', 0)
+                exposure_stats['analog_gain'] = metadata.get('AnalogueGain', 0)
         except Exception as e:
             print(f"Error monitoring exposure: {e}")
         time.sleep(0.2)
@@ -133,7 +133,7 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
         fps_text = f"FPS: {fps_value}"
     with exposure_lock:
         exp_text = f"Exp: {exposure_stats['exposure_time']/1000:.1f}ms"
-        gain_text = f"Gain: {exposure_stats['analogue_gain']:.1f}x"
+        gain_text = f"Gain: {exposure_stats['analog_gain']:.1f}x"
     
     y_offset = 40
     for text in [fps_text, exp_text, gain_text]:
@@ -228,6 +228,18 @@ def update_crosshair():
         crosshair_pos['y'] = int(data['y'])
     return jsonify({'status': 'success'})
 
+@app.route('/reset_crosshair', methods=['POST'])
+def reset_crosshair():
+    """Reset crosshair to center position"""
+    with crosshair_lock:
+        crosshair_pos['x'] = CAMERA_WIDTH // 2
+        crosshair_pos['y'] = CAMERA_HEIGHT // 2
+    return jsonify({
+        'status': 'success',
+        'x': crosshair_pos['x'],
+        'y': crosshair_pos['y']
+    })
+
 @app.route('/get_fps')
 def get_fps():
     """Return current FPS value"""
@@ -257,8 +269,11 @@ def set_exposure():
             # Only set manual exposure if auto is disabled
             controls['ExposureTime'] = int(data['exposure_time'])
         
-        if 'analogue_gain' in data and not data.get('auto', True):
-            controls['AnalogueGain'] = float(data['analogue_gain'])
+        if 'analog_gain' in data and not data.get('auto', True):
+            controls['AnalogueGain'] = float(data['analog_gain'])
+        
+        if 'digital_gain' in data and not data.get('auto', True):
+            controls['DigitalGain'] = float(data['digital_gain'])
         
         if controls:
             picam2.set_controls(controls)
@@ -352,9 +367,9 @@ def get_camera_settings():
             'status': 'success',
             'settings': {
                 'exposure_time': metadata.get('ExposureTime', 0),
-                'analogue_gain': metadata.get('AnalogueGain', 0),
+                'analog_gain': metadata.get('AnalogueGain', 0),
                 'digital_gain': metadata.get('DigitalGain', 0),
-                'colour_gains': metadata.get('ColourGains', [0, 0]),
+                'color_gains': metadata.get('ColourGains', [0, 0]),
                 'lux': metadata.get('Lux', 0)
             }
         })

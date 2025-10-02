@@ -387,6 +387,9 @@
                             <span class="stat-label">Position</span>
                             <span id="position" class="stat-value">Center</span>
                         </div>
+                        <button class="btn-secondary" onclick="resetCrosshair()" style="margin-top: 10px;">
+                            🎯 Reset to Center
+                        </button>
                     </div>
 
                     <div class="control-group">
@@ -400,7 +403,7 @@
                             <span id="exp-time" class="stat-value">--</span>
                         </div>
                         <div class="stat-row">
-                            <span class="stat-label">Analogue Gain</span>
+                            <span class="stat-label">Analog Gain</span>
                             <span id="gain" class="stat-value">--</span>
                         </div>
                         <div class="stat-row">
@@ -433,10 +436,18 @@
                             </div>
 
                             <div class="slider-control">
-                                <label>Analogue Gain</label>
+                                <label>Analog Gain</label>
                                 <div class="slider-wrapper">
-                                    <input type="range" id="analogue-gain" min="1" max="16" value="1" step="0.1" oninput="updateGainValue()">
-                                    <span id="analogue-gain-value" class="slider-value">1.0</span>
+                                    <input type="range" id="analog-gain" min="1" max="16" value="1" step="0.1" oninput="updateAnalogGainValue()">
+                                    <span id="analog-gain-value" class="slider-value">1.0</span>
+                                </div>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Digital Gain</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="digital-gain" min="1" max="8" value="1" step="0.1" oninput="updateDigitalGainValue()">
+                                    <span id="digital-gain-value" class="slider-value">1.0</span>
                                 </div>
                             </div>
 
@@ -588,6 +599,21 @@
             });
         });
 
+        // Reset crosshair to center
+        function resetCrosshair() {
+            fetch('/reset_crosshair', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('position').textContent = `X: ${data.x}, Y: ${data.y}`;
+                }
+            })
+            .catch(error => console.error('Error resetting crosshair:', error));
+        }
+
         // Exposure controls
         function toggleAutoExposure() {
             const autoEnabled = document.getElementById('auto-exposure').checked;
@@ -607,21 +633,28 @@
             document.getElementById('exposure-time-value').textContent = value;
         }
 
-        function updateGainValue() {
-            const value = parseFloat(document.getElementById('analogue-gain').value).toFixed(1);
-            document.getElementById('analogue-gain-value').textContent = value;
+        function updateAnalogGainValue() {
+            const value = parseFloat(document.getElementById('analog-gain').value).toFixed(1);
+            document.getElementById('analog-gain-value').textContent = value;
+        }
+
+        function updateDigitalGainValue() {
+            const value = parseFloat(document.getElementById('digital-gain').value).toFixed(1);
+            document.getElementById('digital-gain-value').textContent = value;
         }
 
         function applyExposure() {
             const exposureTime = parseInt(document.getElementById('exposure-time').value);
-            const analogueGain = parseFloat(document.getElementById('analogue-gain').value);
+            const analogGain = parseFloat(document.getElementById('analog-gain').value);
+            const digitalGain = parseFloat(document.getElementById('digital-gain').value);
             fetch('/set_exposure', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     auto: false,
                     exposure_time: exposureTime,
-                    analogue_gain: analogueGain
+                    analog_gain: analogGain,
+                    digital_gain: digitalGain
                 })
             })
             .then(response => response.json())
@@ -799,7 +832,7 @@
                     document.getElementById('exp-time').textContent = 
                         `${(data.exposure_time/1000).toFixed(1)} ms`;
                     document.getElementById('gain').textContent = 
-                        `${data.analogue_gain.toFixed(2)}x`;
+                        `${data.analog_gain.toFixed(2)}x`;
                 });
 
             fetch('/get_fps')
