@@ -368,6 +368,9 @@ def detect_motion(frame):
             cy = int(M["m01"] / M["m00"])
             motion_center = (cx, cy)
             last_motion_center = motion_center
+    else:
+        # Clear last motion center when no motion detected
+        last_motion_center = None
     
     return motion_contours, motion_center
 
