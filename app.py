@@ -8,6 +8,9 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
+from laserturret.hardware_interface import get_gpio_backend
+from laserturret.config_manager import get_config
+from laserturret.stepper_controller import StepperController
 
 app = Flask(__name__)
 
