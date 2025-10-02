@@ -1,4 +1,8 @@
-from laserturret import LaserControl
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from laserturret.lasercontrol import LaserControl
 
 # Basic usage
 laser = LaserControl(gpio_pin=18)  # Initialize with default 1kHz PWM

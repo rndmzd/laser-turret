@@ -1,12 +1,15 @@
 import logging
 import time
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from contextlib import contextmanager
 from typing import Generator, Optional
 import pytest
 from threading import Thread, Event
 
-from laserturret import Pins
+from laserturret import get_config
 
 from laserturret.steppercontrol import (
     StepperMotor,
@@ -26,17 +29,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Load configuration
+config = get_config()
+
 TEST_CONFIG_X = {
-    'STEP_PIN': Pins.X_STEP.value,
-    'DIR_PIN': Pins.X_DIR.value,
-    'ENABLE_PIN': Pins.X_ENABLE.value,
-    'MS1_PIN': Pins.MS1.value,
-    'MS2_PIN': Pins.MS2.value,
-    'MS3_PIN': Pins.MS3.value,
-    'CW_LIMIT_SWITCH_PIN': Pins.X_CW_LIMIT.value,
-    'CCW_LIMIT_SWITCH_PIN': Pins.X_CCW_LIMIT.value,
-    'STEPS_PER_REV': 200,
-    'MICROSTEPS': 8,
+    'STEP_PIN': config.get_motor_pin('x_step_pin'),
+    'DIR_PIN': config.get_motor_pin('x_dir_pin'),
+    'ENABLE_PIN': config.get_motor_pin('x_enable_pin'),
+    'MS1_PIN': config.get_motor_pin('ms1_pin'),
+    'MS2_PIN': config.get_motor_pin('ms2_pin'),
+    'MS3_PIN': config.get_motor_pin('ms3_pin'),
+    'CW_LIMIT_SWITCH_PIN': config.get_gpio_pin('x_cw_limit_pin'),
+    'CCW_LIMIT_SWITCH_PIN': config.get_gpio_pin('x_ccw_limit_pin'),
+    'STEPS_PER_REV': config.get_motor_steps_per_rev(),
+    'MICROSTEPS': config.get_motor_microsteps(),
     'SAFE_DELAY': 0.001,
     'TEST_STEPS': 50,
     'CALIBRATION_TIMEOUT': 30,
@@ -44,16 +50,16 @@ TEST_CONFIG_X = {
 }
 
 TEST_CONFIG_Y = {
-    'STEP_PIN': Pins.Y_STEP.value,
-    'DIR_PIN': Pins.Y_DIR.value,
-    'ENABLE_PIN': Pins.Y_ENABLE.value,
-    'MS1_PIN': Pins.MS1.value,
-    'MS2_PIN': Pins.MS2.value,
-    'MS3_PIN': Pins.MS3.value,
-    'CW_LIMIT_SWITCH_PIN': Pins.Y_CW_LIMIT.value,
-    'CCW_LIMIT_SWITCH_PIN': Pins.Y_CCW_LIMIT.value,
-    'STEPS_PER_REV': 200,
-    'MICROSTEPS': 8,
+    'STEP_PIN': config.get_motor_pin('y_step_pin'),
+    'DIR_PIN': config.get_motor_pin('y_dir_pin'),
+    'ENABLE_PIN': config.get_motor_pin('y_enable_pin'),
+    'MS1_PIN': config.get_motor_pin('ms1_pin'),
+    'MS2_PIN': config.get_motor_pin('ms2_pin'),
+    'MS3_PIN': config.get_motor_pin('ms3_pin'),
+    'CW_LIMIT_SWITCH_PIN': config.get_gpio_pin('y_cw_limit_pin'),
+    'CCW_LIMIT_SWITCH_PIN': config.get_gpio_pin('y_ccw_limit_pin'),
+    'STEPS_PER_REV': config.get_motor_steps_per_rev(),
+    'MICROSTEPS': config.get_motor_microsteps(),
     'SAFE_DELAY': 0.001,
     'TEST_STEPS': 50,
     'CALIBRATION_TIMEOUT': 30,
