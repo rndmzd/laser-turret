@@ -168,6 +168,21 @@ class LgpioGPIO(GPIOInterface):
         raise RuntimeError("Could not open any GPIO chip (tried 4, 0)")
     
     def setup(self, pin: int, mode: PinMode, pull_up_down: PullMode = PullMode.OFF) -> None:
+        # Check if pin is already configured with the same settings
+        if pin in self._pin_configs:
+            existing = self._pin_configs[pin]
+            if existing['mode'] == mode and existing['pull'] == pull_up_down:
+                # Pin already configured correctly, skip
+                logger.debug(f"Pin {pin} already configured with mode={mode}, pull={pull_up_down}")
+                return
+            else:
+                # Pin configured differently, need to reconfigure
+                logger.warning(f"Pin {pin} already configured, freeing before reconfiguration")
+                try:
+                    self.lgpio.gpio_free(self.chip, pin)
+                except:
+                    pass
+        
         # Configure pin direction and pull-up/down
         flags = 0
         
