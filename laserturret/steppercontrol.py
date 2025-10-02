@@ -432,39 +432,56 @@ class StepperMotor:
             logger.info(f"[{self.name}] No limit switches configured, skipping verification.")
             return
             
-        logger.info(f"\n[{self.name}] Testing limit switches...")
-        logger.info("Please trigger each limit switch to confirm they're working:")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"[{self.name}] LIMIT SWITCH VERIFICATION")
+        logger.info(f"{'='*60}")
+        logger.info(f"Motor: {self.name}")
+        
+        if self.cw_limit_switch_pin:
+            logger.info(f"  CW Limit Switch:  GPIO Pin {self.cw_limit_switch_pin}")
+        if self.ccw_limit_switch_pin:
+            logger.info(f"  CCW Limit Switch: GPIO Pin {self.ccw_limit_switch_pin}")
+        
+        logger.info(f"\nPlease manually trigger each limit switch when prompted.")
+        logger.info(f"You have 30 seconds for each switch.\n")
         
         timeout = 30  # seconds
         switches_to_test = []
         
         if self.cw_limit_switch_pin:
-            switches_to_test.append((CLOCKWISE, "CW"))
+            switches_to_test.append((CLOCKWISE, "CW", "CLOCKWISE"))
         if self.ccw_limit_switch_pin:
-            switches_to_test.append((COUNTER_CLOCKWISE, "CCW"))
+            switches_to_test.append((COUNTER_CLOCKWISE, "CCW", "COUNTER-CLOCKWISE"))
         
-        for direction, name in switches_to_test:
+        for idx, (direction, name, full_name) in enumerate(switches_to_test, 1):
             start_time = time.time()
-            logger.info(f"Trigger the {name} limit switch...")
+            logger.info(f"[{idx}/{len(switches_to_test)}] >>> TRIGGER THE {name} ({full_name}) LIMIT SWITCH FOR {self.name} <<<")
+            logger.info(f"      (GPIO Pin {self.cw_limit_switch_pin if direction == CLOCKWISE else self.ccw_limit_switch_pin})")
+            logger.info(f"      Waiting...")
             
             # Wait for correct switch to trigger
             while True:
                 if time.time() - start_time > timeout:
                     raise LimitSwitchError(
-                        f"Manually trigger the {name} limit switch within {timeout} seconds."
+                        f"Timeout: {name} limit switch for {self.name} was not triggered within {timeout} seconds."
                     )
                     
                 # Poll the switch directly
                 if self._check_limit_switch(direction):
-                    logger.info(f"[{self.name}] {name} limit switch verified")
+                    logger.info(f"      [OK] {name} limit switch verified (GPIO Pin {self.cw_limit_switch_pin if direction == CLOCKWISE else self.ccw_limit_switch_pin})")
                     with self.lock:
                         self.state.triggered_limit = None
                         self.state.status = MotorStatus.IDLE
+                    # Wait for release
+                    time.sleep(0.3)
+                    logger.info(f"")
                     break
                     
                 time.sleep(0.1)
         
-        logger.info(f"[{self.name}] All limit switches verified!")
+        logger.info(f"{'='*60}")
+        logger.info(f"[{self.name}] [SUCCESS] ALL LIMIT SWITCHES VERIFIED!")
+        logger.info(f"{'='*60}\n")
 
     def calibrate(self) -> None:
         """Calibrate by finding limits and centering"""
