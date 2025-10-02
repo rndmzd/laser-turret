@@ -5,9 +5,16 @@ The laser turret project includes a hardware abstraction layer (HAL) that enable
 ## Overview
 
 The HAL provides abstract interfaces for:
+
 - **GPIO operations** - Pin I/O, PWM, event detection
 - **Camera operations** - Frame capture, metadata, configuration
 - **Mock implementations** - Simulated hardware for testing
+
+### Supported Hardware
+
+- **Raspberry Pi 5** - Uses `lgpio` library
+- **Raspberry Pi 4 and earlier** - Uses `RPi.GPIO` library (legacy)
+- **Development/Testing** - Mock implementations (no hardware required)
 
 ## Benefits
 
@@ -37,8 +44,9 @@ The HAL provides abstract interfaces for:
     │  Real   │        │  Mock  │
     │Hardware │        │Hardware│
     └─────────┘        └────────┘
-    RPi.GPIO           Simulated
-    Picamera2          No Pi needed
+    lgpio (Pi 5)       Simulated
+    RPi.GPIO (Pi 4-)   No Pi needed
+    Picamera2
 ```
 
 ## Usage
@@ -48,7 +56,7 @@ The HAL provides abstract interfaces for:
 ```python
 from laserturret.lasercontrol import LaserControl
 
-# Auto-detects RPi.GPIO if available, falls back to mock
+# Auto-detects lgpio (Pi 5) or RPi.GPIO (Pi 4-), falls back to mock
 laser = LaserControl(gpio_pin=12)
 ```
 
@@ -188,7 +196,7 @@ The `get_gpio_backend()` and `get_camera_backend()` functions automatically choo
 ```python
 from laserturret.hardware_interface import get_gpio_backend, get_camera_backend
 
-# Auto-detect: tries real hardware first, falls back to mock
+# Auto-detect: tries lgpio (Pi 5) → RPi.GPIO (Pi 4-) → mock
 gpio = get_gpio_backend()
 camera = get_camera_backend()
 
@@ -196,6 +204,16 @@ camera = get_camera_backend()
 gpio = get_gpio_backend(mock=True)
 camera = get_camera_backend(mock=True)
 ```
+
+### GPIO Backend Priority
+
+The system tries GPIO libraries in this order:
+
+1. **lgpio** - Raspberry Pi 5 (preferred)
+2. **RPi.GPIO** - Raspberry Pi 4 and earlier (legacy)
+3. **MockGPIO** - Fallback for development/testing
+
+This ensures compatibility across all Raspberry Pi models.
 
 ## Testing
 
@@ -207,6 +225,7 @@ python3 test_with_mock_hardware.py
 ```
 
 This runs a complete test suite using mock hardware:
+
 - LaserControl PWM operations
 - MockCamera frame capture
 - GPIO event detection
@@ -247,7 +266,7 @@ if __name__ == '__main__':
 ### Existing Code
 
 ```python
-# Old: Direct RPi.GPIO usage
+# Old: Direct RPi.GPIO usage (doesn't work on Pi 5!)
 import RPi.GPIO as GPIO
 
 GPIO.setmode(GPIO.BCM)
@@ -259,10 +278,10 @@ pwm.start(0)
 ### With HAL
 
 ```python
-# New: Using hardware abstraction
+# New: Using hardware abstraction (works on all Pi models)
 from laserturret.hardware_interface import get_gpio_backend, PinMode
 
-gpio = get_gpio_backend()  # Auto-detects or uses mock
+gpio = get_gpio_backend()  # Auto-detects lgpio/RPi.GPIO
 gpio.setup(12, PinMode.OUTPUT)
 pwm = gpio.pwm(12, frequency=1000)
 pwm.start(0)
@@ -270,11 +289,13 @@ pwm.start(0)
 
 ### Benefits of Migration
 
-1. **Testability** - Can run without Pi hardware
-2. **Flexibility** - Easy to swap implementations
-3. **Type Safety** - Clear interfaces with type hints
-4. **Debugging** - Mock implementations log all operations
-5. **CI/CD** - Run tests in any environment
+1. **Raspberry Pi 5 Support** - Works on Pi 5 (RPi.GPIO doesn't!)
+2. **Testability** - Can run without Pi hardware
+3. **Flexibility** - Easy to swap implementations
+4. **Type Safety** - Clear interfaces with type hints
+5. **Debugging** - Mock implementations log all operations
+6. **CI/CD** - Run tests in any environment
+7. **Backward Compatible** - Still works on Pi 4 and earlier
 
 ## Implementation Details
 
@@ -295,6 +316,7 @@ MockGPIO maintains internal state for all pins:
 ### Mock Camera Frames
 
 MockCamera generates test pattern frames:
+
 - Red gradient (left → right)
 - Green gradient (top → bottom)
 - Blue constant value
