@@ -588,9 +588,13 @@ class MockCamera(CameraInterface):
         }
 
 
+# Global GPIO backend singleton
+_gpio_backend_instance: Optional[GPIOInterface] = None
+
+
 def get_gpio_backend(mock: bool = False) -> GPIOInterface:
     """
-    Get GPIO backend based on environment.
+    Get GPIO backend based on environment (singleton pattern).
     
     Tries backends in this order:
     1. lgpio (Raspberry Pi 5)
@@ -601,16 +605,24 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
         mock: If True, force mock implementation
     
     Returns:
-        GPIOInterface instance
+        GPIOInterface instance (singleton)
     """
+    global _gpio_backend_instance
+    
+    # Return existing instance if available
+    if _gpio_backend_instance is not None:
+        return _gpio_backend_instance
+    
     if mock:
         logger.info("Using mock GPIO backend")
-        return MockGPIO()
+        _gpio_backend_instance = MockGPIO()
+        return _gpio_backend_instance
     
     # Try lgpio first (Pi 5 compatible)
     try:
         backend = LgpioGPIO()
         logger.info("Using LgpioGPIO backend")
+        _gpio_backend_instance = backend
         return backend
     except (ImportError, RuntimeError) as e:
         logger.debug(f"lgpio not available: {e}")
@@ -619,13 +631,15 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
     try:
         backend = RPiGPIO()
         logger.info("Using RPiGPIO backend (legacy)")
+        _gpio_backend_instance = backend
         return backend
     except ImportError:
         logger.debug("RPi.GPIO not available")
     
     # Final fallback to mock
     logger.warning("No GPIO library available (tried lgpio, RPi.GPIO), falling back to mock")
-    return MockGPIO()
+    _gpio_backend_instance = MockGPIO()
+    return _gpio_backend_instance
 
 
 def get_camera_backend(mock: bool = False) -> CameraInterface:
