@@ -397,6 +397,8 @@ class StepperMotor:
         self.running = False
         if hasattr(self, 'command_thread'):
             self.command_thread.join(timeout=1.0)
+            if self.command_thread.is_alive():
+                logger.warning(f"[{self.name}] Command thread did not stop within timeout")
         
         # Release motor
         self.release()
