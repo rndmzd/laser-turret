@@ -36,15 +36,11 @@
 
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr 400px;
+            grid-template-columns: 1fr;
             gap: 20px;
             align-items: start;
-        }
-
-        @media (max-width: 1200px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
         .video-section {
@@ -71,21 +67,25 @@
 
         .tabs {
             display: flex;
-            gap: 5px;
+            justify-content: space-between;
+            gap: 3px;
             margin-bottom: 20px;
             border-bottom: 2px solid #e0e0e0;
         }
 
         .tab {
-            padding: 12px 20px;
+            padding: 10px 8px;
             background: transparent;
             border: none;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
             color: #666;
             transition: all 0.3s;
             border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            flex: 1;
+            text-align: center;
         }
 
         .tab:hover {
@@ -357,6 +357,79 @@
             outline: none;
             border-color: #667eea;
         }
+
+        .preset-item {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .preset-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+
+        .preset-info {
+            flex: 1;
+        }
+
+        .preset-slot {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .preset-label {
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .preset-coords {
+            color: #666;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .preset-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .preset-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-btn-load {
+            background: #667eea;
+            color: white;
+        }
+
+        .preset-btn-load:hover {
+            background: #5568d3;
+        }
+
+        .preset-btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .preset-btn-delete:hover {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -374,6 +447,10 @@
             <div class="controls-panel">
                 <div class="tabs">
                     <button class="tab active" onclick="switchTab('stats')">📊 Stats</button>
+                    <button class="tab" onclick="switchTab('laser')">🔴 Laser</button>
+                    <button class="tab" onclick="switchTab('presets')">📍 Presets</button>
+                    <button class="tab" onclick="switchTab('object')">👤 Objects</button>
+                    <button class="tab" onclick="switchTab('motion')">🎯 Motion</button>
                     <button class="tab" onclick="switchTab('exposure')">🔆 Exposure</button>
                     <button class="tab" onclick="switchTab('image')">🎨 Image</button>
                     <button class="tab" onclick="switchTab('capture')">📸 Capture</button>
@@ -411,6 +488,277 @@
                             <span id="digital-gain" class="stat-value">--</span>
                         </div>
                     </div>
+                </div>
+
+                <!-- Laser Control Tab -->
+                <div id="laser-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>🔴 Laser System</h3>
+                        
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="laser-enabled" onchange="toggleLaser()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Laser System</span>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="auto-fire-enabled" onchange="toggleAutoFire()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Auto-Fire on Detection</span>
+                        </div>
+
+                        <button id="fire-button" class="btn-success" onclick="fireLaser()" style="font-size: 16px; padding: 15px;">
+                            🔴 FIRE LASER
+                        </button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>⚙️ Fire Settings</h3>
+
+                        <div class="slider-control">
+                            <label>Pulse Duration (ms)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pulse-duration" min="10" max="1000" value="100" step="10" oninput="updatePulseDurationValue()">
+                                <span id="pulse-duration-value" class="slider-value">100ms</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Burst Count</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="burst-count" min="1" max="10" value="1" step="1" oninput="updateBurstCountValue()">
+                                <span id="burst-count-value" class="slider-value">1</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Burst Delay (ms)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="burst-delay" min="50" max="1000" value="100" step="50" oninput="updateBurstDelayValue()">
+                                <span id="burst-delay-value" class="slider-value">100ms</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Cooldown (seconds)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="laser-cooldown" min="0.1" max="5" value="0.5" step="0.1" oninput="updateLaserCooldownValue()">
+                                <span id="laser-cooldown-value" class="slider-value">0.5s</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyLaserSettings()">Apply Fire Settings</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>📊 Laser Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">System Status</span>
+                            <span id="laser-system-status" class="stat-value">OFF</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Ready to Fire</span>
+                            <span id="laser-ready" class="stat-value">No</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Total Fires</span>
+                            <span id="laser-fire-count" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Cooldown</span>
+                            <span id="laser-cooldown-remaining" class="stat-value">Ready</span>
+                        </div>
+                        <button class="btn-secondary" onclick="resetFireCount()" style="margin-top: 10px;">
+                            🔄 Reset Counter
+                        </button>
+                    </div>
+
+                    <div id="laser-status-message" class="status-message"></div>
+                </div>
+
+                <!-- Presets Tab -->
+                <div id="presets-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>💾 Save Position</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Save current crosshair position to a slot (1-10)
+                        </p>
+                        
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <input type="number" id="save-slot" min="1" max="10" value="1" 
+                                   style="width: 60px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                            <input type="text" id="preset-label" placeholder="Label (optional)" 
+                                   style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <button class="btn-primary" onclick="savePreset()">💾 Save to Slot</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>📍 Saved Positions</h3>
+                        <div id="preset-list" style="max-height: 200px; overflow-y: auto;">
+                            <p style="color: #999; text-align: center; padding: 20px;">No presets saved</p>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>🔄 Pattern Sequence</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Execute sequence of saved positions
+                        </p>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; color: #555; font-weight: 600; margin-bottom: 8px; font-size: 13px;">
+                                Sequence (comma-separated slots, e.g., 1,2,3,4)
+                            </label>
+                            <input type="text" id="pattern-sequence" placeholder="1,2,3,4" 
+                                   style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Delay Between Positions (seconds)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pattern-delay" min="0.5" max="5" value="1" step="0.5" oninput="updatePatternDelayValue()">
+                                <span id="pattern-delay-value" class="slider-value">1.0s</span>
+                            </div>
+                        </div>
+
+                        <div class="toggle-switch" style="margin-bottom: 15px;">
+                            <label class="switch">
+                                <input type="checkbox" id="pattern-loop" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Loop Pattern</span>
+                        </div>
+
+                        <button id="start-pattern-btn" class="btn-success" onclick="startPattern()">
+                            ▶️ Start Pattern
+                        </button>
+                        <button id="stop-pattern-btn" class="btn-secondary" onclick="stopPattern()" style="display: none;">
+                            ⏹️ Stop Pattern
+                        </button>
+                    </div>
+
+                    <div id="preset-status" class="status-message"></div>
+                </div>
+
+                <!-- Object Detection Tab -->
+                <div id="object-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>👤 Object Detection</h3>
+                        
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="object-enabled" onchange="toggleObjectDetection()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Object Detection</span>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="object-auto-track-enabled" onchange="toggleObjectAutoTrack()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Auto-Track Objects</span>
+                        </div>
+
+                        <div class="select-control">
+                            <label>Detection Mode</label>
+                            <select id="detection-mode" onchange="applyObjectSettings()">
+                                <option value="face">Face Detection</option>
+                                <option value="eye">Eye Detection</option>
+                                <option value="body">Full Body Detection</option>
+                                <option value="smile">Smile Detection</option>
+                            </select>
+                        </div>
+
+                        <div class="select-control">
+                            <label>Target Priority</label>
+                            <select id="target-priority" onchange="applyObjectSettings()">
+                                <option value="largest">Largest Object</option>
+                                <option value="closest">Closest Object</option>
+                                <option value="leftmost">Leftmost Object</option>
+                                <option value="rightmost">Rightmost Object</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>📊 Detection Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Status</span>
+                            <span id="object-status" class="stat-value">OFF</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Objects Detected</span>
+                            <span id="objects-count" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Current Mode</span>
+                            <span id="current-mode" class="stat-value">Face</span>
+                        </div>
+                    </div>
+
+                    <div id="object-status-message" class="status-message"></div>
+                </div>
+
+                <!-- Motion Detection Tab -->
+                <div id="motion-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>🎯 Motion Detection</h3>
+                        
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="motion-enabled" onchange="toggleMotionDetection()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Motion Detection</span>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="auto-track-enabled" onchange="toggleAutoTrack()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Auto-Track Motion</span>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Sensitivity (Lower = More Sensitive)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="motion-sensitivity" min="10" max="100" value="25" step="5" oninput="updateSensitivityValue()">
+                                <span id="sensitivity-value" class="slider-value">25</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Minimum Area (pixels)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="motion-min-area" min="100" max="5000" value="500" step="100" oninput="updateMinAreaValue()">
+                                <span id="min-area-value" class="slider-value">500</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyMotionSettings()">Apply Settings</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>📊 Motion Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Detection</span>
+                            <span id="motion-status" class="stat-value">OFF</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Motion Detected</span>
+                            <span id="motion-detected" class="stat-value">No</span>
+                        </div>
+                    </div>
+
+                    <div id="motion-status-message" class="status-message"></div>
                 </div>
 
                 <!-- Exposure Tab -->
@@ -824,6 +1172,593 @@
                 .catch(error => console.error('Error checking recording status:', error));
         }
 
+        // Laser control functions
+        function toggleLaser() {
+            const enabled = document.getElementById('laser-enabled').checked;
+            fetch('/laser/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, 
+                        enabled ? 'Laser system enabled' : 'Laser system disabled');
+                    updateLaserStatus();
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to toggle laser');
+                console.error('Error toggling laser:', error);
+            });
+        }
+
+        function toggleAutoFire() {
+            const enabled = document.getElementById('auto-fire-enabled').checked;
+            fetch('/laser/auto_fire', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, 
+                        enabled ? 'Auto-fire enabled' : 'Auto-fire disabled');
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to toggle auto-fire');
+                console.error('Error toggling auto-fire:', error);
+            });
+        }
+
+        function fireLaser() {
+            const button = document.getElementById('fire-button');
+            button.disabled = true;
+            
+            fetch('/laser/fire', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, data.message);
+                    updateLaserStatus();
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+                setTimeout(() => { button.disabled = false; }, 100);
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to fire laser');
+                console.error('Error firing laser:', error);
+                button.disabled = false;
+            });
+        }
+
+        function updatePulseDurationValue() {
+            const value = document.getElementById('pulse-duration').value;
+            document.getElementById('pulse-duration-value').textContent = value + 'ms';
+        }
+
+        function updateBurstCountValue() {
+            const value = document.getElementById('burst-count').value;
+            document.getElementById('burst-count-value').textContent = value;
+        }
+
+        function updateBurstDelayValue() {
+            const value = document.getElementById('burst-delay').value;
+            document.getElementById('burst-delay-value').textContent = value + 'ms';
+        }
+
+        function updateLaserCooldownValue() {
+            const value = parseFloat(document.getElementById('laser-cooldown').value).toFixed(1);
+            document.getElementById('laser-cooldown-value').textContent = value + 's';
+        }
+
+        function applyLaserSettings() {
+            const pulseDuration = parseFloat(document.getElementById('pulse-duration').value) / 1000;
+            const burstCount = parseInt(document.getElementById('burst-count').value);
+            const burstDelay = parseFloat(document.getElementById('burst-delay').value) / 1000;
+            const cooldown = parseFloat(document.getElementById('laser-cooldown').value);
+            
+            fetch('/laser/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pulse_duration: pulseDuration,
+                    burst_count: burstCount,
+                    burst_delay: burstDelay,
+                    cooldown: cooldown
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, 'Laser settings applied');
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to apply laser settings');
+                console.error('Error applying laser settings:', error);
+            });
+        }
+
+        function updateLaserStatus() {
+            fetch('/laser/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('laser-system-status').textContent = 
+                            data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('laser-ready').textContent = 
+                            data.ready_to_fire ? 'Yes' : 'No';
+                        document.getElementById('laser-fire-count').textContent = 
+                            data.fire_count;
+                        
+                        if (data.cooldown_remaining > 0) {
+                            document.getElementById('laser-cooldown-remaining').textContent = 
+                                data.cooldown_remaining.toFixed(1) + 's';
+                        } else {
+                            document.getElementById('laser-cooldown-remaining').textContent = 'Ready';
+                        }
+                        
+                        // Sync UI with server state
+                        document.getElementById('laser-enabled').checked = data.enabled;
+                        document.getElementById('auto-fire-enabled').checked = data.auto_fire;
+                        document.getElementById('pulse-duration').value = data.pulse_duration * 1000;
+                        document.getElementById('burst-count').value = data.burst_count;
+                        document.getElementById('burst-delay').value = data.burst_delay * 1000;
+                        document.getElementById('laser-cooldown').value = data.cooldown;
+                        
+                        updatePulseDurationValue();
+                        updateBurstCountValue();
+                        updateBurstDelayValue();
+                        updateLaserCooldownValue();
+                        
+                        // Update fire button state
+                        document.getElementById('fire-button').disabled = !data.ready_to_fire || !data.enabled;
+                    }
+                })
+                .catch(error => console.error('Error fetching laser status:', error));
+        }
+
+        function resetFireCount() {
+            if (!confirm('Reset fire counter to 0?')) return;
+            
+            fetch('/laser/reset_count', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, 'Fire counter reset');
+                    updateLaserStatus();
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to reset counter');
+                console.error('Error resetting counter:', error);
+            });
+        }
+
+        // Preset position controls
+        function savePreset() {
+            const slot = parseInt(document.getElementById('save-slot').value);
+            const label = document.getElementById('preset-label').value || `Preset ${slot}`;
+            
+            fetch('/presets/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot, label: label })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, `Saved to slot ${slot}`);
+                    document.getElementById('preset-label').value = '';
+                    loadPresetList();
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to save preset');
+                console.error('Error saving preset:', error);
+            });
+        }
+
+        function loadPreset(slot) {
+            fetch(`/presets/load/${slot}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, `Loaded ${data.label}`);
+                    document.getElementById('position').textContent = `X: ${data.position.x}, Y: ${data.position.y}`;
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to load preset');
+                console.error('Error loading preset:', error);
+            });
+        }
+
+        function deletePreset(slot) {
+            if (!confirm(`Delete preset ${slot}?`)) return;
+            
+            fetch(`/presets/delete/${slot}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, `Deleted slot ${slot}`);
+                    loadPresetList();
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to delete preset');
+                console.error('Error deleting preset:', error);
+            });
+        }
+
+        function loadPresetList() {
+            fetch('/presets/list')
+                .then(response => response.json())
+                .then(data => {
+                    const listEl = document.getElementById('preset-list');
+                    const presets = data.presets;
+                    
+                    if (Object.keys(presets).length === 0) {
+                        listEl.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No presets saved</p>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    for (const [slot, preset] of Object.entries(presets).sort((a, b) => a[0] - b[0])) {
+                        html += `
+                            <div class="preset-item">
+                                <div class="preset-info">
+                                    <div><span class="preset-slot">#${slot}</span> <span class="preset-label">${preset.label}</span></div>
+                                    <div class="preset-coords">X: ${preset.x}, Y: ${preset.y}</div>
+                                </div>
+                                <div class="preset-actions">
+                                    <button class="preset-btn preset-btn-load" onclick="loadPreset(${slot})">Load</button>
+                                    <button class="preset-btn preset-btn-delete" onclick="deletePreset(${slot})">Delete</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    listEl.innerHTML = html;
+                })
+                .catch(error => console.error('Error loading preset list:', error));
+        }
+
+        function updatePatternDelayValue() {
+            const value = parseFloat(document.getElementById('pattern-delay').value).toFixed(1);
+            document.getElementById('pattern-delay-value').textContent = value + 's';
+        }
+
+        function startPattern() {
+            const sequenceStr = document.getElementById('pattern-sequence').value;
+            const delay = parseFloat(document.getElementById('pattern-delay').value);
+            const loop = document.getElementById('pattern-loop').checked;
+            
+            // Parse sequence
+            const sequence = sequenceStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            
+            if (sequence.length === 0) {
+                showStatus('preset-status', false, 'Enter a valid sequence');
+                return;
+            }
+            
+            fetch('/presets/pattern/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sequence: sequence, delay: delay, loop: loop })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, 'Pattern started');
+                    document.getElementById('start-pattern-btn').style.display = 'none';
+                    document.getElementById('stop-pattern-btn').style.display = 'block';
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to start pattern');
+                console.error('Error starting pattern:', error);
+            });
+        }
+
+        function stopPattern() {
+            fetch('/presets/pattern/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, 'Pattern stopped');
+                    document.getElementById('start-pattern-btn').style.display = 'block';
+                    document.getElementById('stop-pattern-btn').style.display = 'none';
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to stop pattern');
+                console.error('Error stopping pattern:', error);
+            });
+        }
+
+        function updatePatternStatus() {
+            fetch('/presets/pattern/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.running) {
+                        document.getElementById('start-pattern-btn').style.display = 'none';
+                        document.getElementById('stop-pattern-btn').style.display = 'block';
+                    } else {
+                        document.getElementById('start-pattern-btn').style.display = 'block';
+                        document.getElementById('stop-pattern-btn').style.display = 'none';
+                    }
+                })
+                .catch(error => console.error('Error checking pattern status:', error));
+        }
+
+        // Keyboard shortcuts for presets (1-9, 0 for slot 10)
+        document.addEventListener('keydown', function(e) {
+            // Only trigger if not typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            const key = e.key;
+            if (key >= '1' && key <= '9') {
+                const slot = parseInt(key);
+                loadPreset(slot);
+                e.preventDefault();
+            } else if (key === '0') {
+                loadPreset(10);
+                e.preventDefault();
+            }
+        });
+
+        // Object detection controls
+        function toggleObjectDetection() {
+            const enabled = document.getElementById('object-enabled').checked;
+            fetch('/object_detection/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        enabled ? 'Object detection enabled' : 'Object detection disabled');
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to toggle object detection');
+                console.error('Error toggling object detection:', error);
+            });
+        }
+
+        function toggleObjectAutoTrack() {
+            const enabled = document.getElementById('object-auto-track-enabled').checked;
+            fetch('/object_detection/auto_track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        enabled ? 'Object auto-tracking enabled' : 'Object auto-tracking disabled');
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to toggle object auto-track');
+                console.error('Error toggling object auto-track:', error);
+            });
+        }
+
+        function applyObjectSettings() {
+            const mode = document.getElementById('detection-mode').value;
+            const priority = document.getElementById('target-priority').value;
+            
+            fetch('/object_detection/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: mode,
+                    priority: priority
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 'Object detection settings applied');
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply object settings');
+                console.error('Error applying object settings:', error);
+            });
+        }
+
+        function updateObjectStatus() {
+            fetch('/object_detection/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('object-status').textContent = 
+                            data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('objects-count').textContent = 
+                            data.objects_detected;
+                        document.getElementById('current-mode').textContent = 
+                            data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
+                        
+                        // Sync UI with server state
+                        document.getElementById('object-enabled').checked = data.enabled;
+                        document.getElementById('object-auto-track-enabled').checked = data.auto_track;
+                        document.getElementById('detection-mode').value = data.mode;
+                        document.getElementById('target-priority').value = data.priority;
+                    }
+                })
+                .catch(error => console.error('Error fetching object status:', error));
+        }
+
+        // Motion detection controls
+        function toggleMotionDetection() {
+            const enabled = document.getElementById('motion-enabled').checked;
+            fetch('/motion_detection/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('motion-status-message', true, 
+                        enabled ? 'Motion detection enabled' : 'Motion detection disabled');
+                    updateMotionStatus();
+                } else {
+                    showStatus('motion-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('motion-status-message', false, 'Failed to toggle motion detection');
+                console.error('Error toggling motion detection:', error);
+            });
+        }
+
+        function toggleAutoTrack() {
+            const enabled = document.getElementById('auto-track-enabled').checked;
+            fetch('/motion_detection/auto_track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('motion-status-message', true, 
+                        enabled ? 'Auto-tracking enabled' : 'Auto-tracking disabled');
+                } else {
+                    showStatus('motion-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('motion-status-message', false, 'Failed to toggle auto-track');
+                console.error('Error toggling auto-track:', error);
+            });
+        }
+
+        function updateSensitivityValue() {
+            const value = document.getElementById('motion-sensitivity').value;
+            document.getElementById('sensitivity-value').textContent = value;
+        }
+
+        function updateMinAreaValue() {
+            const value = document.getElementById('motion-min-area').value;
+            document.getElementById('min-area-value').textContent = value;
+        }
+
+        function applyMotionSettings() {
+            const sensitivity = parseInt(document.getElementById('motion-sensitivity').value);
+            const minArea = parseInt(document.getElementById('motion-min-area').value);
+            
+            fetch('/motion_detection/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sensitivity: sensitivity,
+                    min_area: minArea
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('motion-status-message', true, 'Motion settings applied');
+                    syncMotionSliders(); // Sync sliders after successful apply
+                } else {
+                    showStatus('motion-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('motion-status-message', false, 'Failed to apply motion settings');
+                console.error('Error applying motion settings:', error);
+            });
+        }
+
+        function updateMotionStatus() {
+            fetch('/motion_detection/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('motion-status').textContent = 
+                            data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('motion-detected').textContent = 
+                            data.motion_detected ? 'Yes' : 'No';
+                        
+                        // Sync toggles with server state
+                        document.getElementById('motion-enabled').checked = data.enabled;
+                        document.getElementById('auto-track-enabled').checked = data.auto_track;
+                        
+                        // Don't sync sliders here - let user adjust them before applying
+                        // Only sync sliders on page load or after applying settings
+                    }
+                })
+                .catch(error => console.error('Error fetching motion status:', error));
+        }
+        
+        function syncMotionSliders() {
+            // Sync motion sliders with server state (called on page load only)
+            fetch('/motion_detection/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('motion-sensitivity').value = data.sensitivity;
+                        document.getElementById('motion-min-area').value = data.min_area;
+                        updateSensitivityValue();
+                        updateMinAreaValue();
+                    }
+                })
+                .catch(error => console.error('Error fetching motion status:', error));
+        }
+
         // Update stats periodically
         function updateStats() {
             fetch('/exposure_stats')
@@ -852,8 +1787,26 @@
             
             // Update recording status if on capture tab
             updateRecordingStatus();
+            
+            // Update laser status
+            updateLaserStatus();
+            
+            // Update object detection status
+            updateObjectStatus();
+            
+            // Update motion detection status
+            updateMotionStatus();
+            
+            // Update pattern status
+            updatePatternStatus();
         }
 
+        // Load presets on page load
+        loadPresetList();
+        
+        // Sync motion sliders on page load
+        syncMotionSliders();
+        
         setInterval(updateStats, 1000);
         updateStats();
     </script>
