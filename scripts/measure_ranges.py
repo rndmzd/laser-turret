@@ -2,13 +2,16 @@
 """
 DEPRECATED: This script uses an old StepperMotor API that no longer exists.
 Use scripts/test_limit_switches.py instead for testing limit switches.
+
+This script is kept for historical reference only and will not run with the current codebase.
 """
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import time
-from laserturret import StepperMotor
+# This import will fail - the old API no longer exists
+# from laserturret import StepperMotor
 
 # Calibration Script (OUTDATED)
 def calibrate_motor(motor):
