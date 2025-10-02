@@ -1032,7 +1032,7 @@ def object_detection_status():
             'mode': detection_mode,
             'priority': target_priority,
             'objects_detected': len(detected_objects),
-            'objects': [{'type': obj['type'], 'rect': list(obj['rect'])} for obj in detected_objects]
+            'objects': [{'type': obj['type'], 'rect': [int(v) for v in obj['rect']]} for obj in detected_objects]
         })
 
 @app.route('/presets/save', methods=['POST'])
