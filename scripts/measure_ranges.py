@@ -1,8 +1,12 @@
+#!/usr/bin/env python3
+"""
+DEPRECATED: This script uses an old StepperMotor API that no longer exists.
+Use scripts/test_limit_switches.py instead for testing limit switches.
+"""
 import time
-import RPi.GPIO as GPIO
 from laserturret import StepperMotor
 
-# Calibration Script
+# Calibration Script (OUTDATED)
 def calibrate_motor(motor):
     input(f"Press any key to start calibration for {motor.name}.")
 

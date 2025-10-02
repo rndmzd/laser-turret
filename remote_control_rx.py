@@ -1,61 +1,40 @@
-import configparser
 import paho.mqtt.client as mqtt
 import time
 import logging
 from laserturret.steppercontrol import StepperMotor, MotorStatus, MotorError
 from laserturret.lasercontrol import LaserControl
-import RPi.GPIO as GPIO
+from laserturret.config_manager import get_config
 
 # Configure logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
-config = configparser.ConfigParser()
-config.read('laserturret.conf')
-
-# MQTT Configuration
-mqtt_broker = config['MQTT']['broker']
-mqtt_topic = config['MQTT']['topic']
-
-# Motor Configuration
-x_motor_channel = int(config['Motor']['x_motor_channel'])
-y_motor_channel = int(config['Motor']['y_motor_channel'])
-x_cw_limit_pin = int(config['GPIO']['x_cw_limit_pin'])
-x_ccw_limit_pin = int(config['GPIO']['x_ccw_limit_pin'])
-y_cw_limit_pin = int(config['GPIO']['y_cw_limit_pin'])
-y_ccw_limit_pin = int(config['GPIO']['y_ccw_limit_pin'])
-steps_per_rev = int(config['Motor']['steps_per_rev'])
-microsteps = int(config['Motor']['microsteps'])
-
-# Control Parameters
-max_steps_per_update = int(config['Control']['max_steps_per_update'])
-control_deadzone = int(config['Control']['deadzone'])
-speed_scaling = float(config['Control']['speed_scaling'])
-step_delay = float(config['Control']['step_delay'])
-
-# Laser
-laser_pin = int(config['Laser']['laser_pin'])
-laser_max_power = int(config['Laser']['laser_max_power'])
+# Load configuration
+config = get_config()
 
 class TurretController:
     def __init__(self, skip_calibration=False, skip_direction_check=False):
-        """
-        Initialize the turret controller with two stepper motors.
-        
-        Args:
-            skip_calibration: If True, skips the initial motor calibration
-        """
+        """Initialize the turret controller with two stepper motors."""
         logger.info("Initializing Turret Controller...")
         
         try:
+            # Get motor configuration using config manager
+            x_motor_cfg = config.get_motor_config('x')
+            y_motor_cfg = config.get_motor_config('y')
+            
             # Initialize X-axis motor
             self.motor_x = StepperMotor(
-                motor_channel=x_motor_channel,
-                cw_limit_switch_pin=x_cw_limit_pin,
-                ccw_limit_switch_pin=x_ccw_limit_pin,
-                steps_per_rev=steps_per_rev,
-                microsteps=microsteps,
+                step_pin=x_motor_cfg['step_pin'],
+                dir_pin=x_motor_cfg['dir_pin'],
+                enable_pin=x_motor_cfg['enable_pin'],
+                ms1_pin=x_motor_cfg['ms1_pin'],
+                ms2_pin=x_motor_cfg['ms2_pin'],
+                ms3_pin=x_motor_cfg['ms3_pin'],
+                cw_limit_switch_pin=x_motor_cfg['cw_limit_pin'],
+                ccw_limit_switch_pin=x_motor_cfg['ccw_limit_pin'],
+                steps_per_rev=x_motor_cfg['steps_per_rev'],
+                microsteps=x_motor_cfg['microsteps'],
                 name="MotorX",
                 perform_calibration=not skip_calibration,
                 skip_direction_check=skip_direction_check
@@ -63,96 +42,84 @@ class TurretController:
             
             # Initialize Y-axis motor
             self.motor_y = StepperMotor(
-                motor_channel=y_motor_channel,
-                cw_limit_switch_pin=y_cw_limit_pin,
-                ccw_limit_switch_pin=y_ccw_limit_pin,
-                steps_per_rev=steps_per_rev,
-                microsteps=microsteps,
+                step_pin=y_motor_cfg['step_pin'],
+                dir_pin=y_motor_cfg['dir_pin'],
+                enable_pin=y_motor_cfg['enable_pin'],
+                ms1_pin=y_motor_cfg['ms1_pin'],
+                ms2_pin=y_motor_cfg['ms2_pin'],
+                ms3_pin=y_motor_cfg['ms3_pin'],
+                cw_limit_switch_pin=y_motor_cfg['cw_limit_pin'],
+                ccw_limit_switch_pin=y_motor_cfg['ccw_limit_pin'],
+                steps_per_rev=y_motor_cfg['steps_per_rev'],
+                microsteps=y_motor_cfg['microsteps'],
                 name="MotorY",
                 perform_calibration=not skip_calibration,
                 skip_direction_check=skip_direction_check
             )
 
-            self.laser = LaserControl(gpio_pin=laser_pin, initial_power=0)
+            self.laser = LaserControl(gpio_pin=config.get_laser_pin(), initial_power=0)
             
         except Exception as e:
             logger.error(f"Failed to initialize motors: {str(e)}")
             self.cleanup()
             raise
         
-        # Initialize MQTT client with protocol version 5 and modern callbacks
-        self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        # Initialize MQTT client
+        self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
         
         # Control variables
         self.last_update_time = time.time()
-        self.button_pressed = False
+        self.joystic_button_pressed = False
+        self.laser_button_pressed = False
+        self.laser_power = 100  # Default max power
         
         logger.info("Turret Controller initialized successfully")
     
-    def on_connect(self, client, userdata, flags, rc, properties=None):
+    def on_connect(self, client, userdata, flags, rc):
         """Callback when connected to MQTT broker."""
         if rc == 0:
             logger.info("Connected to MQTT broker successfully")
-            client.subscribe(mqtt_topic, qos=1)
+            client.subscribe(config.get_mqtt_topic())
         else:
             logger.error(f"Failed to connect to MQTT broker with result code: {rc}")
     
-    def on_disconnect(self, client, userdata, disconnect_flags, rc, properties=None, *args):
+    def on_disconnect(self, client, userdata, rc):
         """Callback for when the client disconnects from the broker."""
         if rc == 0:
             logger.info("Cleanly disconnected from MQTT broker")
         else:
             logger.warning(f"Unexpected disconnection from MQTT broker. RC: {rc}")
     
-    def move_motor(self, motor, steps):
-        """
-        Move a motor safely with error handling.
-        
-        Args:
-            motor: StepperMotor instance to move
-            steps: Number of steps (negative for CCW, positive for CW)
-        """
-        try:
-            if steps == 0:
-                return
-                
-            # Set direction based on steps sign
-            direction = 'CW' if steps > 0 else 'CCW'
-            motor.set_direction(direction)
-            
-            # Get motor status before moving
-            status = motor.get_status()
-            if status.status == MotorStatus.ERROR:
-                logger.error(f"Motor error: {status.error_message}")
-                return
-                
-            # Move the motor
-            motor.step(abs(steps), delay=step_delay)
-            
-        except MotorError as e:
-            logger.error(f"Motor movement error: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error during motor movement: {str(e)}")
-    
-    def on_message(self, client, userdata, message, properties=None):
+    def on_message(self, client, userdata, message):
         """Handle incoming MQTT messages"""
         try:
-            # Parse the message (format: "x_val,y_val,button")
-            x_val, y_val, button = message.payload.decode().split(',')
-            x_val = float(x_val)    # Now between -100 and +100
-            y_val = float(y_val)    # Now between -100 and +100
-            self.button_pressed = button.strip().lower() == 'true'
+            # Parse the message (format: "x_val,y_val,joystick_button,laser_button,pot_value")
+            parts = message.payload.decode().split(',')
+            if len(parts) != 5:
+                logger.error(f"Invalid message format. Expected 5 values, got {len(parts)}")
+                return
+
+            x_val = float(parts[0])          # Between -100 and +100
+            y_val = float(parts[1])          # Between -100 and +100
+            self.joystic_button_pressed = parts[2].strip().lower() == 'true'
+            self.laser_button_pressed = parts[3].strip().lower() == 'true'
+            self.laser_power = float(parts[4])  # Between 0 and 100
             
             # Process commands for each axis
             self.motor_x.process_command(x_val)
             self.motor_y.process_command(y_val)
             
-            # Handle button press
-            if self.button_pressed:
-                self.laser.on(power_level=laser_max_power)
+            # Handle laser control with variable power
+            if self.joystic_button_pressed:
+                logger.debug("Joystick button pressed")
+                
+            # Handle auxiliary button (you can add custom functionality here)
+            if self.laser_button_pressed:
+                power_level = min(100, max(0, self.laser_power))
+                self.laser.on(power_level=power_level)
             else:
                 self.laser.off()
                 
@@ -175,7 +142,11 @@ class TurretController:
         try:
             logger.info("Starting Turret Controller...")
             # Connect to MQTT broker
-            self.client.connect(mqtt_broker, 1883, keepalive=60)
+            self.client.connect(
+                config.get_mqtt_broker(), 
+                config.get_mqtt_port(), 
+                keepalive=60
+            )
             
             # Start the MQTT loop
             self.client.loop_forever()
@@ -192,11 +163,11 @@ class TurretController:
         logger.info("Cleaning up resources...")
         try:
             if hasattr(self, 'motor_x'):
-                self.motor_x.release()
                 self.motor_x.cleanup()
             if hasattr(self, 'motor_y'):
-                self.motor_y.release()
                 self.motor_y.cleanup()
+            if hasattr(self, 'laser'):
+                self.laser.cleanup()
             if hasattr(self, 'client'):
                 self.client.disconnect()
         except Exception as e:

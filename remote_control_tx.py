@@ -27,6 +27,24 @@ COLOR_ACTIVE = (255, 255, 255)         # White
 SSID = secrets.WIFI_SSID
 PASSWORD = secrets.WIFI_PASSWORD
 
+# Initialize hardware and connections
+pool = socketpool.SocketPool(wifi.radio)
+
+# Joystick inputs
+joystick_x = AnalogIn(board.IO8)  # X-axis pin
+joystick_y = AnalogIn(board.IO9)  # Y-axis pin
+
+# Joystick button
+joystick_button = DigitalInOut(board.IO7)  # Original button pin
+joystick_button.switch_to_input(pull=Pull.UP)
+
+# Potentiometer on IO10
+potentiometer = AnalogIn(board.IO10)
+
+# New tactile button with pull-up on IO11
+laser_button = DigitalInOut(board.IO11)
+laser_button.switch_to_input(pull=Pull.UP)
+
 # Max size of NVM data (255 bytes)
 NVM_SIZE = 255
 
@@ -37,10 +55,11 @@ calibration = {
     'up': 65535,
     'down': 0,
     'x_center': 32767,
-    'y_center': 32767
+    'y_center': 32767,
+    'pot_min': 0,
+    'pot_max': 65535
 }
 
-# Save calibration data to NVM
 def save_calibration(calibration_data):
     try:
         # Convert calibration dict to JSON string
@@ -52,20 +71,24 @@ def save_calibration(calibration_data):
             return
         
         # Clear NVM first by writing zeros
+        print("Clearing NVM...")
         for i in range(NVM_SIZE):
             microcontroller.nvm[i] = 0
+        print("NVM cleared.")
             
         # Write the data to NVM
+        print("Writing calibration data to NVM...")
         nvm_bytes = bytes(calibration_string, "utf-8")
         for i, b in enumerate(nvm_bytes):
             microcontroller.nvm[i] = b
-            
-        print("Calibration saved successfully!")
+        print("Calibration data saved successfully!")
+
+        return
         
     except Exception as e:
         print(f"Failed to save calibration: {e}")
+        return
 
-# Load calibration data from NVM
 def load_calibration():
     try:
         # Read data until we hit a null byte
@@ -93,51 +116,43 @@ def load_calibration():
 
 # Function to connect to Wi-Fi
 def connect_to_wifi():
-    print("Connecting to Wi-Fi...")
-    pixel.fill(COLOR_WIFI_CONNECTING)
-    try:
-        wifi.radio.connect(SSID, PASSWORD)
-        print(f"Connected to {SSID}")
-        pixel.fill(COLOR_WIFI_CONNECTED)
-    except Exception as e:
-        print(f"Failed to connect to Wi-Fi: {e}")
-        pixel.fill(COLOR_ERROR)
-        time.sleep(5)
-        connect_to_wifi()
+    while True:
+        try:
+            print("Connecting to Wi-Fi...")
+            pixel.fill(COLOR_WIFI_CONNECTING)
+            wifi.radio.connect(SSID, PASSWORD)
+            print(f"Connected to {SSID}")
+            pixel.fill(COLOR_WIFI_CONNECTED)
+            break
+        except Exception as e:
+            print(f"Failed to connect to Wi-Fi: {e}")
+            pixel.fill(COLOR_ERROR)
+            time.sleep(5)
 
 # Function to handle MQTT connection
 def connect_to_mqtt():
-    try:
-        mqtt_client.connect()
-        print("Connected to MQTT broker!")
-        pixel.fill(COLOR_MQTT_CONNECTED)
-    except Exception as e:
-        print(f"Failed to connect to MQTT broker: {e}")
-        pixel.fill(COLOR_ERROR)
-        time.sleep(5)
-        connect_to_mqtt()
-
-# MQTT callback functions
-def connected(client, userdata, flags, rc):
-    print("Connected to MQTT broker!")
-
-def disconnected(client, userdata, rc):
-    print("Disconnected from MQTT broker!")
-
-def publish(client, userdata, topic, pid):
-    print(f"Published to {topic} with PID {pid}")
+    while True:
+        try:
+            mqtt_client.connect()
+            print("Connected to MQTT broker!")
+            pixel.fill(COLOR_MQTT_CONNECTED)
+            break
+        except Exception as e:
+            print(f"Failed to connect to MQTT broker: {e}")
+            pixel.fill(COLOR_ERROR)
+            time.sleep(5)
 
 # Wait for joystick button press and release
 def wait_for_button_press():
-    while button.value:
+    while joystick_button.value:
         time.sleep(0.1)  # Wait until the button is pressed
-    while not button.value:
+    while not joystick_button.value:
         time.sleep(0.1)  # Wait until the button is released
     time.sleep(1)  # 1-second delay after button release
 
-# Modified calibration function with LED feedback
-def calibrate_joystick():
-    print("Joystick calibration started! Press button to proceed.")
+# Modified calibration function to include potentiometer calibration
+def calibrate_controls():
+    print("Control calibration started! Press button to proceed.")
     pixel.fill(COLOR_CALIBRATING)
     wait_for_button_press()
     
@@ -214,9 +229,45 @@ def calibrate_joystick():
     calibration['y_center'] = y_center
     print(f"Center: {calibration['x_center']}, {calibration['y_center']}")
     
+    # Potentiometer calibration
+    print("\nPotentiometer calibration...")
+    print("Press the button then turn potentiometer to MINIMUM position within 5 seconds.")
+    wait_for_button_press()
+    print("Reading values...")
+    start_time = time.time()
+    pot_min = 65535
+    while (time.time() - start_time) < 5:
+        val = potentiometer.value
+        if val < pot_min:
+            pot_min = val
+        time.sleep(0.1)
+    calibration['pot_min'] = pot_min
+    print(f"Potentiometer minimum: {calibration['pot_min']}")
+    
+    print("\nPress the button then turn potentiometer to MAXIMUM position within 5 seconds.")
+    wait_for_button_press()
+    print("Reading values...")
+    start_time = time.time()
+    pot_max = 0
+    while (time.time() - start_time) < 5:
+        val = potentiometer.value
+        if val > pot_max:
+            pot_max = val
+        time.sleep(0.1)
+    calibration['pot_max'] = pot_max
+    print(f"Potentiometer maximum: {calibration['pot_max']}")
+    
     print("Calibration complete!")
     save_calibration(calibration)
-    pixel.fill(COLOR_MQTT_CONNECTED)  # Return to normal operation color
+    pixel.fill(COLOR_MQTT_CONNECTED)
+
+def map_pot_value(pot_val):
+    """Map potentiometer value to 0-100 range"""
+    pot_range = calibration['pot_max'] - calibration['pot_min']
+    if pot_range == 0:
+        return 0
+    mapped_val = ((pot_val - calibration['pot_min']) / pot_range) * 100
+    return max(0, min(100, mapped_val))
 
 def map_joystick_values(x_val, y_val):
     # Use stored center values
@@ -225,18 +276,14 @@ def map_joystick_values(x_val, y_val):
     
     # Map X-axis values (-100 to +100)
     if x_val < x_center:
-        # Left side (negative values)
         x_mapped = (x_val - x_center) / (x_center - calibration['left']) * 100
     else:
-        # Right side (positive values)
         x_mapped = (x_val - x_center) / (calibration['right'] - x_center) * 100
     
     # Map Y-axis values (-100 to +100)
     if y_val < y_center:
-        # Down side (negative values)
         y_mapped = (y_val - y_center) / (y_center - calibration['down']) * 100
     else:
-        # Up side (positive values)
         y_mapped = (y_val - y_center) / (calibration['up'] - y_center) * 100
     
     # Clamp values between -100 and 100
@@ -267,24 +314,22 @@ def update_led_from_movement(x_mapped, y_mapped):
     
     pixel.fill(color)
 
-# Initialize hardware and connections
-pool = socketpool.SocketPool(wifi.radio)
+# MQTT callback functions
+def connected(client, userdata, flags, rc):
+    print("Connected to MQTT broker!")
 
-joystick_x = AnalogIn(board.IO8)  # X-axis pin
-joystick_y = AnalogIn(board.IO9)  # Y-axis pin
+def disconnected(client, userdata, rc):
+    print("Disconnected from MQTT broker!")
 
-button = DigitalInOut(board.IO7)  # Button pin
-button.switch_to_input(pull=Pull.UP)
-
-broker = '192.168.1.182'
-topic = 'laserturret'
+def publish(client, userdata, topic, pid):
+    print(f"Published to {topic} with PID {pid}")
 
 # Connect to Wi-Fi
 connect_to_wifi()
 
 # Setup MQTT
 mqtt_client = MQTT.MQTT(
-    broker=broker,
+    broker=secrets.MQTT_BROKER,
     socket_pool=pool,
     is_ssl=False
 )
@@ -299,28 +344,31 @@ connect_to_mqtt()
 calibration = load_calibration()
 
 # Check if joystick button is pressed during startup
-if not button.value:
-    calibrate_joystick()
+if not joystick_button.value:
+    calibrate_controls()
 
 # Main loop
 while True:
     try:
+        # Read all inputs
         x_val = joystick_x.value
         y_val = joystick_y.value
-        button_pressed = not button.value
+        joystick_btn_pressed = not joystick_button.value
+        laser_btn_pressed = not laser_button.value
+        pot_val = map_pot_value(potentiometer.value)
         
-        # Map joystick values using the calibration
+        # Map joystick values
         x_mapped, y_mapped = map_joystick_values(x_val, y_val)
 
         # Update LED based on movement
         update_led_from_movement(x_mapped, y_mapped)
         
-        # Create payload to send
-        payload = f"{x_mapped},{y_mapped},{button_pressed}"
-        mqtt_client.publish(topic, payload)
+        # Create payload with all control values
+        payload = f"{x_mapped},{y_mapped},{joystick_btn_pressed},{laser_btn_pressed},{pot_val}"
+        mqtt_client.publish(secrets.MQTT_TOPIC, payload)
 
         # Show button press with white flash
-        if button_pressed:
+        if joystick_btn_pressed or laser_btn_pressed:
             pixel.fill(COLOR_ACTIVE)
         
         time.sleep(0.25)

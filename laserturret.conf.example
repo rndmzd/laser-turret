@@ -1,0 +1,66 @@
+# Laser Turret Configuration File
+# Copy this file to laserturret.conf and adjust values for your setup
+
+[GPIO]
+# Limit switch GPIO pins (BCM numbering)
+x_ccw_limit_pin = 21
+x_cw_limit_pin = 18
+y_ccw_limit_pin = 4
+y_cw_limit_pin = 20
+
+[MQTT]
+# MQTT broker configuration for remote control
+broker = localhost
+port = 1883
+topic = laserturret
+
+[Motor]
+# X-axis motor pins
+x_dir_pin = 19
+x_step_pin = 23
+x_enable_pin = 5
+
+# Y-axis motor pins
+y_dir_pin = 26
+y_step_pin = 24
+y_enable_pin = 6
+
+# Microstepping pins (shared between both motors)
+ms1_pin = 17
+ms2_pin = 27
+ms3_pin = 22
+
+# Motor specifications
+microsteps = 8          # Microstepping resolution (1, 2, 4, 8, or 16)
+steps_per_rev = 200     # Steps per revolution (typically 200 for 1.8° motors)
+
+[Control]
+# Maximum steps to move per MQTT message
+max_steps_per_update = 50
+
+# Values between -deadzone and +deadzone are ignored (reduces jitter)
+deadzone = 5
+
+# Speed scaling factor (lower = slower, higher = faster)
+speed_scaling = 0.10
+
+# Delay between steps in seconds (lower = faster, but may skip steps)
+step_delay = 0.0005
+
+[Laser]
+# Laser control pin (BCM numbering)
+laser_pin = 12
+
+# Maximum laser power percentage (0-100)
+laser_max_power = 100
+
+[Camera]
+# Camera resolution
+width = 1920
+height = 1080
+
+# Camera format (RGB888, YUV420, etc.)
+format = RGB888
+
+# Number of camera buffers
+buffer_count = 2

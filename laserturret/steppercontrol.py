@@ -1,4 +1,3 @@
-import RPi.GPIO as GPIO
 import logging
 import time
 import threading
@@ -6,6 +5,7 @@ from typing import Optional, Tuple, List
 from enum import Enum
 from dataclasses import dataclass
 import queue
+from .hardware_interface import get_gpio_backend, PinMode, PullMode, Edge
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -129,24 +129,24 @@ class StepperMotor:
         self.movement_timeout = movement_timeout
         self.deadzone = deadzone
 
-        # Initialize GPIO
-        GPIO.setmode(GPIO.BCM)
+        # Initialize GPIO backend
+        self.gpio = get_gpio_backend()
         
         # Setup motor control pins
-        GPIO.setup(self.step_pin, GPIO.OUT)
-        GPIO.setup(self.dir_pin, GPIO.OUT)
-        GPIO.setup(self.enable_pin, GPIO.OUT)
+        self.gpio.setup(self.step_pin, PinMode.OUTPUT)
+        self.gpio.setup(self.dir_pin, PinMode.OUTPUT)
+        self.gpio.setup(self.enable_pin, PinMode.OUTPUT)
         for pin in self.ms_pins:
-            GPIO.setup(pin, GPIO.OUT)
+            self.gpio.setup(pin, PinMode.OUTPUT)
             
         # Set microstepping configuration
         ms1_val, ms2_val, ms3_val = MICROSTEP_CONFIG[microsteps]
-        GPIO.output(self.ms_pins[0], ms1_val)
-        GPIO.output(self.ms_pins[1], ms2_val)
-        GPIO.output(self.ms_pins[2], ms3_val)
+        self.gpio.output(self.ms_pins[0], ms1_val)
+        self.gpio.output(self.ms_pins[1], ms2_val)
+        self.gpio.output(self.ms_pins[2], ms3_val)
         
         # Disable motor initially
-        GPIO.output(self.enable_pin, GPIO.HIGH)  # Active LOW
+        self.gpio.output(self.enable_pin, 1)  # Active LOW
         
         # Setup limit switches with debouncing
         self._last_cw_trigger = 0
@@ -154,19 +154,19 @@ class StepperMotor:
         self.debounce_time = 0.1  # 100ms debounce window
         
         if cw_limit_switch_pin:
-            GPIO.setup(cw_limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(
+            self.gpio.setup(cw_limit_switch_pin, PinMode.INPUT, pull_up_down=PullMode.UP)
+            self.gpio.add_event_detect(
                 cw_limit_switch_pin,
-                GPIO.FALLING,
+                Edge.FALLING,
                 callback=lambda channel: self._limit_switch_handler(channel, CLOCKWISE),
                 bouncetime=200
             )
             
         if ccw_limit_switch_pin:
-            GPIO.setup(ccw_limit_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(
+            self.gpio.setup(ccw_limit_switch_pin, PinMode.INPUT, pull_up_down=PullMode.UP)
+            self.gpio.add_event_detect(
                 ccw_limit_switch_pin,
-                GPIO.FALLING,
+                Edge.FALLING,
                 callback=lambda channel: self._limit_switch_handler(channel, COUNTER_CLOCKWISE),
                 bouncetime=200
             )
@@ -204,7 +204,7 @@ class StepperMotor:
             self._last_ccw_trigger = current_time
         
         # Update state if switch is actually pressed
-        if GPIO.input(channel) == 0:  # Switch is pressed (pulled low)
+        if self.gpio.input(channel) == 0:  # Switch is pressed (pulled low)
             with self.lock:
                 self.state.triggered_limit = direction
                 self.state.status = MotorStatus.LIMIT_REACHED
@@ -212,11 +212,11 @@ class StepperMotor:
 
     def enable(self) -> None:
         """Enable the motor driver (active LOW)"""
-        GPIO.output(self.enable_pin, GPIO.LOW)
+        self.gpio.output(self.enable_pin, 0)
 
     def disable(self) -> None:
         """Disable the motor driver"""
-        GPIO.output(self.enable_pin, GPIO.HIGH)
+        self.gpio.output(self.enable_pin, 1)
 
     def set_direction(self, direction: str) -> None:
         """Set motor direction"""
@@ -230,7 +230,7 @@ class StepperMotor:
                 raise LimitSwitchError(f"Cannot move {direction}, limit switch triggered.")
             
             self.state.direction = direction
-            GPIO.output(self.dir_pin, GPIO.HIGH if direction == CLOCKWISE else GPIO.LOW)
+            self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
             
             # Reset stop condition if moving away from triggered limit
             if ((direction == COUNTER_CLOCKWISE and self.state.triggered_limit == CLOCKWISE) or
@@ -278,9 +278,9 @@ class StepperMotor:
                     break
                 
                 # Generate step pulse
-                GPIO.output(self.step_pin, GPIO.HIGH)
+                self.gpio.output(self.step_pin, 1)
                 time.sleep(delay / 2)  # Half delay for pulse width
-                GPIO.output(self.step_pin, GPIO.LOW)
+                self.gpio.output(self.step_pin, 0)
                 time.sleep(delay / 2)  # Half delay between steps
                 
                 # Update position
@@ -397,6 +397,8 @@ class StepperMotor:
         self.running = False
         if hasattr(self, 'command_thread'):
             self.command_thread.join(timeout=1.0)
+            if self.command_thread.is_alive():
+                logger.warning(f"[{self.name}] Command thread did not stop within timeout")
         
         # Release motor
         self.release()
@@ -406,29 +408,28 @@ class StepperMotor:
         pins_to_cleanup.extend(self.ms_pins)
         if self.cw_limit_switch_pin:
             try:
-                GPIO.remove_event_detect(self.cw_limit_switch_pin)
+                self.gpio.remove_event_detect(self.cw_limit_switch_pin)
                 pins_to_cleanup.append(self.cw_limit_switch_pin)
             except:
                 pass
         if self.ccw_limit_switch_pin:
             try:
-                GPIO.remove_event_detect(self.ccw_limit_switch_pin)
+                self.gpio.remove_event_detect(self.ccw_limit_switch_pin)
                 pins_to_cleanup.append(self.ccw_limit_switch_pin)
             except:
                 pass
                 
-        for pin in pins_to_cleanup:
-            try:
-                GPIO.cleanup(pin)
-            except:
-                pass
+        try:
+            self.gpio.cleanup(pins_to_cleanup)
+        except:
+            pass
                 
         logger.info(f"[{self.name}] Cleanup complete.")
 
     def confirm_limit_switches(self) -> None:
         """
         Verify limit switch functionality by requesting manual confirmation.
-        Used during initialization to ensure switches are properly connected and working.
+{{ ... }}
         """
         if not (self.cw_limit_switch_pin or self.ccw_limit_switch_pin):
             logger.info(f"[{self.name}] No limit switches configured, skipping verification.")
@@ -571,7 +572,7 @@ class StepperMotor:
                 # Take multiple readings over a short period
                 readings = []
                 for _ in range(5):
-                    readings.append(GPIO.input(pin) == 0)
+                    readings.append(self.gpio.input(pin) == 0)
                     time.sleep(0.001)
                     
                 # Return True only if majority of readings indicate switch is pressed

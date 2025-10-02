@@ -1,13 +1,21 @@
-import RPi.GPIO as GPIO
 import logging
 from time import sleep
+from typing import Optional
+from .hardware_interface import GPIOInterface, get_gpio_backend, PinMode
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 class LaserControl:
-    def __init__(self, gpio_pin, pwm_frequency=1000, initial_power=0, name="Laser"):
+    def __init__(
+        self, 
+        gpio_pin: int, 
+        pwm_frequency: float = 1000, 
+        initial_power: float = 0, 
+        name: str = "Laser",
+        gpio_backend: Optional[GPIOInterface] = None
+    ):
         """
         Initialize laser control with optional PWM support.
 
@@ -15,6 +23,7 @@ class LaserControl:
         :param pwm_frequency: PWM frequency in Hz (default 1000Hz)
         :param initial_power: Initial power level 0-100 (default 0)
         :param name: Name identifier for logging
+        :param gpio_backend: Optional GPIO backend (defaults to auto-detect)
         """
         self.gpio_pin = gpio_pin
         self.name = name
@@ -22,12 +31,12 @@ class LaserControl:
         self._power_level = 0
         self.is_on = False
 
-        # Initialize GPIO
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_pin, GPIO.OUT)
+        # Initialize GPIO backend
+        self.gpio = gpio_backend if gpio_backend else get_gpio_backend()
+        self.gpio.setup(self.gpio_pin, PinMode.OUTPUT)
         
         # Initialize PWM
-        self.pwm = GPIO.PWM(self.gpio_pin, pwm_frequency)
+        self.pwm = self.gpio.pwm(self.gpio_pin, pwm_frequency)
         self.pwm.start(0)  # Start with 0% duty cycle
         
         # Set initial power level
@@ -56,7 +65,7 @@ class LaserControl:
             return False
 
         self._power_level = level
-        self.pwm.ChangeDutyCycle(level)
+        self.pwm.change_duty_cycle(level)
         logger.debug(f"[{self.name}] Power level set to {level}%")
         return True
 
@@ -76,7 +85,7 @@ class LaserControl:
 
     def off(self):
         """Turn laser off while preserving last power level setting."""
-        self.pwm.ChangeDutyCycle(0)
+        self.pwm.change_duty_cycle(0)
         self.is_on = False
         logger.info(f"[{self.name}] Laser OFF")
 
@@ -106,7 +115,7 @@ class LaserControl:
         """Clean up GPIO resources."""
         self.off()
         self.pwm.stop()
-        GPIO.cleanup(self.gpio_pin)
+        self.gpio.cleanup([self.gpio_pin])
         logger.info(f"[{self.name}] Cleaned up GPIO resources")
 
     def __enter__(self):
