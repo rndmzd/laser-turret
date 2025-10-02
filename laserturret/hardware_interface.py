@@ -139,8 +139,162 @@ class CameraInterface(ABC):
 
 # Real hardware implementations
 
+class LgpioGPIO(GPIOInterface):
+    """Raspberry Pi 5 GPIO implementation using lgpio"""
+    
+    def __init__(self):
+        try:
+            import lgpio
+            self.lgpio = lgpio
+            # Open GPIO chip (gpiochip4 on Pi 5)
+            self.chip = self._open_chip()
+            self._pin_configs = {}  # Track pin configurations
+            logger.info(f"Initialized lgpio with chip handle {self.chip}")
+        except ImportError:
+            raise ImportError("lgpio not available. Install with: pip install lgpio")
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize lgpio: {e}")
+    
+    def _open_chip(self):
+        """Open the GPIO chip - tries gpiochip4 (Pi 5) then gpiochip0"""
+        for chip_name in ['gpiochip4', 'gpiochip0']:
+            try:
+                chip = self.lgpio.gpiochip_open(chip_name)
+                logger.debug(f"Opened {chip_name}")
+                return chip
+            except Exception:
+                continue
+        raise RuntimeError("Could not open any GPIO chip")
+    
+    def setup(self, pin: int, mode: PinMode, pull_up_down: PullMode = PullMode.OFF) -> None:
+        # Configure pin direction and pull-up/down
+        flags = 0
+        
+        if mode == PinMode.INPUT:
+            if pull_up_down == PullMode.UP:
+                flags = self.lgpio.SET_PULL_UP
+            elif pull_up_down == PullMode.DOWN:
+                flags = self.lgpio.SET_PULL_DOWN
+            else:
+                flags = self.lgpio.SET_PULL_NONE
+            
+            self.lgpio.gpio_claim_input(self.chip, pin, flags)
+        else:  # OUTPUT
+            self.lgpio.gpio_claim_output(self.chip, pin, 0)  # Start low
+        
+        self._pin_configs[pin] = {'mode': mode, 'pull': pull_up_down}
+    
+    def output(self, pin: int, value: int) -> None:
+        self.lgpio.gpio_write(self.chip, pin, 1 if value else 0)
+    
+    def input(self, pin: int) -> int:
+        return self.lgpio.gpio_read(self.chip, pin)
+    
+    def add_event_detect(
+        self,
+        pin: int,
+        edge: Edge,
+        callback: Optional[Callable] = None,
+        bouncetime: int = 0
+    ) -> None:
+        # lgpio uses alerts for edge detection
+        if edge == Edge.RISING:
+            lgpio_edge = self.lgpio.RISING_EDGE
+        elif edge == Edge.FALLING:
+            lgpio_edge = self.lgpio.FALLING_EDGE
+        else:
+            lgpio_edge = self.lgpio.BOTH_EDGES
+        
+        self.lgpio.gpio_claim_alert(self.chip, pin, lgpio_edge)
+        
+        if callback:
+            # Store callback for this pin
+            if not hasattr(self, '_callbacks'):
+                self._callbacks = {}
+            self._callbacks[pin] = callback
+            
+            # Note: lgpio requires polling or using gpio_get_chip_info
+            # For production use, consider using a background thread to poll alerts
+            logger.warning("lgpio event callbacks require manual polling - consider using gpiozero for full event support")
+    
+    def remove_event_detect(self, pin: int) -> None:
+        # Free the pin to remove alert
+        self.lgpio.gpio_free(self.chip, pin)
+        if hasattr(self, '_callbacks') and pin in self._callbacks:
+            del self._callbacks[pin]
+    
+    def cleanup(self, pins: Optional[list] = None) -> None:
+        if pins:
+            for pin in pins:
+                try:
+                    self.lgpio.gpio_free(self.chip, pin)
+                except:
+                    pass
+        else:
+            # Free all configured pins
+            for pin in list(self._pin_configs.keys()):
+                try:
+                    self.lgpio.gpio_free(self.chip, pin)
+                except:
+                    pass
+        
+        # Close chip
+        try:
+            self.lgpio.gpiochip_close(self.chip)
+        except:
+            pass
+    
+    def pwm(self, pin: int, frequency: float) -> PWMInterface:
+        return LgpioPWM(self.lgpio, self.chip, pin, frequency)
+
+
+class LgpioPWM(PWMInterface):
+    """Raspberry Pi 5 PWM implementation using lgpio"""
+    
+    def __init__(self, lgpio_module, chip: int, pin: int, frequency: float):
+        self.lgpio = lgpio_module
+        self.chip = chip
+        self.pin = pin
+        self.frequency = frequency
+        self.duty_cycle = 0
+        self.running = False
+        
+        # Claim the pin for PWM
+        try:
+            self.lgpio.gpio_claim_output(self.chip, pin, 0)
+        except:
+            pass  # May already be claimed
+    
+    def start(self, duty_cycle: float) -> None:
+        self.duty_cycle = duty_cycle
+        self.running = True
+        
+        # lgpio PWM: frequency in Hz, duty cycle in range 0-100
+        # Convert duty cycle percentage to lgpio range (0-100)
+        self.lgpio.tx_pwm(self.chip, self.pin, self.frequency, self.duty_cycle)
+        logger.debug(f"LgpioPWM: Started on pin {self.pin} with duty cycle {duty_cycle}%")
+    
+    def change_duty_cycle(self, duty_cycle: float) -> None:
+        self.duty_cycle = duty_cycle
+        if self.running:
+            self.lgpio.tx_pwm(self.chip, self.pin, self.frequency, self.duty_cycle)
+        logger.debug(f"LgpioPWM: Changed duty cycle to {duty_cycle}%")
+    
+    def change_frequency(self, frequency: float) -> None:
+        self.frequency = frequency
+        if self.running:
+            self.lgpio.tx_pwm(self.chip, self.pin, self.frequency, self.duty_cycle)
+        logger.debug(f"LgpioPWM: Changed frequency to {frequency}Hz")
+    
+    def stop(self) -> None:
+        self.running = False
+        # Stop PWM by setting to 0
+        self.lgpio.tx_pwm(self.chip, self.pin, self.frequency, 0)
+        logger.debug(f"LgpioPWM: Stopped on pin {self.pin}")
+
+
 class RPiGPIO(GPIOInterface):
-    """Raspberry Pi GPIO implementation using RPi.GPIO"""
+    """Raspberry Pi GPIO implementation using RPi.GPIO (for Pi 4 and earlier)"""
     
     def __init__(self):
         try:
@@ -148,7 +302,7 @@ class RPiGPIO(GPIOInterface):
             self.GPIO = GPIO
             self.GPIO.setmode(GPIO.BCM)
             self.GPIO.setwarnings(False)
-            logger.info("Initialized RPi.GPIO")
+            logger.info("Initialized RPi.GPIO (legacy)")
         except ImportError:
             raise ImportError("RPi.GPIO not available. Install with: pip install RPi.GPIO")
     
@@ -437,6 +591,11 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
     """
     Get GPIO backend based on environment.
     
+    Tries backends in this order:
+    1. lgpio (Raspberry Pi 5)
+    2. RPi.GPIO (Raspberry Pi 4 and earlier)
+    3. MockGPIO (fallback for testing)
+    
     Args:
         mock: If True, force mock implementation
     
@@ -447,11 +606,21 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
         logger.info("Using mock GPIO backend")
         return MockGPIO()
     
+    # Try lgpio first (Pi 5 compatible)
+    try:
+        return LgpioGPIO()
+    except (ImportError, RuntimeError) as e:
+        logger.debug(f"lgpio not available: {e}")
+    
+    # Fall back to RPi.GPIO (Pi 4 and earlier)
     try:
         return RPiGPIO()
     except ImportError:
-        logger.warning("RPi.GPIO not available, falling back to mock")
-        return MockGPIO()
+        logger.debug("RPi.GPIO not available")
+    
+    # Final fallback to mock
+    logger.warning("No GPIO library available (tried lgpio, RPi.GPIO), falling back to mock")
+    return MockGPIO()
 
 
 def get_camera_backend(mock: bool = False) -> CameraInterface:
