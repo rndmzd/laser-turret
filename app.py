@@ -799,6 +799,426 @@ def recording_status():
                 'is_recording': False
             })
 
+@app.route('/motion_detection/toggle', methods=['POST'])
+def toggle_motion_detection():
+    """Toggle motion detection on/off"""
+    global motion_detection_enabled, background_subtractor
+    
+    try:
+        data = request.get_json()
+        with motion_lock:
+            motion_detection_enabled = bool(data.get('enabled', not motion_detection_enabled))
+            
+            # Reset background subtractor when toggling
+            if not motion_detection_enabled:
+                background_subtractor = None
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': motion_detection_enabled
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/motion_detection/auto_track', methods=['POST'])
+def toggle_auto_track():
+    """Toggle auto-tracking on/off"""
+    global motion_auto_track
+    
+    try:
+        data = request.get_json()
+        with motion_lock:
+            motion_auto_track = bool(data.get('enabled', not motion_auto_track))
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': motion_auto_track
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/motion_detection/settings', methods=['POST'])
+def update_motion_settings():
+    """Update motion detection settings"""
+    global motion_sensitivity, motion_min_area, background_subtractor
+    
+    try:
+        data = request.get_json()
+        with motion_lock:
+            if 'sensitivity' in data:
+                motion_sensitivity = int(data['sensitivity'])
+                # Reset background subtractor to apply new sensitivity
+                background_subtractor = None
+            
+            if 'min_area' in data:
+                motion_min_area = int(data['min_area'])
+        
+        return jsonify({
+            'status': 'success',
+            'sensitivity': motion_sensitivity,
+            'min_area': motion_min_area
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/motion_detection/status')
+def motion_detection_status():
+    """Get current motion detection status and settings"""
+    with motion_lock:
+        return jsonify({
+            'status': 'success',
+            'enabled': motion_detection_enabled,
+            'auto_track': motion_auto_track,
+            'sensitivity': motion_sensitivity,
+            'min_area': motion_min_area,
+            'motion_detected': last_motion_center is not None,
+            'motion_center': last_motion_center
+        })
+
+@app.route('/object_detection/toggle', methods=['POST'])
+def toggle_object_detection():
+    """Toggle object/face detection on/off"""
+    global object_detection_enabled
+    
+    try:
+        data = request.get_json()
+        with object_lock:
+            object_detection_enabled = bool(data.get('enabled', not object_detection_enabled))
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': object_detection_enabled
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/object_detection/auto_track', methods=['POST'])
+def toggle_object_auto_track():
+    """Toggle object auto-tracking on/off"""
+    global object_auto_track
+    
+    try:
+        data = request.get_json()
+        with object_lock:
+            object_auto_track = bool(data.get('enabled', not object_auto_track))
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': object_auto_track
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/object_detection/settings', methods=['POST'])
+def update_object_settings():
+    """Update object detection settings"""
+    global detection_mode, target_priority
+    
+    try:
+        data = request.get_json()
+        with object_lock:
+            if 'mode' in data:
+                detection_mode = data['mode']
+            
+            if 'priority' in data:
+                target_priority = data['priority']
+        
+        return jsonify({
+            'status': 'success',
+            'mode': detection_mode,
+            'priority': target_priority
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/object_detection/status')
+def object_detection_status():
+    """Get current object detection status and settings"""
+    with object_lock:
+        return jsonify({
+            'status': 'success',
+            'enabled': object_detection_enabled,
+            'auto_track': object_auto_track,
+            'mode': detection_mode,
+            'priority': target_priority,
+            'objects_detected': len(detected_objects),
+            'objects': [{'type': obj['type'], 'rect': list(obj['rect'])} for obj in detected_objects]
+        })
+
+@app.route('/presets/save', methods=['POST'])
+def save_preset():
+    """Save current crosshair position to a preset slot"""
+    try:
+        data = request.get_json()
+        slot = int(data.get('slot'))
+        label = data.get('label', f'Preset {slot}')
+        
+        if slot < 1 or slot > 10:
+            return jsonify({'status': 'error', 'message': 'Slot must be between 1 and 10'}), 400
+        
+        with crosshair_lock:
+            x = crosshair_pos['x']
+            y = crosshair_pos['y']
+        
+        with preset_lock:
+            preset_positions[slot] = {
+                'x': x,
+                'y': y,
+                'label': label
+            }
+        
+        return jsonify({
+            'status': 'success',
+            'slot': slot,
+            'position': {'x': x, 'y': y},
+            'label': label
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/presets/load/<int:slot>', methods=['POST'])
+def load_preset(slot):
+    """Load a preset position to the crosshair"""
+    try:
+        if slot < 1 or slot > 10:
+            return jsonify({'status': 'error', 'message': 'Slot must be between 1 and 10'}), 400
+        
+        with preset_lock:
+            if slot not in preset_positions:
+                return jsonify({'status': 'error', 'message': f'No preset saved in slot {slot}'}), 404
+            
+            preset = preset_positions[slot]
+        
+        with crosshair_lock:
+            crosshair_pos['x'] = preset['x']
+            crosshair_pos['y'] = preset['y']
+        
+        return jsonify({
+            'status': 'success',
+            'slot': slot,
+            'position': {'x': preset['x'], 'y': preset['y']},
+            'label': preset['label']
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/presets/delete/<int:slot>', methods=['POST'])
+def delete_preset(slot):
+    """Delete a preset position"""
+    try:
+        if slot < 1 or slot > 10:
+            return jsonify({'status': 'error', 'message': 'Slot must be between 1 and 10'}), 400
+        
+        with preset_lock:
+            if slot in preset_positions:
+                del preset_positions[slot]
+                return jsonify({'status': 'success', 'slot': slot})
+            else:
+                return jsonify({'status': 'error', 'message': f'No preset in slot {slot}'}), 404
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/presets/list')
+def list_presets():
+    """Get all saved presets"""
+    with preset_lock:
+        presets = {
+            slot: {
+                'x': pos['x'],
+                'y': pos['y'],
+                'label': pos['label']
+            }
+            for slot, pos in preset_positions.items()
+        }
+    
+    return jsonify({
+        'status': 'success',
+        'presets': presets
+    })
+
+@app.route('/presets/pattern/start', methods=['POST'])
+def start_pattern():
+    """Start executing a pattern sequence"""
+    global pattern_running, pattern_thread, pattern_sequence, pattern_delay
+    
+    try:
+        data = request.get_json()
+        sequence = data.get('sequence', [])
+        delay = float(data.get('delay', 1.0))
+        loop = bool(data.get('loop', True))
+        
+        if not sequence:
+            return jsonify({'status': 'error', 'message': 'Empty sequence'}), 400
+        
+        # Validate sequence slots
+        for slot in sequence:
+            if slot < 1 or slot > 10:
+                return jsonify({'status': 'error', 'message': f'Invalid slot {slot}'}), 400
+            with preset_lock:
+                if slot not in preset_positions:
+                    return jsonify({'status': 'error', 'message': f'No preset in slot {slot}'}), 404
+        
+        # Stop existing pattern if running
+        if pattern_running:
+            pattern_running = False
+            if pattern_thread:
+                pattern_thread.join(timeout=2)
+        
+        pattern_sequence = sequence
+        pattern_delay = delay
+        pattern_running = loop  # Only keep running if looping
+        
+        # Start pattern thread
+        pattern_thread = threading.Thread(target=run_pattern_sequence, daemon=True)
+        pattern_thread.start()
+        
+        return jsonify({
+            'status': 'success',
+            'sequence': sequence,
+            'delay': delay,
+            'loop': loop
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/presets/pattern/stop', methods=['POST'])
+def stop_pattern():
+    """Stop the running pattern sequence"""
+    global pattern_running
+    
+    pattern_running = False
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Pattern stopped'
+    })
+
+@app.route('/presets/pattern/status')
+def pattern_status():
+    """Get pattern execution status"""
+    return jsonify({
+        'status': 'success',
+        'running': pattern_running,
+        'sequence': pattern_sequence,
+        'delay': pattern_delay
+    })
+
+@app.route('/laser/toggle', methods=['POST'])
+def toggle_laser():
+    """Enable/disable laser system"""
+    global laser_enabled
+    
+    try:
+        data = request.get_json()
+        with laser_lock:
+            laser_enabled = bool(data.get('enabled', not laser_enabled))
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': laser_enabled
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/laser/fire', methods=['POST'])
+def manual_fire():
+    """Manually fire the laser"""
+    success, message = fire_laser()
+    
+    if success:
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'fire_count': fire_count
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': message
+        }), 400
+
+@app.route('/laser/auto_fire', methods=['POST'])
+def toggle_auto_fire():
+    """Toggle auto-fire mode"""
+    global laser_auto_fire
+    
+    try:
+        data = request.get_json()
+        with laser_lock:
+            laser_auto_fire = bool(data.get('enabled', not laser_auto_fire))
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': laser_auto_fire
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/laser/settings', methods=['POST'])
+def update_laser_settings():
+    """Update laser fire settings"""
+    global laser_pulse_duration, laser_burst_count, laser_burst_delay, laser_cooldown
+    
+    try:
+        data = request.get_json()
+        with laser_lock:
+            if 'pulse_duration' in data:
+                laser_pulse_duration = float(data['pulse_duration'])
+            
+            if 'burst_count' in data:
+                laser_burst_count = int(data['burst_count'])
+            
+            if 'burst_delay' in data:
+                laser_burst_delay = float(data['burst_delay'])
+            
+            if 'cooldown' in data:
+                laser_cooldown = float(data['cooldown'])
+        
+        return jsonify({
+            'status': 'success',
+            'pulse_duration': laser_pulse_duration,
+            'burst_count': laser_burst_count,
+            'burst_delay': laser_burst_delay,
+            'cooldown': laser_cooldown
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/laser/status')
+def laser_status():
+    """Get laser system status"""
+    with laser_lock:
+        cooldown_remaining = 0
+        if last_fire_time:
+            elapsed = time.time() - last_fire_time
+            cooldown_remaining = max(0, laser_cooldown - elapsed)
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': laser_enabled,
+            'auto_fire': laser_auto_fire,
+            'pulse_duration': laser_pulse_duration,
+            'burst_count': laser_burst_count,
+            'burst_delay': laser_burst_delay,
+            'cooldown': laser_cooldown,
+            'cooldown_remaining': cooldown_remaining,
+            'fire_count': fire_count,
+            'ready_to_fire': cooldown_remaining == 0
+        })
+
+@app.route('/laser/reset_count', methods=['POST'])
+def reset_fire_count():
+    """Reset fire counter"""
+    global fire_count
+    
+    with laser_lock:
+        fire_count = 0
+    
+    return jsonify({
+        'status': 'success',
+        'fire_count': 0
+    })
+
 if __name__ == '__main__':
     initialize_camera()
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
