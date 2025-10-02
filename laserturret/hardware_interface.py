@@ -156,15 +156,16 @@ class LgpioGPIO(GPIOInterface):
             raise RuntimeError(f"Failed to initialize lgpio: {e}")
     
     def _open_chip(self):
-        """Open the GPIO chip - tries gpiochip4 (Pi 5) then gpiochip0"""
-        for chip_name in ['gpiochip4', 'gpiochip0']:
+        """Open the GPIO chip - tries chip 4 (Pi 5) then chip 0 (Pi 4-)"""
+        for chip_num in [4, 0]:
             try:
-                chip = self.lgpio.gpiochip_open(chip_name)
-                logger.debug(f"Opened {chip_name}")
+                chip = self.lgpio.gpiochip_open(chip_num)
+                logger.info(f"Opened gpiochip{chip_num}")
                 return chip
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not open gpiochip{chip_num}: {e}")
                 continue
-        raise RuntimeError("Could not open any GPIO chip")
+        raise RuntimeError("Could not open any GPIO chip (tried 4, 0)")
     
     def setup(self, pin: int, mode: PinMode, pull_up_down: PullMode = PullMode.OFF) -> None:
         # Configure pin direction and pull-up/down
@@ -608,13 +609,17 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
     
     # Try lgpio first (Pi 5 compatible)
     try:
-        return LgpioGPIO()
+        backend = LgpioGPIO()
+        logger.info("Using LgpioGPIO backend")
+        return backend
     except (ImportError, RuntimeError) as e:
         logger.debug(f"lgpio not available: {e}")
     
     # Fall back to RPi.GPIO (Pi 4 and earlier)
     try:
-        return RPiGPIO()
+        backend = RPiGPIO()
+        logger.info("Using RPiGPIO backend (legacy)")
+        return backend
     except ImportError:
         logger.debug("RPi.GPIO not available")
     
