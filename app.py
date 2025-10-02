@@ -677,14 +677,14 @@ def set_exposure():
         if 'auto' in data:
             controls['AeEnable'] = bool(data['auto'])
         
-        if 'exposure_time' in data and not data.get('auto', True):
+        if 'exposure_time' in data and data['exposure_time'] is not None and not data.get('auto', True):
             # Only set manual exposure if auto is disabled
             controls['ExposureTime'] = int(data['exposure_time'])
         
-        if 'analog_gain' in data and not data.get('auto', True):
+        if 'analog_gain' in data and data['analog_gain'] is not None and not data.get('auto', True):
             controls['AnalogueGain'] = float(data['analog_gain'])
         
-        if 'digital_gain' in data and not data.get('auto', True):
+        if 'digital_gain' in data and data['digital_gain'] is not None and not data.get('auto', True):
             controls['DigitalGain'] = float(data['digital_gain'])
         
         if controls:
@@ -705,13 +705,13 @@ def set_image_params():
         data = request.get_json()
         controls = {}
         
-        if 'brightness' in data:
+        if 'brightness' in data and data['brightness'] is not None:
             controls['Brightness'] = float(data['brightness'])
         
-        if 'contrast' in data:
+        if 'contrast' in data and data['contrast'] is not None:
             controls['Contrast'] = float(data['contrast'])
         
-        if 'saturation' in data:
+        if 'saturation' in data and data['saturation'] is not None:
             controls['Saturation'] = float(data['saturation'])
         
         if controls:
@@ -735,7 +735,7 @@ def set_white_balance():
         if 'auto' in data:
             controls['AwbEnable'] = bool(data['auto'])
         
-        if 'mode' in data:
+        if 'mode' in data and data['mode'] is not None:
             controls['AwbMode'] = int(data['mode'])
         
         if controls:
