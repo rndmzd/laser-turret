@@ -168,6 +168,21 @@ class LgpioGPIO(GPIOInterface):
         raise RuntimeError("Could not open any GPIO chip (tried 4, 0)")
     
     def setup(self, pin: int, mode: PinMode, pull_up_down: PullMode = PullMode.OFF) -> None:
+        # Check if pin is already configured with the same settings
+        if pin in self._pin_configs:
+            existing = self._pin_configs[pin]
+            if existing['mode'] == mode and existing['pull'] == pull_up_down:
+                # Pin already configured correctly, skip
+                logger.debug(f"Pin {pin} already configured with mode={mode}, pull={pull_up_down}")
+                return
+            else:
+                # Pin configured differently, need to reconfigure
+                logger.warning(f"Pin {pin} already configured, freeing before reconfiguration")
+                try:
+                    self.lgpio.gpio_free(self.chip, pin)
+                except:
+                    pass
+        
         # Configure pin direction and pull-up/down
         flags = 0
         
@@ -226,24 +241,30 @@ class LgpioGPIO(GPIOInterface):
     
     def cleanup(self, pins: Optional[list] = None) -> None:
         if pins:
+            # Clean up specific pins only (for individual motor cleanup)
             for pin in pins:
                 try:
                     self.lgpio.gpio_free(self.chip, pin)
+                    # Remove from tracked configs
+                    if pin in self._pin_configs:
+                        del self._pin_configs[pin]
                 except:
                     pass
+            # Do NOT close chip when cleaning specific pins (shared singleton)
         else:
-            # Free all configured pins
+            # Full cleanup - free all configured pins and close chip
             for pin in list(self._pin_configs.keys()):
                 try:
                     self.lgpio.gpio_free(self.chip, pin)
                 except:
                     pass
-        
-        # Close chip
-        try:
-            self.lgpio.gpiochip_close(self.chip)
-        except:
-            pass
+            self._pin_configs.clear()
+            
+            # Close chip handle
+            try:
+                self.lgpio.gpiochip_close(self.chip)
+            except:
+                pass
     
     def pwm(self, pin: int, frequency: float) -> PWMInterface:
         return LgpioPWM(self.lgpio, self.chip, pin, frequency)
@@ -588,9 +609,13 @@ class MockCamera(CameraInterface):
         }
 
 
+# Global GPIO backend singleton
+_gpio_backend_instance: Optional[GPIOInterface] = None
+
+
 def get_gpio_backend(mock: bool = False) -> GPIOInterface:
     """
-    Get GPIO backend based on environment.
+    Get GPIO backend based on environment (singleton pattern).
     
     Tries backends in this order:
     1. lgpio (Raspberry Pi 5)
@@ -601,16 +626,24 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
         mock: If True, force mock implementation
     
     Returns:
-        GPIOInterface instance
+        GPIOInterface instance (singleton)
     """
+    global _gpio_backend_instance
+    
+    # Return existing instance if available
+    if _gpio_backend_instance is not None:
+        return _gpio_backend_instance
+    
     if mock:
         logger.info("Using mock GPIO backend")
-        return MockGPIO()
+        _gpio_backend_instance = MockGPIO()
+        return _gpio_backend_instance
     
     # Try lgpio first (Pi 5 compatible)
     try:
         backend = LgpioGPIO()
         logger.info("Using LgpioGPIO backend")
+        _gpio_backend_instance = backend
         return backend
     except (ImportError, RuntimeError) as e:
         logger.debug(f"lgpio not available: {e}")
@@ -619,13 +652,15 @@ def get_gpio_backend(mock: bool = False) -> GPIOInterface:
     try:
         backend = RPiGPIO()
         logger.info("Using RPiGPIO backend (legacy)")
+        _gpio_backend_instance = backend
         return backend
     except ImportError:
         logger.debug("RPi.GPIO not available")
     
     # Final fallback to mock
     logger.warning("No GPIO library available (tried lgpio, RPi.GPIO), falling back to mock")
-    return MockGPIO()
+    _gpio_backend_instance = MockGPIO()
+    return _gpio_backend_instance
 
 
 def get_camera_backend(mock: bool = False) -> CameraInterface:
