@@ -148,28 +148,12 @@ class StepperMotor:
         # Disable motor initially
         self.gpio.output(self.enable_pin, 1)  # Active LOW
         
-        # Setup limit switches with debouncing
-        self._last_cw_trigger = 0
-        self._last_ccw_trigger = 0
-        self.debounce_time = 0.1  # 100ms debounce window
-        
+        # Setup limit switches with pull-ups (polling-based, not event-based)
         if cw_limit_switch_pin:
             self.gpio.setup(cw_limit_switch_pin, PinMode.INPUT, pull_up_down=PullMode.UP)
-            self.gpio.add_event_detect(
-                cw_limit_switch_pin,
-                Edge.FALLING,
-                callback=lambda channel: self._limit_switch_handler(channel, CLOCKWISE),
-                bouncetime=200
-            )
             
         if ccw_limit_switch_pin:
             self.gpio.setup(ccw_limit_switch_pin, PinMode.INPUT, pull_up_down=PullMode.UP)
-            self.gpio.add_event_detect(
-                ccw_limit_switch_pin,
-                Edge.FALLING,
-                callback=lambda channel: self._limit_switch_handler(channel, COUNTER_CLOCKWISE),
-                bouncetime=200
-            )
         
         # Initialize command processing thread
         self.command_queue = queue.Queue(maxsize=1)  # Only keep latest command
@@ -189,26 +173,25 @@ class StepperMotor:
             if perform_calibration:
                 self.calibrate()
 
-    def _limit_switch_handler(self, channel: int, direction: str) -> None:
-        """Fast limit switch event handler with minimal processing"""
-        current_time = time.time()
+    def _check_limit_switch(self, direction: str) -> bool:
+        """
+        Check if a limit switch is triggered by polling.
         
-        # Quick debounce check
+        Args:
+            direction: CLOCKWISE or COUNTER_CLOCKWISE
+            
+        Returns:
+            True if the limit switch for that direction is pressed (active LOW)
+        """
         if direction == CLOCKWISE:
-            if current_time - self._last_cw_trigger < self.debounce_time:
-                return
-            self._last_cw_trigger = current_time
+            if self.cw_limit_switch_pin is None:
+                return False
+            # Switch is pressed when pin reads LOW (0)
+            return self.gpio.input(self.cw_limit_switch_pin) == 0
         else:  # COUNTER_CLOCKWISE
-            if current_time - self._last_ccw_trigger < self.debounce_time:
-                return
-            self._last_ccw_trigger = current_time
-        
-        # Update state if switch is actually pressed
-        if self.gpio.input(channel) == 0:  # Switch is pressed (pulled low)
-            with self.lock:
-                self.state.triggered_limit = direction
-                self.state.status = MotorStatus.LIMIT_REACHED
-            logger.info(f"[{self.name}] {direction} limit switch triggered")
+            if self.ccw_limit_switch_pin is None:
+                return False
+            return self.gpio.input(self.ccw_limit_switch_pin) == 0
 
     def enable(self) -> None:
         """Enable the motor driver (active LOW)"""
@@ -224,19 +207,13 @@ class StepperMotor:
             raise ValueError(f"Invalid direction: {direction}")
         
         with self.lock:
-            # Check if movement is allowed
-            if ((direction == CLOCKWISE and self.state.triggered_limit == CLOCKWISE) or
-                (direction == COUNTER_CLOCKWISE and self.state.triggered_limit == COUNTER_CLOCKWISE)):
-                raise LimitSwitchError(f"Cannot move {direction}, limit switch triggered.")
+            # Check if limit switch is currently pressed in the direction we want to move
+            if self._check_limit_switch(direction):
+                raise LimitSwitchError(f"Cannot move {direction}, limit switch is pressed.")
             
             self.state.direction = direction
             self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
-            
-            # Reset stop condition if moving away from triggered limit
-            if ((direction == COUNTER_CLOCKWISE and self.state.triggered_limit == CLOCKWISE) or
-                (direction == CLOCKWISE and self.state.triggered_limit == COUNTER_CLOCKWISE)):
-                self.state.triggered_limit = None
-                self.state.status = MotorStatus.IDLE
+            self.state.status = MotorStatus.IDLE
 
     def step(self, steps: int, delay: float = 0.0001) -> int:
         """
@@ -256,13 +233,10 @@ class StepperMotor:
         actual_steps = 0
         
         try:
-            # Check initial limit state
-            if ((self.state.direction == CLOCKWISE and 
-                self.state.triggered_limit == CLOCKWISE) or
-                (self.state.direction == COUNTER_CLOCKWISE and 
-                self.state.triggered_limit == COUNTER_CLOCKWISE)):
+            # Check initial limit state by polling
+            if self._check_limit_switch(self.state.direction):
                 raise LimitSwitchError(
-                    f"Cannot move {self.state.direction}, limit switch already triggered"
+                    f"Cannot move {self.state.direction}, limit switch is pressed"
                 )
             
             self.enable()  # Enable motor
@@ -273,8 +247,12 @@ class StepperMotor:
                 if time.time() - start_time > self.movement_timeout:
                     raise MotorError("Movement operation timed out")
                 
-                # Check for limit switch
-                if self.state.triggered_limit:
+                # Check for limit switch by polling
+                if self._check_limit_switch(self.state.direction):
+                    logger.info(f"[{self.name}] {self.state.direction} limit switch detected during movement")
+                    with self.lock:
+                        self.state.triggered_limit = self.state.direction
+                        self.state.status = MotorStatus.LIMIT_REACHED
                     break
                 
                 # Generate step pulse
@@ -298,9 +276,12 @@ class StepperMotor:
         
         finally:
             if self.state.status != MotorStatus.ERROR:
-                self.state.status = (MotorStatus.LIMIT_REACHED 
-                                   if self.state.triggered_limit 
-                                   else MotorStatus.IDLE)
+                # Update status based on current limit switch state
+                if (self._check_limit_switch(CLOCKWISE) or 
+                    self._check_limit_switch(COUNTER_CLOCKWISE)):
+                    self.state.status = MotorStatus.LIMIT_REACHED
+                else:
+                    self.state.status = MotorStatus.IDLE
             self.disable()  # Disable motor after movement
         
         return actual_steps
@@ -353,9 +334,11 @@ class StepperMotor:
                     except LimitSwitchError:
                         continue
 
-                # Check limit switches
-                if ((direction == CLOCKWISE and self.state.triggered_limit == CLOCKWISE) or
-                    (direction == COUNTER_CLOCKWISE and self.state.triggered_limit == COUNTER_CLOCKWISE)):
+                # Check limit switches by polling
+                if self._check_limit_switch(direction):
+                    with self.lock:
+                        self.state.triggered_limit = direction
+                        self.state.status = MotorStatus.LIMIT_REACHED
                     time.sleep(0.001)
                     continue
 
@@ -407,17 +390,9 @@ class StepperMotor:
         pins_to_cleanup = [self.step_pin, self.dir_pin, self.enable_pin]
         pins_to_cleanup.extend(self.ms_pins)
         if self.cw_limit_switch_pin:
-            try:
-                self.gpio.remove_event_detect(self.cw_limit_switch_pin)
-                pins_to_cleanup.append(self.cw_limit_switch_pin)
-            except:
-                pass
+            pins_to_cleanup.append(self.cw_limit_switch_pin)
         if self.ccw_limit_switch_pin:
-            try:
-                self.gpio.remove_event_detect(self.ccw_limit_switch_pin)
-                pins_to_cleanup.append(self.ccw_limit_switch_pin)
-            except:
-                pass
+            pins_to_cleanup.append(self.ccw_limit_switch_pin)
                 
         try:
             self.gpio.cleanup(pins_to_cleanup)
@@ -429,7 +404,6 @@ class StepperMotor:
     def confirm_limit_switches(self) -> None:
         """
         Verify limit switch functionality by requesting manual confirmation.
-{{ ... }}
         """
         if not (self.cw_limit_switch_pin or self.ccw_limit_switch_pin):
             logger.info(f"[{self.name}] No limit switches configured, skipping verification.")
@@ -454,22 +428,17 @@ class StepperMotor:
             while True:
                 if time.time() - start_time > timeout:
                     raise LimitSwitchError(
-                        f"Timeout waiting for {name} limit switch confirmation"
+                        f"Manually trigger the {name} limit switch within {timeout} seconds."
                     )
                     
-                with self.lock:
-                    if self.state.triggered_limit == direction:
-                        logger.info(f"[{self.name}] {name} limit switch verified")
-                        # Reset the triggered state
+                # Poll the switch directly
+                if self._check_limit_switch(direction):
+                    logger.info(f"[{self.name}] {name} limit switch verified")
+                    with self.lock:
                         self.state.triggered_limit = None
                         self.state.status = MotorStatus.IDLE
-                        break
-                    elif self.state.triggered_limit:
-                        raise LimitSwitchError(
-                            f"Wrong limit switch triggered: expected {name}, "
-                            f"got {self.state.triggered_limit}"
-                        )
-                        
+                    break
+                    
                 time.sleep(0.1)
         
         logger.info(f"[{self.name}] All limit switches verified!")
@@ -492,15 +461,15 @@ class StepperMotor:
             # First move to CCW limit
             logger.info(f"[{self.name}] Moving to CCW limit...")
             self.set_direction(COUNTER_CLOCKWISE)
-            while not self.state.triggered_limit:
+            while not self._check_limit_switch(COUNTER_CLOCKWISE):
                 if time.time() - start_time > self.calibration_timeout:
                     raise CalibrationError("Calibration timed out waiting for CCW limit")
                 steps = self.step(1, delay=0.0005)  # Move in smaller increments
-                logger.debug(f"[{self.name}] Moved {steps} steps toward CCW limit")
+                time.sleep(0.001)
                 if steps == 0:  # If we couldn't move, might be at limit already
                     break
             
-            if not self.state.triggered_limit:
+            if not self._check_limit_switch(COUNTER_CLOCKWISE):
                 raise CalibrationError("Failed to reach CCW limit")
             
             logger.info(f"[{self.name}] Reached CCW limit")
@@ -512,21 +481,21 @@ class StepperMotor:
             backoff_steps = self.step(self.limit_backoff_steps, delay=0.0005)
             logger.debug(f"[{self.name}] Backed off {backoff_steps} steps from CCW limit")
             
-            # Now move to CW limit while counting steps
-            logger.info(f"[{self.name}] Moving to CW limit...")
+            # Find CW limit and measure total travel
+            logger.info(f"[{self.name}] Finding CW limit and measuring range...")
             self.set_direction(CLOCKWISE)
             total_steps = 0
             
-            while not self.state.triggered_limit:
+            while not self._check_limit_switch(CLOCKWISE):
                 if time.time() - start_time > self.calibration_timeout:
                     raise CalibrationError("Calibration timed out waiting for CW limit")
                 steps = self.step(1, delay=0.0005)  # Move in smaller increments
                 total_steps += steps
-                logger.debug(f"[{self.name}] Moved {steps} steps toward CW limit (Total: {total_steps})")
+                time.sleep(0.001)
                 if steps == 0:  # If we couldn't move, might be at limit
                     break
             
-            if not self.state.triggered_limit:
+            if not self._check_limit_switch(CLOCKWISE):
                 raise CalibrationError("Failed to reach CW limit")
             
             logger.info(f"[{self.name}] Reached CW limit. Total travel: {total_steps} steps")
