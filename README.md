@@ -15,22 +15,26 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 ## Hardware Requirements
 
 ### Raspberry Pi Setup
+
 - Raspberry Pi 4/5 (recommended) or Pi 3B+
 - Picamera2 compatible camera module
 - MicroSD card (16GB+ recommended)
 
 ### Motor Control
+
 - 2x NEMA 17 stepper motors (or similar)
 - 2x A4988 stepper motor drivers
 - 4x Limit switches (2 per axis)
 - 12V power supply for motors
 
 ### Laser
+
 - Laser diode module (compatible with PWM control)
 - MOSFET or driver circuit for laser
 - Appropriate safety equipment
 
 ### Remote Control (Optional)
+
 - CircuitPython-compatible board (e.g., Adafruit QT Py ESP32-S3)
 - Analog joystick module
 - Potentiometer (for laser power control)
@@ -42,11 +46,23 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 
 #### 1. Install System Dependencies
 
+**For Raspberry Pi 5:**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-opencv python3-numpy \
+    python3-picamera2 python3-libcamera python3-lgpio
+```
+
+**For Raspberry Pi 4 and earlier:**
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y python3-pip python3-opencv python3-numpy \
     python3-picamera2 python3-libcamera python3-rpi.gpio
 ```
+
+> **Note:** Raspberry Pi 5 requires `lgpio` instead of `RPi.GPIO`. The software will automatically detect and use the correct library.
 
 #### 2. Install Python Dependencies
 
@@ -89,6 +105,7 @@ laser_max_power = 100
 #### 1. Install CircuitPython Libraries
 
 Copy these libraries to your CircuitPython device's `lib/` folder:
+
 - `adafruit_minimqtt`
 - `adafruit_neopixel` (built-in on most boards)
 
@@ -159,6 +176,7 @@ python3 remote_control_rx.py
 ```
 
 On first run, the system will:
+
 - Verify all limit switches
 - Calibrate both axes by finding limits
 - Center the turret
@@ -176,6 +194,7 @@ Access the camera feed at: `http://<raspberry-pi-ip>:5000`
 #### 3. Calibrate Remote Control (First Time)
 
 Hold the joystick button during power-on to enter calibration mode. Follow the LED color indicators:
+
 - **Orange** - Connecting to WiFi
 - **Green** - WiFi connected
 - **Light Blue** - MQTT connected
@@ -205,6 +224,7 @@ x_axis,y_axis,joystick_button,laser_button,laser_power
 ```
 
 Example: `50,-30,false,true,75`
+
 - X axis: 50 (right)
 - Y axis: -30 (down)
 - Joystick button: not pressed
@@ -244,6 +264,7 @@ step_delay = 0.0005
 6. **Follow all local regulations for laser use**
 
 The software includes:
+
 - Limit switches to prevent mechanical damage
 - Configurable laser power limits
 - Emergency stop capability (Ctrl+C)
@@ -251,24 +272,28 @@ The software includes:
 ## Troubleshooting
 
 ### Motors Not Moving
+
 - Check GPIO pin assignments in `laserturret.conf`
 - Verify A4988 drivers have power (12V)
 - Test with `scripts/steppercontrol_test.py`
 - Check limit switch wiring (should be NC or properly pulled up)
 
 ### Camera Not Working
+
 - Run `libcamera-hello` to test camera
 - Check camera cable connection
 - Verify Picamera2 is installed: `python3 -c "from picamera2 import Picamera2"`
 - App will show "Camera Not Available" if camera fails
 
 ### Remote Control Not Connecting
+
 - Verify WiFi credentials in `secrets.py`
 - Check MQTT broker IP address
 - Ensure Pi is running `remote_control_rx.py`
 - Check CircuitPython serial console for errors
 
 ### Limit Switches Not Triggering
+
 - Test with multimeter (should be closed when not pressed)
 - Verify GPIO pins in config
 - Check pull-up resistors are enabled
@@ -309,6 +334,7 @@ laser-turret/
 ## Contributing
 
 See `REVIEW.md` for:
+
 - Known issues and bugs
 - Refactoring opportunities
 - Feature enhancement ideas
