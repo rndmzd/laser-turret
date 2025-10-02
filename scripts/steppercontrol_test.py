@@ -1,6 +1,9 @@
 import logging
 import time
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from contextlib import contextmanager
 from typing import Generator, Optional
 import pytest

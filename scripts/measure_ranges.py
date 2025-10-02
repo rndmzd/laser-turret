@@ -3,6 +3,10 @@
 DEPRECATED: This script uses an old StepperMotor API that no longer exists.
 Use scripts/test_limit_switches.py instead for testing limit switches.
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 import time
 from laserturret import StepperMotor
 
