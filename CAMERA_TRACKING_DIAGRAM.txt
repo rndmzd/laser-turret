@@ -1,0 +1,399 @@
+═══════════════════════════════════════════════════════════════════════════
+                    CAMERA TRACKING SYSTEM ARCHITECTURE
+═══════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         TRACKING MODE SELECTION                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    ┌──────────────────────┐              ┌──────────────────────┐
+    │  CROSSHAIR TRACKING  │              │   CAMERA TRACKING    │
+    │    (Software Mode)   │              │   (Hardware Mode)    │
+    └──────────────────────┘              └──────────────────────┘
+              │                                      │
+              │                                      │
+    ┌─────────▼──────────┐              ┌───────────▼───────────┐
+    │ Camera: FIXED      │              │ Camera: MOVES         │
+    │ Crosshair: MOVES   │              │ Crosshair: FIXED      │
+    │ Response: INSTANT  │              │ Response: DELAYED     │
+    │ Hardware: NONE     │              │ Hardware: STEPPERS    │
+    └────────────────────┘              └───────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                      CAMERA TRACKING DATA FLOW
+═══════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────┐
+  │   Camera     │──────► Capture Frame (RGB, 1920x1080)
+  │   Pi Camera  │
+  └──────────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │   Object/    │──────► Detect Objects/Motion
+  │   Motion     │        Returns: Bounding boxes
+  │  Detection   │
+  └──────────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │  Calculate   │──────► Object Center: (x, y)
+  │    Center    │        Frame Center: (960, 540)
+  │   Position   │        Offset: (dx, dy)
+  └──────────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │   Dead Zone  │──────► If |dx| < threshold AND
+  │     Check    │        |dy| < threshold: SKIP
+  └──────────────┘        Else: PROCEED
+         │
+         ▼
+  ┌──────────────┐
+  │  Pixel → Step│──────► steps_x = dx * calibration_x
+  │  Conversion  │        steps_y = dy * calibration_y
+  └──────────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ Apply Safety │──────► Check Software Limits
+  │    Limits    │        Check Hardware Limits
+  └──────────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │   Execute    │──────► Move X-Axis Stepper
+  │   Movement   │        Move Y-Axis Stepper
+  │  (Threaded)  │        With Acceleration Profile
+  └──────────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │    Update    │──────► position_x += steps_x
+  │   Position   │        position_y += steps_y
+  │   Tracking   │
+  └──────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        HARDWARE CONNECTIONS
+═══════════════════════════════════════════════════════════════════════════
+
+                    Raspberry Pi GPIO
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+        ▼                 ▼                 ▼
+  ┌──────────┐      ┌──────────┐    ┌──────────┐
+  │  X-Axis  │      │  Y-Axis  │    │Microstep │
+  │  Driver  │      │  Driver  │    │ Control  │
+  │ (A4988)  │      │ (A4988)  │    │(MS1-3)   │
+  └──────────┘      └──────────┘    └──────────┘
+   STEP DIR EN      STEP DIR EN
+     │   │   │        │   │   │
+     ▼   ▼   ▼        ▼   ▼   ▼
+  ┌──────────┐      ┌──────────┐
+  │ X Stepper│      │ Y Stepper│
+  │  Motor   │      │  Motor   │
+  └──────────┘      └──────────┘
+       │                 │
+       ▼                 ▼
+  ┌──────────┐      ┌──────────┐
+  │ Pan Axis │      │Tilt Axis │
+  │ Movement │      │ Movement │
+  └──────────┘      └──────────┘
+       └─────────┬───────────┘
+                 │
+                 ▼
+          ┌──────────────┐
+          │   Camera     │
+          │   Mount      │
+          └──────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                     STEPPER MOTOR CONTROL FLOW
+═══════════════════════════════════════════════════════════════════════════
+
+  ┌────────────────┐
+  │ Movement       │
+  │ Request        │
+  │ (steps, axis)  │
+  └────────┬───────┘
+           │
+           ▼
+  ┌────────────────┐
+  │ Check Software │────► IF position + steps > max_limit
+  │ Limits         │      THEN constrain steps
+  └────────┬───────┘
+           │
+           ▼
+  ┌────────────────┐
+  │ Set Direction  │────► GPIO: DIR pin HIGH/LOW
+  │ Pin            │
+  └────────┬───────┘
+           │
+           ▼
+  ┌────────────────┐
+  │ Acceleration   │────► Calculate variable delay:
+  │ Profile        │      Start: 3x base_delay
+  │                │      Peak: 1x base_delay
+  │                │      End: 3x base_delay
+  └────────┬───────┘
+           │
+           ▼
+  ┌────────────────┐
+  │ Step Loop      │────► FOR each step:
+  │                │        - Check limit switch
+  │                │        - STEP pin HIGH
+  │                │        - Delay (variable)
+  │                │        - STEP pin LOW
+  │                │        - Delay (variable)
+  └────────┬───────┘
+           │
+           ▼
+  ┌────────────────┐
+  │ Update         │────► position += (direction * steps)
+  │ Position       │
+  └────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        CALIBRATION PROCESS
+═══════════════════════════════════════════════════════════════════════════
+
+  Step 1: Place Known Object
+  ┌─────────────────────────────────────┐
+  │   [Object]                          │  Place object at edge of frame
+  │                                     │  Note pixel position: x1
+  │                      [Crosshair]    │
+  └─────────────────────────────────────┘
+
+  Step 2: Execute Manual Movement
+  ┌─────────────────────────────────────┐
+  │                 [Object]            │  Execute 100 steps toward object
+  │                                     │  Object appears to move on screen
+  │              [Crosshair]            │  Note new pixel position: x2
+  └─────────────────────────────────────┘
+
+  Step 3: Calculate Calibration
+  ┌────────────────────────────────────────────────────┐
+  │  Pixels Moved = |x2 - x1|                         │
+  │  Steps Executed = 100                             │
+  │  Steps Per Pixel = 100 / Pixels_Moved            │
+  │                                                    │
+  │  Example: Object moved 667 pixels                │
+  │           100 steps / 667 pixels = 0.15 steps/px │
+  └────────────────────────────────────────────────────┘
+
+  Step 4: Apply and Test
+  ┌─────────────────────────────────────┐
+  │         [Object] [Crosshair]        │  Enable auto-tracking
+  │                                     │  Object should center
+  │                                     │  If not, adjust calibration
+  └─────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    SAFETY SYSTEM ARCHITECTURE
+═══════════════════════════════════════════════════════════════════════════
+
+                     ┌──────────────┐
+                     │  Movement    │
+                     │   Request    │
+                     └──────┬───────┘
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │
+              ▼             ▼             ▼
+      ┌──────────┐   ┌──────────┐  ┌──────────┐
+      │Software  │   │Hardware  │  │Movement  │
+      │  Limits  │   │  Limits  │  │   Lock   │
+      │          │   │(Switches)│  │ (Thread) │
+      └─────┬────┘   └─────┬────┘  └─────┬────┘
+            │              │             │
+            │     ALL MUST PASS          │
+            └──────────┬─────────────────┘
+                       ▼
+                ┌──────────────┐
+                │   Execute    │
+                │   Movement   │
+                └──────────────┘
+
+  Software Limits:
+  • Max steps from center: ±2000 (configurable)
+  • Position tracking prevents overextension
+  • Constraints applied before movement
+
+  Hardware Limits:
+  • Physical switches at travel extremes
+  • Active-low (triggered = LOW)
+  • Immediately stops movement
+  • Optional but recommended
+
+  Thread Safety:
+  • Movement lock prevents concurrent operations
+  • Only one movement at a time
+  • Non-blocking background threads
+
+
+═══════════════════════════════════════════════════════════════════════════
+                          USER INTERFACE FLOW
+═══════════════════════════════════════════════════════════════════════════
+
+  Main Interface
+  ┌─────────────────────────────────────────────────────┐
+  │ Tabs: [Stats] [Track] [Laser] [Presets] [Objects]  │
+  └─────────────────────────────────────────────────────┘
+                      │
+                      │ Click "Track" Tab
+                      ▼
+  ┌─────────────────────────────────────────────────────┐
+  │ Tracking Mode Selection                             │
+  │ [ ] Crosshair Tracking (Software)                   │
+  │ [x] Camera Tracking (Stepper Motors)  <─── Select  │
+  └─────────────────────────────────────────────────────┘
+                      │
+                      ▼
+  ┌─────────────────────────────────────────────────────┐
+  │ Camera Control                                      │
+  │ [x] Enable Camera Movement            <─── Toggle   │
+  │ [Home Camera to Center]               <─── Click    │
+  └─────────────────────────────────────────────────────┘
+                      │
+                      ▼
+  ┌─────────────────────────────────────────────────────┐
+  │ Camera Settings                                     │
+  │ Dead Zone:      [====|====] 20px                    │
+  │ Movement Speed: [====|====] 1.0ms                   │
+  │ [Apply Settings]                                    │
+  └─────────────────────────────────────────────────────┘
+                      │
+                      ▼
+  ┌─────────────────────────────────────────────────────┐
+  │ Calibration                                         │
+  │ X-Axis Steps/Pixel: [====|====] 0.15                │
+  │ Y-Axis Steps/Pixel: [====|====] 0.12                │
+  │ [Save Calibration]                                  │
+  └─────────────────────────────────────────────────────┘
+                      │
+                      ▼
+  ┌─────────────────────────────────────────────────────┐
+  │ Camera Status                                       │
+  │ System Status:    Available                         │
+  │ Camera Enabled:   Yes                               │
+  │ Position (X, Y):  150, -75                          │
+  │ Moving:           No                                │
+  └─────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                       TIMING DIAGRAM (TYPICAL)
+═══════════════════════════════════════════════════════════════════════════
+
+Time (ms)  Event
+    0      │ Camera captures frame
+   30      │ Object detection completes
+   31      │ Calculate offset: (150, -80) pixels
+   32      │ Check dead zone: |150| > 20, |80| > 20 → PROCEED
+   33      │ Convert to steps: 150*0.15 = 23 steps X, 80*0.12 = 10 steps Y
+   34      │ Check limits: Within bounds
+   35      │ Start movement thread (non-blocking)
+   36      │── X-Axis: Set direction = RIGHT
+   37      │── Y-Axis: Set direction = UP
+   38      │── X-Axis: Begin step loop (23 steps)
+   39      │   └─► Step 1: Accelerating (3ms delay)
+   42      │   └─► Step 2: Accelerating (2.5ms delay)
+   ...     │   └─► Steps 3-20: Constant speed (1ms delay)
+   58      │   └─► Step 21: Decelerating (2.5ms delay)
+   61      │   └─► Step 22: Decelerating (3ms delay)
+   64      │   └─► Step 23: Complete
+   65      │── Y-Axis: Begin step loop (10 steps)
+   66      │   └─► Steps 1-10: Similar acceleration profile
+   82      │   └─► Complete
+   83      │── Update position: X += 23, Y += 10
+   84      │── Movement complete
+   85      │ Next frame capture begins
+
+
+═══════════════════════════════════════════════════════════════════════════
+                         API ENDPOINT MAP
+═══════════════════════════════════════════════════════════════════════════
+
+  Tracking Control
+  ├── POST /tracking/mode
+  │   └─► Set mode: "crosshair" or "camera"
+  │
+  ├── GET /tracking/status
+  │   └─► Get overall tracking status
+  │
+  └── Camera Tracking
+      ├── POST /tracking/camera/toggle
+      │   └─► Enable/disable camera tracking
+      │
+      ├── POST /tracking/camera/home
+      │   └─► Return camera to center (0,0)
+      │
+      ├── POST /tracking/camera/settings
+      │   └─► Update dead_zone, speed, calibration
+      │
+      ├── POST /tracking/camera/calibrate
+      │   └─► Set steps-per-pixel for axis
+      │
+      └── GET /tracking/camera/status
+          └─► Get detailed camera status
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    TROUBLESHOOTING DECISION TREE
+═══════════════════════════════════════════════════════════════════════════
+
+  Camera Not Moving?
+       │
+       ├─► Is mode set to "camera"? ────NO──► Switch to camera mode
+       │                          └─YES
+       │
+       ├─► Is "Enable Camera Movement" ON? ──NO──► Toggle it ON
+       │                                   └─YES
+       │
+       ├─► Are motors powered? ──────────NO──► Check power supply
+       │                        └─YES
+       │
+       ├─► Is object detected? ──────────NO──► Enable object/motion detection
+       │                        └─YES
+       │
+       ├─► Is auto-track ON? ────────────NO──► Enable auto-track
+       │                      └─YES
+       │
+       └─► Check GPIO wiring and config
+
+
+  Camera Oscillates?
+       │
+       ├─► Is dead zone too small? ──YES──► Increase to 30-40px
+       │                            └─NO
+       │
+       ├─► Is steps/pixel too high? ─YES──► Reduce calibration values
+       │                             └─NO
+       │
+       └─► Is lighting poor? ────────YES──► Improve lighting
+
+
+  Wrong Direction?
+       │
+       └─► Swap motor wiring or invert direction in code
+
+
+═══════════════════════════════════════════════════════════════════════════
+                          VERSION INFORMATION
+═══════════════════════════════════════════════════════════════════════════
+
+  Feature:      Camera Tracking with Stepper Motors
+  Version:      1.0.0
+  Status:       Complete & Ready for Testing
+  Date:         2025-10-02
+  Lines Added:  ~1100+ (Python, HTML, JavaScript)
+  Files:        3 new, 3 modified, 3 documentation
+
+═══════════════════════════════════════════════════════════════════════════
