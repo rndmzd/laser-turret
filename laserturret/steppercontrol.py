@@ -183,23 +183,33 @@ class StepperMotor:
         Returns:
             True if the limit switch for that direction is pressed (active LOW)
         """
-        if direction == CLOCKWISE:
-            if self.cw_limit_switch_pin is None:
-                return False
-            # Switch is pressed when pin reads LOW (0)
-            return self.gpio.input(self.cw_limit_switch_pin) == 0
-        else:  # COUNTER_CLOCKWISE
-            if self.ccw_limit_switch_pin is None:
-                return False
-            return self.gpio.input(self.ccw_limit_switch_pin) == 0
+        try:
+            if direction == CLOCKWISE:
+                if self.cw_limit_switch_pin is None:
+                    return False
+                # Switch is pressed when pin reads LOW (0)
+                return self.gpio.input(self.cw_limit_switch_pin) == 0
+            else:  # COUNTER_CLOCKWISE
+                if self.ccw_limit_switch_pin is None:
+                    return False
+                return self.gpio.input(self.ccw_limit_switch_pin) == 0
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to read limit switch (GPIO may be cleaned up): {e}")
+            return False
 
     def enable(self) -> None:
         """Enable the motor driver (active LOW)"""
-        self.gpio.output(self.enable_pin, 0)
+        try:
+            self.gpio.output(self.enable_pin, 0)
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to enable motor (GPIO may be cleaned up): {e}")
 
     def disable(self) -> None:
         """Disable the motor driver"""
-        self.gpio.output(self.enable_pin, 1)
+        try:
+            self.gpio.output(self.enable_pin, 1)
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to disable motor (GPIO may be cleaned up): {e}")
 
     def set_direction(self, direction: str) -> None:
         """Set motor direction"""
@@ -212,7 +222,11 @@ class StepperMotor:
                 raise LimitSwitchError(f"Cannot move {direction}, limit switch is pressed.")
             
             self.state.direction = direction
-            self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
+            try:
+                self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
+            except Exception as e:
+                logger.debug(f"[{self.name}] Failed to set direction (GPIO may be cleaned up): {e}")
+                raise
             self.state.status = MotorStatus.IDLE
 
     def step(self, steps: int, delay: float = 0.0001) -> int:
@@ -256,10 +270,15 @@ class StepperMotor:
                     break
                 
                 # Generate step pulse
-                self.gpio.output(self.step_pin, 1)
-                time.sleep(delay / 2)  # Half delay for pulse width
-                self.gpio.output(self.step_pin, 0)
-                time.sleep(delay / 2)  # Half delay between steps
+                try:
+                    self.gpio.output(self.step_pin, 1)
+                    time.sleep(delay / 2)  # Half delay for pulse width
+                    self.gpio.output(self.step_pin, 0)
+                    time.sleep(delay / 2)  # Half delay between steps
+                except Exception as gpio_error:
+                    # GPIO error during step - might be cleanup in progress
+                    logger.debug(f"[{self.name}] GPIO error during step: {gpio_error}")
+                    break
                 
                 # Update position
                 if self.state.direction == CLOCKWISE:
@@ -349,6 +368,10 @@ class StepperMotor:
                     self.step(1, delay)
 
             except Exception as e:
+                # Check if we're being cleaned up
+                if not self.running:
+                    logger.debug(f"[{self.name}] Command thread exiting due to cleanup")
+                    break
                 logger.error(f"[{self.name}] Error in command thread: {str(e)}")
                 time.sleep(0.1)
 
