@@ -1,85 +1,566 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Laser Turret</title>
+    <title>Laser Turret Control Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            background: #f0f0f0;
-            font-family: Arial, sans-serif;
         }
+
         .container {
-            max-width: 1920px;
+            max-width: 1600px;
             margin: 0 auto;
+        }
+
+        .header {
             text-align: center;
+            color: white;
+            margin-bottom: 30px;
         }
-        .video-container {
-            margin-top: 20px;
-            background: #000;
-            padding: 10px;
-            border-radius: 8px;
-            display: inline-block;
-            position: relative;
-            max-width: 100%;
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            align-items: start;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .video-section {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
         #video-stream {
             width: 100%;
             height: auto;
-            border-radius: 4px;
-            cursor: crosshair;
-        }
-        .controls {
-            margin-top: 20px;
-            padding: 15px;
-            background: #fff;
             border-radius: 8px;
-            display: inline-block;
-            min-width: 300px;
+            cursor: crosshair;
+            display: block;
         }
-        .control-group {
-            margin: 10px 0;
-            padding: 10px;
-            background: #f8f8f8;
-            border-radius: 4px;
+
+        .controls-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
-        .exposure-stats {
-            font-family: monospace;
-            margin: 10px 0;
-            text-align: left;
-            display: inline-block;
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
         }
-        .exposure-value {
-            font-weight: bold;
-            color: #444;
-        }
-        button {
-            padding: 8px 15px;
-            margin: 0 5px;
+
+        .tab {
+            padding: 12px 20px;
+            background: transparent;
             border: none;
-            border-radius: 4px;
-            background: #4CAF50;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .control-group h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            color: #333;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .slider-control {
+            margin-bottom: 15px;
+        }
+
+        .slider-control label {
+            display: block;
+            color: #555;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .slider-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #5568d3;
+            transform: scale(1.2);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #333;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 26px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+
+        .status-message {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .select-control {
+            margin-bottom: 15px;
+        }
+
+        .select-control label {
+            display: block;
+            color: #555;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
             cursor: pointer;
         }
-        button:hover {
-            background: #45a049;
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Laser Turret</h1>
-        <div class="video-container">
-            <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+        <div class="header">
+            <h1>🎯 Laser Turret Control Panel</h1>
+            <p>Advanced Camera Control & Monitoring System</p>
         </div>
-        <div class="controls">
-            <div class="control-group">
-                <h3>Camera Stats</h3>
-                <div class="exposure-stats">
-                    <div>Crosshair: <span id="position" class="exposure-value">Center</span></div>
-                    <div>Exposure: <span id="exp-time" class="exposure-value">--</span></div>
-                    <div>Gain: <span id="gain" class="exposure-value">--</span></div>
+
+        <div class="main-grid">
+            <div class="video-section">
+                <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+            </div>
+
+            <div class="controls-panel">
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('stats')">📊 Stats</button>
+                    <button class="tab" onclick="switchTab('exposure')">🔆 Exposure</button>
+                    <button class="tab" onclick="switchTab('image')">🎨 Image</button>
+                    <button class="tab" onclick="switchTab('capture')">📸 Capture</button>
+                </div>
+
+                <!-- Stats Tab -->
+                <div id="stats-tab" class="tab-content active">
+                    <div class="control-group">
+                        <h3>📍 Crosshair Position</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Position</span>
+                            <span id="position" class="stat-value">Center</span>
+                        </div>
+                        <button class="btn-secondary" onclick="resetCrosshair()" style="margin-top: 10px;">
+                            🎯 Reset to Center
+                        </button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>⚡ Performance</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Frame Rate</span>
+                            <span id="fps" class="stat-value">-- FPS</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Exposure Time</span>
+                            <span id="exp-time" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Analog Gain</span>
+                            <span id="gain" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Digital Gain</span>
+                            <span id="digital-gain" class="stat-value">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Exposure Tab -->
+                <div id="exposure-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>🔆 Exposure Control</h3>
+                        
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="auto-exposure" checked onchange="toggleAutoExposure()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Auto Exposure</span>
+                        </div>
+
+                        <div id="manual-exposure-controls" style="display: none;">
+                            <div class="slider-control">
+                                <label>Exposure Time (µs)</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="exposure-time" min="1000" max="200000" value="20000" step="1000" oninput="updateExposureValue()">
+                                    <span id="exposure-time-value" class="slider-value">20000</span>
+                                </div>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Analog Gain</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="analog-gain" min="1" max="16" value="1" step="0.1" oninput="updateAnalogGainValue()">
+                                    <span id="analog-gain-value" class="slider-value">1.0</span>
+                                </div>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Digital Gain</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="digital-gain" min="1" max="8" value="1" step="0.1" oninput="updateDigitalGainValue()">
+                                    <span id="digital-gain-value" class="slider-value">1.0</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" onclick="applyExposure()">Apply Exposure Settings</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>⚖️ White Balance</h3>
+                        
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="auto-wb" checked onchange="toggleAutoWB()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Auto White Balance</span>
+                        </div>
+
+                        <div class="select-control" id="wb-mode-control" style="display: none;">
+                            <label>WB Mode</label>
+                            <select id="wb-mode" onchange="applyWhiteBalance()">
+                                <option value="0">Auto</option>
+                                <option value="1">Incandescent</option>
+                                <option value="2">Tungsten</option>
+                                <option value="3">Fluorescent</option>
+                                <option value="4">Indoor</option>
+                                <option value="5">Daylight</option>
+                                <option value="6">Cloudy</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="exposure-status" class="status-message"></div>
+                </div>
+
+                <!-- Image Tab -->
+                <div id="image-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>🎨 Image Adjustments</h3>
+
+                        <div class="slider-control">
+                            <label>Brightness</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="brightness" min="-1" max="1" value="0" step="0.1" oninput="updateBrightnessValue()">
+                                <span id="brightness-value" class="slider-value">0.0</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Contrast</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="contrast" min="0" max="2" value="1" step="0.1" oninput="updateContrastValue()">
+                                <span id="contrast-value" class="slider-value">1.0</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Saturation</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="saturation" min="0" max="2" value="1" step="0.1" oninput="updateSaturationValue()">
+                                <span id="saturation-value" class="slider-value">1.0</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyImageParams()">Apply Image Settings</button>
+                        <button class="btn-secondary" onclick="resetImageParams()">Reset to Defaults</button>
+                    </div>
+
+                    <div id="image-status" class="status-message"></div>
+                </div>
+
+                <!-- Capture Tab -->
+                <div id="capture-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>📸 Image Capture</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Capture high-quality still images from the camera feed.
+                        </p>
+                        <button class="btn-success" onclick="captureImage()">📷 Capture Image</button>
+                    </div>
+
+                    <div id="capture-status" class="status-message"></div>
+
+                    <div class="control-group">
+                        <h3>🎥 Video Recording</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Record live video feed to MP4 file with timestamp.
+                        </p>
+                        
+                        <div id="recording-info" style="display: none; margin-bottom: 15px;">
+                            <div class="stat-row">
+                                <span class="stat-label">Status</span>
+                                <span class="stat-value" style="color: #dc3545;">● Recording</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Duration</span>
+                                <span id="recording-duration" class="stat-value">00:00</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Filename</span>
+                                <span id="recording-filename" class="stat-value" style="font-size: 11px;">--</span>
+                            </div>
+                        </div>
+
+                        <button id="start-recording-btn" class="btn-primary" onclick="startRecording()">
+                            ⏺️ Start Recording
+                        </button>
+                        <button id="stop-recording-btn" class="btn-secondary" onclick="stopRecording()" style="display: none;">
+                            ⏹️ Stop Recording
+                        </button>
+                    </div>
+
+                    <div id="recording-status" class="status-message"></div>
                 </div>
             </div>
         </div>
@@ -88,62 +569,293 @@
     <script>
         const CAMERA_WIDTH = 1920;
         const CAMERA_HEIGHT = 1080;
-        
-        // Handle click events for crosshair positioning
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Crosshair positioning
         document.getElementById('video-stream').addEventListener('click', function(e) {
             const rect = this.getBoundingClientRect();
             const scaleX = CAMERA_WIDTH / this.offsetWidth;
             const scaleY = CAMERA_HEIGHT / this.offsetHeight;
-            
-            // Calculate click position relative to the image
             const clickX = (e.clientX - rect.left);
             const clickY = (e.clientY - rect.top);
-            
-            // Convert to camera coordinates
             const cameraX = Math.round(clickX * scaleX);
             const cameraY = Math.round(clickY * scaleY);
-            
-            // Update position display
-            document.getElementById('position').textContent = 
-                `X: ${cameraX}, Y: ${cameraY}`;
-            
-            // Send to server
+            document.getElementById('position').textContent = `X: ${cameraX}, Y: ${cameraY}`;
             fetch('/update_crosshair', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    x: cameraX,
-                    y: cameraY
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: cameraX, y: cameraY })
             });
         });
 
-        function adjustBrightness(adjustment) {
-            fetch('/adjust_brightness', {
+        // Reset crosshair to center
+        function resetCrosshair() {
+            fetch('/reset_crosshair', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ adjustment: adjustment })
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('position').textContent = `X: ${data.x}, Y: ${data.y}`;
+                }
+            })
+            .catch(error => console.error('Error resetting crosshair:', error));
+        }
+
+        // Exposure controls
+        function toggleAutoExposure() {
+            const autoEnabled = document.getElementById('auto-exposure').checked;
+            document.getElementById('manual-exposure-controls').style.display = autoEnabled ? 'none' : 'block';
+            fetch('/set_exposure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto: autoEnabled })
+            })
+            .then(response => response.json())
+            .then(data => showStatus('exposure-status', data.status === 'success', 
+                autoEnabled ? 'Auto exposure enabled' : 'Manual exposure mode'));
+        }
+
+        function updateExposureValue() {
+            const value = document.getElementById('exposure-time').value;
+            document.getElementById('exposure-time-value').textContent = value;
+        }
+
+        function updateAnalogGainValue() {
+            const value = parseFloat(document.getElementById('analog-gain').value).toFixed(1);
+            document.getElementById('analog-gain-value').textContent = value;
+        }
+
+        function updateDigitalGainValue() {
+            const value = parseFloat(document.getElementById('digital-gain').value).toFixed(1);
+            document.getElementById('digital-gain-value').textContent = value;
+        }
+
+        function applyExposure() {
+            const exposureTime = parseInt(document.getElementById('exposure-time').value);
+            const analogGain = parseFloat(document.getElementById('analog-gain').value);
+            const digitalGain = parseFloat(document.getElementById('digital-gain').value);
+            fetch('/set_exposure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    auto: false,
+                    exposure_time: exposureTime,
+                    analog_gain: analogGain,
+                    digital_gain: digitalGain
+                })
+            })
+            .then(response => response.json())
+            .then(data => showStatus('exposure-status', data.status === 'success', 
+                data.status === 'success' ? 'Exposure settings applied' : data.message));
+        }
+
+        // White balance controls
+        function toggleAutoWB() {
+            const autoEnabled = document.getElementById('auto-wb').checked;
+            document.getElementById('wb-mode-control').style.display = autoEnabled ? 'none' : 'block';
+            fetch('/set_white_balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto: autoEnabled })
+            })
+            .then(response => response.json())
+            .then(data => showStatus('exposure-status', data.status === 'success',
+                autoEnabled ? 'Auto white balance enabled' : 'Manual white balance mode'));
+        }
+
+        function applyWhiteBalance() {
+            const mode = parseInt(document.getElementById('wb-mode').value);
+            fetch('/set_white_balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto: false, mode: mode })
+            })
+            .then(response => response.json())
+            .then(data => showStatus('exposure-status', data.status === 'success',
+                data.status === 'success' ? 'White balance applied' : data.message));
+        }
+
+        // Image adjustment controls
+        function updateBrightnessValue() {
+            const value = parseFloat(document.getElementById('brightness').value).toFixed(1);
+            document.getElementById('brightness-value').textContent = value;
+        }
+
+        function updateContrastValue() {
+            const value = parseFloat(document.getElementById('contrast').value).toFixed(1);
+            document.getElementById('contrast-value').textContent = value;
+        }
+
+        function updateSaturationValue() {
+            const value = parseFloat(document.getElementById('saturation').value).toFixed(1);
+            document.getElementById('saturation-value').textContent = value;
+        }
+
+        function applyImageParams() {
+            const brightness = parseFloat(document.getElementById('brightness').value);
+            const contrast = parseFloat(document.getElementById('contrast').value);
+            const saturation = parseFloat(document.getElementById('saturation').value);
+            fetch('/set_image_params', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    brightness: brightness,
+                    contrast: contrast,
+                    saturation: saturation
+                })
+            })
+            .then(response => response.json())
+            .then(data => showStatus('image-status', data.status === 'success',
+                data.status === 'success' ? 'Image settings applied' : data.message));
+        }
+
+        function resetImageParams() {
+            document.getElementById('brightness').value = 0;
+            document.getElementById('contrast').value = 1;
+            document.getElementById('saturation').value = 1;
+            updateBrightnessValue();
+            updateContrastValue();
+            updateSaturationValue();
+            applyImageParams();
+        }
+
+        // Image capture
+        function captureImage() {
+            fetch('/capture_image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => showStatus('capture-status', data.status === 'success',
+                data.status === 'success' ? `Image saved: ${data.filename}` : data.message));
+        }
+
+        // Status message display
+        function showStatus(elementId, success, message) {
+            const statusEl = document.getElementById(elementId);
+            statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // Video recording controls
+        function startRecording() {
+            fetch('/start_recording', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('start-recording-btn').style.display = 'none';
+                    document.getElementById('stop-recording-btn').style.display = 'block';
+                    document.getElementById('recording-info').style.display = 'block';
+                    document.getElementById('recording-filename').textContent = data.filename;
+                    showStatus('recording-status', true, 'Recording started');
+                } else {
+                    showStatus('recording-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('recording-status', false, 'Failed to start recording');
+                console.error('Error starting recording:', error);
             });
         }
 
-        function updateExposureStats() {
+        function stopRecording() {
+            fetch('/stop_recording', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('start-recording-btn').style.display = 'block';
+                    document.getElementById('stop-recording-btn').style.display = 'none';
+                    document.getElementById('recording-info').style.display = 'none';
+                    const duration = data.duration ? `${Math.floor(data.duration)}s` : '';
+                    showStatus('recording-status', true, 
+                        `Recording saved: ${data.filename} (${duration})`);
+                } else {
+                    showStatus('recording-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('recording-status', false, 'Failed to stop recording');
+                console.error('Error stopping recording:', error);
+            });
+        }
+
+        function updateRecordingStatus() {
+            fetch('/recording_status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.is_recording) {
+                        // Update duration display
+                        const duration = Math.floor(data.duration);
+                        const minutes = Math.floor(duration / 60);
+                        const seconds = duration % 60;
+                        document.getElementById('recording-duration').textContent = 
+                            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                        
+                        // Ensure UI is in recording state
+                        document.getElementById('start-recording-btn').style.display = 'none';
+                        document.getElementById('stop-recording-btn').style.display = 'block';
+                        document.getElementById('recording-info').style.display = 'block';
+                        document.getElementById('recording-filename').textContent = data.filename;
+                    }
+                })
+                .catch(error => console.error('Error checking recording status:', error));
+        }
+
+        // Update stats periodically
+        function updateStats() {
             fetch('/exposure_stats')
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('exp-time').textContent = 
-                        `${(data.exposure_time/1000).toFixed(1)}ms`;
+                        `${(data.exposure_time/1000).toFixed(1)} ms`;
                     document.getElementById('gain').textContent = 
-                        `${data.analogue_gain.toFixed(1)}x`;
-                })
-                .catch(error => console.error('Error fetching exposure stats:', error));
+                        `${data.analog_gain.toFixed(2)}x`;
+                });
+
+            fetch('/get_fps')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('fps').textContent = `${data.fps} FPS`;
+                });
+
+            fetch('/get_camera_settings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('digital-gain').textContent = 
+                            `${data.settings.digital_gain.toFixed(2)}x`;
+                    }
+                });
+            
+            // Update recording status if on capture tab
+            updateRecordingStatus();
         }
 
-        // Update exposure stats every second
-        setInterval(updateExposureStats, 1000);
+        setInterval(updateStats, 1000);
+        updateStats();
     </script>
 </body>
 </html>
