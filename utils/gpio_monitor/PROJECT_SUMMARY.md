@@ -66,6 +66,7 @@ python3 gpio_monitor.py
 ## 📊 Pin Information Displayed
 
 For each GPIO pin:
+
 - Physical pin number (1-40)
 - BCM GPIO number
 - Pin function/special name
@@ -89,7 +90,7 @@ Pin 7  - GPIO 4     Pin 8  - GPIO 14
 ## 🌐 Network Access
 
 - **Default Port**: 5001
-- **Local**: http://localhost:5001
+- **Local**: <http://localhost:5001>
 - **Network**: http://<raspberry-pi-ip>:5001
 - **Binding**: 0.0.0.0 (all interfaces)
 
@@ -110,18 +111,23 @@ Pin 7  - GPIO 4     Pin 8  - GPIO 14
 ## 🛠️ Configuration Options
 
 ### Change Port
+
 Edit `gpio_monitor.py`, line ~264:
+
 ```python
 socketio.run(app, host='0.0.0.0', port=5001, debug=False)
 ```
 
 ### Change Update Rate
+
 Edit `gpio_monitor.py`, line ~184:
+
 ```python
 time.sleep(0.1)  # 100ms = 10Hz
 ```
 
 ### Customize Colors
+
 Edit `templates/gpio_monitor.html`, CSS section (lines 30-100)
 
 ## 🔄 Auto-Start Setup
@@ -139,18 +145,21 @@ sudo systemctl start gpio-monitor
 ## 🐛 Troubleshooting
 
 ### Permission Issues
+
 ```bash
 sudo usermod -a -G gpio $USER
 # Log out and back in
 ```
 
 ### Port Already in Use
+
 ```bash
 sudo lsof -i :5001
 sudo kill -9 <PID>
 ```
 
 ### Module Not Found
+
 ```bash
 pip3 install --force-reinstall -r requirements.txt
 ```
@@ -175,12 +184,14 @@ pip3 install --force-reinstall -r requirements.txt
 ## 📝 Dependencies
 
 ### System (apt)
+
 - python3-pip
 - python3-libgpiod
 - gpiod
 - libgpiod-dev
 
 ### Python (pip)
+
 - Flask >= 3.0.0
 - flask-socketio >= 5.3.0
 - python-socketio >= 5.10.0
@@ -190,6 +201,7 @@ pip3 install --force-reinstall -r requirements.txt
 ## 🎓 Code Highlights
 
 ### Backend Architecture
+
 - Threaded GPIO monitoring loop
 - SocketIO for real-time updates
 - Automatic pin state tracking
@@ -197,6 +209,7 @@ pip3 install --force-reinstall -r requirements.txt
 - Graceful error handling
 
 ### Frontend Features
+
 - Responsive grid layout
 - Real-time WebSocket updates
 - Color-coded visual feedback
@@ -207,6 +220,7 @@ pip3 install --force-reinstall -r requirements.txt
 ## 🤝 Integration with Laser Turret
 
 This GPIO monitor can be used to:
+
 - Debug GPIO connections for servos/motors
 - Monitor sensor inputs in real-time
 - Verify pin configurations
@@ -225,6 +239,7 @@ This GPIO monitor can be used to:
 ## 📞 Support
 
 For issues or questions:
+
 1. Check README.md for detailed documentation
 2. Review INSTALL.md for setup issues
 3. Check systemd logs: `sudo journalctl -u gpio-monitor`
@@ -235,6 +250,7 @@ For issues or questions:
 ✅ **Complete and Production Ready**
 
 All core features implemented:
+
 - ✅ Real-time GPIO monitoring
 - ✅ Visual pinout display
 - ✅ WebSocket updates

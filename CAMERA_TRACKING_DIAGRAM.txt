@@ -42,7 +42,7 @@
   │    Center    │        Frame Center: (960, 540)
   │   Position   │        Offset: (dx, dy)
   └──────────────┘
-         │
+         │w
          ▼
   ┌──────────────┐
   │   Dead Zone  │──────► If |dx| < threshold AND

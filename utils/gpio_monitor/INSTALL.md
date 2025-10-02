@@ -163,6 +163,7 @@ pip3 install --force-reinstall -r requirements.txt
 ### Access from other devices on your network
 
 1. Find your Pi's IP address:
+
    ```bash
    hostname -I
    ```
