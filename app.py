@@ -240,6 +240,228 @@ def get_exposure_stats():
     with exposure_lock:
         return jsonify(exposure_stats)
 
+@app.route('/set_exposure', methods=['POST'])
+def set_exposure():
+    """Set exposure mode and parameters"""
+    if picam2 is None:
+        return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
+    
+    try:
+        data = request.get_json()
+        controls = {}
+        
+        if 'auto' in data:
+            controls['AeEnable'] = bool(data['auto'])
+        
+        if 'exposure_time' in data and not data.get('auto', True):
+            # Only set manual exposure if auto is disabled
+            controls['ExposureTime'] = int(data['exposure_time'])
+        
+        if 'analogue_gain' in data and not data.get('auto', True):
+            controls['AnalogueGain'] = float(data['analogue_gain'])
+        
+        if controls:
+            picam2.set_controls(controls)
+            return jsonify({'status': 'success', 'controls': controls})
+        
+        return jsonify({'status': 'success', 'message': 'No changes'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/set_image_params', methods=['POST'])
+def set_image_params():
+    """Set image parameters like brightness, contrast, saturation"""
+    if picam2 is None:
+        return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
+    
+    try:
+        data = request.get_json()
+        controls = {}
+        
+        if 'brightness' in data:
+            controls['Brightness'] = float(data['brightness'])
+        
+        if 'contrast' in data:
+            controls['Contrast'] = float(data['contrast'])
+        
+        if 'saturation' in data:
+            controls['Saturation'] = float(data['saturation'])
+        
+        if controls:
+            picam2.set_controls(controls)
+            return jsonify({'status': 'success', 'controls': controls})
+        
+        return jsonify({'status': 'success', 'message': 'No changes'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/set_white_balance', methods=['POST'])
+def set_white_balance():
+    """Set white balance mode"""
+    if picam2 is None:
+        return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
+    
+    try:
+        data = request.get_json()
+        controls = {}
+        
+        if 'auto' in data:
+            controls['AwbEnable'] = bool(data['auto'])
+        
+        if 'mode' in data:
+            controls['AwbMode'] = int(data['mode'])
+        
+        if controls:
+            picam2.set_controls(controls)
+            return jsonify({'status': 'success', 'controls': controls})
+        
+        return jsonify({'status': 'success', 'message': 'No changes'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/capture_image', methods=['POST'])
+def capture_image():
+    """Capture and save a still image"""
+    if picam2 is None:
+        return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
+    
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"capture_{timestamp}.jpg"
+        
+        # Capture high quality image
+        picam2.capture_file(filename)
+        
+        return jsonify({
+            'status': 'success',
+            'filename': filename,
+            'message': f'Image saved as {filename}'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/get_camera_settings')
+def get_camera_settings():
+    """Get current camera settings"""
+    if picam2 is None:
+        return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
+    
+    try:
+        metadata = picam2.capture_metadata()
+        return jsonify({
+            'status': 'success',
+            'settings': {
+                'exposure_time': metadata.get('ExposureTime', 0),
+                'analogue_gain': metadata.get('AnalogueGain', 0),
+                'digital_gain': metadata.get('DigitalGain', 0),
+                'colour_gains': metadata.get('ColourGains', [0, 0]),
+                'lux': metadata.get('Lux', 0)
+            }
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/start_recording', methods=['POST'])
+def start_recording():
+    """Start recording video to file"""
+    global is_recording, video_writer, recording_filename, recording_start_time
+    
+    if picam2 is None:
+        return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
+    
+    with recording_lock:
+        if is_recording:
+            return jsonify({'status': 'error', 'message': 'Already recording'}), 400
+        
+        try:
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            recording_filename = f"video_{timestamp}.mp4"
+            
+            # Initialize video writer
+            # Using mp4v codec for MP4 container
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            
+            # Get actual FPS or use default
+            actual_fps = fps_value if fps_value > 0 else 30.0
+            
+            video_writer = cv2.VideoWriter(
+                recording_filename,
+                fourcc,
+                actual_fps,
+                (CAMERA_WIDTH, CAMERA_HEIGHT)
+            )
+            
+            if not video_writer.isOpened():
+                video_writer = None
+                return jsonify({'status': 'error', 'message': 'Failed to open video writer'}), 500
+            
+            is_recording = True
+            recording_start_time = datetime.now()
+            
+            return jsonify({
+                'status': 'success',
+                'filename': recording_filename,
+                'message': 'Recording started'
+            })
+        except Exception as e:
+            is_recording = False
+            video_writer = None
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/stop_recording', methods=['POST'])
+def stop_recording():
+    """Stop recording video"""
+    global is_recording, video_writer, recording_filename, recording_start_time
+    
+    with recording_lock:
+        if not is_recording:
+            return jsonify({'status': 'error', 'message': 'Not currently recording'}), 400
+        
+        try:
+            filename = recording_filename
+            duration = None
+            
+            if recording_start_time:
+                duration = (datetime.now() - recording_start_time).total_seconds()
+            
+            # Release video writer
+            if video_writer is not None:
+                video_writer.release()
+                video_writer = None
+            
+            is_recording = False
+            recording_start_time = None
+            
+            return jsonify({
+                'status': 'success',
+                'filename': filename,
+                'duration': duration,
+                'message': f'Recording stopped. Saved as {filename}'
+            })
+        except Exception as e:
+            is_recording = False
+            video_writer = None
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/recording_status')
+def recording_status():
+    """Get current recording status"""
+    with recording_lock:
+        if is_recording and recording_start_time:
+            duration = (datetime.now() - recording_start_time).total_seconds()
+            return jsonify({
+                'status': 'success',
+                'is_recording': True,
+                'filename': recording_filename,
+                'duration': duration
+            })
+        else:
+            return jsonify({
+                'status': 'success',
+                'is_recording': False
+            })
+
 if __name__ == '__main__':
     initialize_camera()
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
