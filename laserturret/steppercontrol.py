@@ -183,23 +183,33 @@ class StepperMotor:
         Returns:
             True if the limit switch for that direction is pressed (active LOW)
         """
-        if direction == CLOCKWISE:
-            if self.cw_limit_switch_pin is None:
-                return False
-            # Switch is pressed when pin reads LOW (0)
-            return self.gpio.input(self.cw_limit_switch_pin) == 0
-        else:  # COUNTER_CLOCKWISE
-            if self.ccw_limit_switch_pin is None:
-                return False
-            return self.gpio.input(self.ccw_limit_switch_pin) == 0
+        try:
+            if direction == CLOCKWISE:
+                if self.cw_limit_switch_pin is None:
+                    return False
+                # Switch is pressed when pin reads LOW (0)
+                return self.gpio.input(self.cw_limit_switch_pin) == 0
+            else:  # COUNTER_CLOCKWISE
+                if self.ccw_limit_switch_pin is None:
+                    return False
+                return self.gpio.input(self.ccw_limit_switch_pin) == 0
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to read limit switch (GPIO may be cleaned up): {e}")
+            return False
 
     def enable(self) -> None:
         """Enable the motor driver (active LOW)"""
-        self.gpio.output(self.enable_pin, 0)
+        try:
+            self.gpio.output(self.enable_pin, 0)
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to enable motor (GPIO may be cleaned up): {e}")
 
     def disable(self) -> None:
         """Disable the motor driver"""
-        self.gpio.output(self.enable_pin, 1)
+        try:
+            self.gpio.output(self.enable_pin, 1)
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to disable motor (GPIO may be cleaned up): {e}")
 
     def set_direction(self, direction: str) -> None:
         """Set motor direction"""
@@ -212,7 +222,11 @@ class StepperMotor:
                 raise LimitSwitchError(f"Cannot move {direction}, limit switch is pressed.")
             
             self.state.direction = direction
-            self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
+            try:
+                self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
+            except Exception as e:
+                logger.debug(f"[{self.name}] Failed to set direction (GPIO may be cleaned up): {e}")
+                raise
             self.state.status = MotorStatus.IDLE
 
     def step(self, steps: int, delay: float = 0.0001) -> int:
@@ -256,10 +270,15 @@ class StepperMotor:
                     break
                 
                 # Generate step pulse
-                self.gpio.output(self.step_pin, 1)
-                time.sleep(delay / 2)  # Half delay for pulse width
-                self.gpio.output(self.step_pin, 0)
-                time.sleep(delay / 2)  # Half delay between steps
+                try:
+                    self.gpio.output(self.step_pin, 1)
+                    time.sleep(delay / 2)  # Half delay for pulse width
+                    self.gpio.output(self.step_pin, 0)
+                    time.sleep(delay / 2)  # Half delay between steps
+                except Exception as gpio_error:
+                    # GPIO error during step - might be cleanup in progress
+                    logger.debug(f"[{self.name}] GPIO error during step: {gpio_error}")
+                    break
                 
                 # Update position
                 if self.state.direction == CLOCKWISE:
@@ -349,6 +368,10 @@ class StepperMotor:
                     self.step(1, delay)
 
             except Exception as e:
+                # Check if we're being cleaned up
+                if not self.running:
+                    logger.debug(f"[{self.name}] Command thread exiting due to cleanup")
+                    break
                 logger.error(f"[{self.name}] Error in command thread: {str(e)}")
                 time.sleep(0.1)
 
@@ -386,9 +409,9 @@ class StepperMotor:
         # Release motor
         self.release()
         
-        # Clean up GPIO
+        # Clean up GPIO - only cleanup pins unique to this motor
+        # Do NOT cleanup ms_pins as they may be shared with other motors
         pins_to_cleanup = [self.step_pin, self.dir_pin, self.enable_pin]
-        pins_to_cleanup.extend(self.ms_pins)
         if self.cw_limit_switch_pin:
             pins_to_cleanup.append(self.cw_limit_switch_pin)
         if self.ccw_limit_switch_pin:
@@ -409,39 +432,56 @@ class StepperMotor:
             logger.info(f"[{self.name}] No limit switches configured, skipping verification.")
             return
             
-        logger.info(f"\n[{self.name}] Testing limit switches...")
-        logger.info("Please trigger each limit switch to confirm they're working:")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"[{self.name}] LIMIT SWITCH VERIFICATION")
+        logger.info(f"{'='*60}")
+        logger.info(f"Motor: {self.name}")
+        
+        if self.cw_limit_switch_pin:
+            logger.info(f"  CW Limit Switch:  GPIO Pin {self.cw_limit_switch_pin}")
+        if self.ccw_limit_switch_pin:
+            logger.info(f"  CCW Limit Switch: GPIO Pin {self.ccw_limit_switch_pin}")
+        
+        logger.info(f"\nPlease manually trigger each limit switch when prompted.")
+        logger.info(f"You have 30 seconds for each switch.\n")
         
         timeout = 30  # seconds
         switches_to_test = []
         
         if self.cw_limit_switch_pin:
-            switches_to_test.append((CLOCKWISE, "CW"))
+            switches_to_test.append((CLOCKWISE, "CW", "CLOCKWISE"))
         if self.ccw_limit_switch_pin:
-            switches_to_test.append((COUNTER_CLOCKWISE, "CCW"))
+            switches_to_test.append((COUNTER_CLOCKWISE, "CCW", "COUNTER-CLOCKWISE"))
         
-        for direction, name in switches_to_test:
+        for idx, (direction, name, full_name) in enumerate(switches_to_test, 1):
             start_time = time.time()
-            logger.info(f"Trigger the {name} limit switch...")
+            logger.info(f"[{idx}/{len(switches_to_test)}] >>> TRIGGER THE {name} ({full_name}) LIMIT SWITCH FOR {self.name} <<<")
+            logger.info(f"      (GPIO Pin {self.cw_limit_switch_pin if direction == CLOCKWISE else self.ccw_limit_switch_pin})")
+            logger.info(f"      Waiting...")
             
             # Wait for correct switch to trigger
             while True:
                 if time.time() - start_time > timeout:
                     raise LimitSwitchError(
-                        f"Manually trigger the {name} limit switch within {timeout} seconds."
+                        f"Timeout: {name} limit switch for {self.name} was not triggered within {timeout} seconds."
                     )
                     
                 # Poll the switch directly
                 if self._check_limit_switch(direction):
-                    logger.info(f"[{self.name}] {name} limit switch verified")
+                    logger.info(f"      [OK] {name} limit switch verified (GPIO Pin {self.cw_limit_switch_pin if direction == CLOCKWISE else self.ccw_limit_switch_pin})")
                     with self.lock:
                         self.state.triggered_limit = None
                         self.state.status = MotorStatus.IDLE
+                    # Wait for release
+                    time.sleep(0.3)
+                    logger.info(f"")
                     break
                     
                 time.sleep(0.1)
         
-        logger.info(f"[{self.name}] All limit switches verified!")
+        logger.info(f"{'='*60}")
+        logger.info(f"[{self.name}] [SUCCESS] ALL LIMIT SWITCHES VERIFIED!")
+        logger.info(f"{'='*60}\n")
 
     def calibrate(self) -> None:
         """Calibrate by finding limits and centering"""

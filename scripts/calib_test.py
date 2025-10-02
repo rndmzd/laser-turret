@@ -47,16 +47,29 @@ if __name__ == "__main__":
         )
 
         # Confirm limit switch assignment
-        print("Confirming limit switches...")
+        print("\n" + "="*60)
+        print("STEP 1: VERIFYING LIMIT SWITCHES")
+        print("="*60)
+        print("You will be asked to manually trigger each limit switch.")
+        print("This ensures the switches are correctly connected.\n")
+        
         motor_x.confirm_limit_switches()
         motor_y.confirm_limit_switches()
 
         # Calibrate both motors
-        print("Starting calibration...")
+        print("\n" + "="*60)
+        print("STEP 2: AUTO-CALIBRATION")
+        print("="*60)
+        print("Motors will now automatically find their range limits")
+        print("and return to center position.\n")
+        
         motor_x.calibrate()
         motor_y.calibrate()
         
-        print("Calibration complete!")
+        print("\n" + "="*60)
+        print("CALIBRATION COMPLETE!")
+        print("="*60)
+        print("Both motors have been calibrated successfully.")
         
     except KeyboardInterrupt:
         print("\nCalibration interrupted.")
