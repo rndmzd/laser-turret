@@ -241,24 +241,30 @@ class LgpioGPIO(GPIOInterface):
     
     def cleanup(self, pins: Optional[list] = None) -> None:
         if pins:
+            # Clean up specific pins only (for individual motor cleanup)
             for pin in pins:
                 try:
                     self.lgpio.gpio_free(self.chip, pin)
+                    # Remove from tracked configs
+                    if pin in self._pin_configs:
+                        del self._pin_configs[pin]
                 except:
                     pass
+            # Do NOT close chip when cleaning specific pins (shared singleton)
         else:
-            # Free all configured pins
+            # Full cleanup - free all configured pins and close chip
             for pin in list(self._pin_configs.keys()):
                 try:
                     self.lgpio.gpio_free(self.chip, pin)
                 except:
                     pass
-        
-        # Close chip
-        try:
-            self.lgpio.gpiochip_close(self.chip)
-        except:
-            pass
+            self._pin_configs.clear()
+            
+            # Close chip handle
+            try:
+                self.lgpio.gpiochip_close(self.chip)
+            except:
+                pass
     
     def pwm(self, pin: int, frequency: float) -> PWMInterface:
         return LgpioPWM(self.lgpio, self.chip, pin, frequency)
