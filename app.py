@@ -87,6 +87,30 @@ laser_lock = threading.Lock()
 last_fire_time = None
 fire_count = 0  # Track total fires
 
+# Camera tracking mode (stepper motor control)
+tracking_mode = 'crosshair'  # 'crosshair' or 'camera'
+camera_tracking_enabled = False
+stepper_controller = None
+tracking_mode_lock = threading.Lock()
+
+def initialize_stepper_controller():
+    """Initialize stepper motor controller for camera tracking"""
+    global stepper_controller
+    
+    try:
+        # Get configuration and GPIO backend
+        config = get_config()
+        gpio = get_gpio_backend(mock=False)  # Set to True for testing without hardware
+        
+        # Initialize stepper controller
+        stepper_controller = StepperController(gpio, config)
+        print("Stepper controller initialized successfully")
+        
+    except Exception as e:
+        print(f"WARNING: Failed to initialize stepper controller: {e}")
+        print("Camera tracking mode will not be available.")
+        stepper_controller = None
+
 def initialize_camera():
     """Initialize the Pi Camera with compatible auto exposure settings"""
     global picam2, crosshair_pos, last_frame_time
@@ -410,10 +434,21 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                         cv2.circle(overlay, (center_x, center_y), 15, (0, 255, 255), 3)
                         cv2.circle(overlay, (center_x, center_y), 5, (0, 255, 255), -1)
                         
-                        # Update crosshair position
-                        with crosshair_lock:
-                            crosshair_pos['x'] = center_x
-                            crosshair_pos['y'] = center_y
+                        # Update tracking based on mode
+                        with tracking_mode_lock:
+                            if tracking_mode == 'crosshair':
+                                # Traditional mode: move crosshair to object
+                                with crosshair_lock:
+                                    crosshair_pos['x'] = center_x
+                                    crosshair_pos['y'] = center_y
+                            elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
+                                # Camera tracking mode: move camera to center object
+                                threading.Thread(
+                                    target=lambda: stepper_controller.move_to_center_object(
+                                        center_x, center_y, CAMERA_WIDTH, CAMERA_HEIGHT
+                                    ),
+                                    daemon=True
+                                ).start()
             except Exception as e:
                 print(f"Object detection error: {e}")
     
@@ -434,11 +469,22 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                     cv2.circle(overlay, motion_center, 10, (255, 0, 255), 2)
                     cv2.circle(overlay, motion_center, 3, (255, 0, 255), -1)
                     
-                    # Auto-track: update crosshair position (only if object tracking is off)
+                    # Auto-track: update tracking based on mode (only if object tracking is off)
                     if motion_auto_track and not object_auto_track:
-                        with crosshair_lock:
-                            crosshair_pos['x'] = motion_center[0]
-                            crosshair_pos['y'] = motion_center[1]
+                        with tracking_mode_lock:
+                            if tracking_mode == 'crosshair':
+                                # Traditional mode: move crosshair to motion
+                                with crosshair_lock:
+                                    crosshair_pos['x'] = motion_center[0]
+                                    crosshair_pos['y'] = motion_center[1]
+                            elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
+                                # Camera tracking mode: move camera to center motion
+                                threading.Thread(
+                                    target=lambda: stepper_controller.move_to_center_object(
+                                        motion_center[0], motion_center[1], CAMERA_WIDTH, CAMERA_HEIGHT
+                                    ),
+                                    daemon=True
+                                ).start()
             except Exception as e:
                 print(f"Motion detection error: {e}")
     
@@ -489,6 +535,14 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
             if laser_auto_fire:
                 laser_text += " [AUTO]"
             texts.append(laser_text)
+    
+    # Add camera tracking mode status
+    with tracking_mode_lock:
+        if tracking_mode == 'camera':
+            cam_track_text = "Track: CAMERA"
+            if camera_tracking_enabled:
+                cam_track_text += " [ON]"
+            texts.append(cam_track_text)
     
     # Check and trigger auto-fire if conditions met
     if check_auto_fire():
@@ -1255,6 +1309,199 @@ def reset_fire_count():
         'fire_count': 0
     })
 
+# Camera tracking mode endpoints
+@app.route('/tracking/mode', methods=['POST'])
+def set_tracking_mode():
+    """Set tracking mode (crosshair or camera)"""
+    global tracking_mode, camera_tracking_enabled
+    
+    try:
+        data = request.get_json()
+        mode = data.get('mode', 'crosshair')
+        
+        if mode not in ['crosshair', 'camera']:
+            return jsonify({'status': 'error', 'message': 'Invalid mode. Must be "crosshair" or "camera"'}), 400
+        
+        with tracking_mode_lock:
+            # If switching to camera mode, verify stepper controller is available
+            if mode == 'camera' and stepper_controller is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Camera tracking not available. Stepper controller not initialized.'
+                }), 503
+            
+            # Disable camera tracking when switching to crosshair mode
+            if mode == 'crosshair':
+                camera_tracking_enabled = False
+                if stepper_controller:
+                    stepper_controller.disable()
+            
+            tracking_mode = mode
+        
+        return jsonify({
+            'status': 'success',
+            'mode': tracking_mode
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/toggle', methods=['POST'])
+def toggle_camera_tracking():
+    """Enable/disable camera tracking"""
+    global camera_tracking_enabled
+    
+    try:
+        if stepper_controller is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'Stepper controller not available'
+            }), 503
+        
+        data = request.get_json()
+        enabled = bool(data.get('enabled', not camera_tracking_enabled))
+        
+        with tracking_mode_lock:
+            if tracking_mode != 'camera':
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Must be in camera tracking mode first'
+                }), 400
+            
+            camera_tracking_enabled = enabled
+            
+            if enabled:
+                stepper_controller.enable()
+            else:
+                stepper_controller.disable()
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': camera_tracking_enabled
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/home', methods=['POST'])
+def home_camera():
+    """Home the camera to center position"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        if not camera_tracking_enabled:
+            return jsonify({'status': 'error', 'message': 'Camera tracking not enabled'}), 400
+        
+        # Home in background thread
+        threading.Thread(target=stepper_controller.home, daemon=True).start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Homing camera to center position'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/calibrate', methods=['POST'])
+def calibrate_camera_tracking():
+    """Calibrate camera tracking steps-per-pixel"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        data = request.get_json()
+        axis = data.get('axis')  # 'x' or 'y'
+        pixels_moved = float(data.get('pixels_moved'))
+        steps_executed = int(data.get('steps_executed'))
+        
+        if axis not in ['x', 'y']:
+            return jsonify({'status': 'error', 'message': 'Invalid axis'}), 400
+        
+        stepper_controller.calibrate_steps_per_pixel(axis, pixels_moved, steps_executed)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'{axis.upper()} axis calibrated',
+            'calibration': stepper_controller.get_status()['calibration']
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/settings', methods=['POST'])
+def update_camera_tracking_settings():
+    """Update camera tracking settings"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        data = request.get_json()
+        
+        if 'dead_zone_pixels' in data:
+            stepper_controller.calibration.dead_zone_pixels = int(data['dead_zone_pixels'])
+        
+        if 'step_delay' in data:
+            stepper_controller.calibration.step_delay = float(data['step_delay'])
+        
+        if 'x_max_steps' in data:
+            stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])
+        
+        if 'y_max_steps' in data:
+            stepper_controller.calibration.y_max_steps = int(data['y_max_steps'])
+        
+        if 'x_steps_per_pixel' in data:
+            stepper_controller.calibration.x_steps_per_pixel = float(data['x_steps_per_pixel'])
+        
+        if 'y_steps_per_pixel' in data:
+            stepper_controller.calibration.y_steps_per_pixel = float(data['y_steps_per_pixel'])
+        
+        return jsonify({
+            'status': 'success',
+            'settings': stepper_controller.get_status()
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/status')
+def camera_tracking_status():
+    """Get camera tracking status"""
+    with tracking_mode_lock:
+        if stepper_controller is None:
+            return jsonify({
+                'status': 'success',
+                'available': False,
+                'mode': tracking_mode,
+                'enabled': False
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'available': True,
+            'mode': tracking_mode,
+            'enabled': camera_tracking_enabled,
+            'controller_status': stepper_controller.get_status()
+        })
+
+@app.route('/tracking/status')
+def tracking_status():
+    """Get overall tracking status"""
+    with tracking_mode_lock:
+        return jsonify({
+            'status': 'success',
+            'mode': tracking_mode,
+            'camera_tracking': {
+                'available': stepper_controller is not None,
+                'enabled': camera_tracking_enabled
+            },
+            'object_tracking': {
+                'enabled': object_detection_enabled,
+                'auto_track': object_auto_track
+            },
+            'motion_tracking': {
+                'enabled': motion_detection_enabled,
+                'auto_track': motion_auto_track
+            }
+        })
+
 if __name__ == '__main__':
     initialize_camera()
+    initialize_stepper_controller()  # Initialize stepper controller
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
