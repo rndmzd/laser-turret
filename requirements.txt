@@ -4,3 +4,8 @@ adafruit-circuitpython-motorkit>=1.6.0
 adafruit-circuitpython-motor>=3.3.0
 pytest>=7.0.0
 adafruit-blinka>=8.0.0
+
+# GPIO library (auto-detected by hardware_interface.py):
+# - lgpio for Raspberry Pi 5
+# - RPi.GPIO for Raspberry Pi 4 and earlier
+lgpio>=0.2.0.0

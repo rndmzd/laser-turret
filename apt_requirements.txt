@@ -1,5 +1,10 @@
 python3-picamera2
 python3-opencv
 python3-numpy
-python3-rpi.gpio
 python3-libcamera
+
+# GPIO library (choose based on your Raspberry Pi model):
+# Raspberry Pi 5: python3-lgpio
+# Raspberry Pi 4 and earlier: python3-rpi.gpio
+python3-lgpio
+python3-rpi.gpio
