@@ -4,12 +4,11 @@ import logging
 from laserturret.steppercontrol import StepperMotor, MotorStatus, MotorError
 from laserturret.lasercontrol import LaserControl
 from laserturret.config_manager import get_config
-import RPi.GPIO as GPIO
 
 # Configure logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # Load configuration
 config = get_config()
