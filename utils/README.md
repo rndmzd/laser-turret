@@ -45,11 +45,13 @@ python3 gpio_monitor.py
 ```
 
 The application will start on port 5001. Access it by navigating to:
+
 ```
 http://<raspberry-pi-ip>:5001
 ```
 
 Or if running locally on the Pi:
+
 ```
 http://localhost:5001
 ```
@@ -120,6 +122,7 @@ sudo usermod -a -G gpio $USER
 ### Port Already in Use
 
 If port 5001 is already in use, either:
+
 1. Change the port in `gpio_monitor.py`
 2. Stop the conflicting service
 3. Use a different port: `python3 gpio_monitor.py --port 5002` (requires code modification)
