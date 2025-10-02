@@ -386,9 +386,9 @@ class StepperMotor:
         # Release motor
         self.release()
         
-        # Clean up GPIO
+        # Clean up GPIO - only cleanup pins unique to this motor
+        # Do NOT cleanup ms_pins as they may be shared with other motors
         pins_to_cleanup = [self.step_pin, self.dir_pin, self.enable_pin]
-        pins_to_cleanup.extend(self.ms_pins)
         if self.cw_limit_switch_pin:
             pins_to_cleanup.append(self.cw_limit_switch_pin)
         if self.ccw_limit_switch_pin:
