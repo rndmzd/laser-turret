@@ -447,6 +447,7 @@
             <div class="controls-panel">
                 <div class="tabs">
                     <button class="tab active" onclick="switchTab('stats')">📊 Stats</button>
+                    <button class="tab" onclick="switchTab('tracking')">📹 Track</button>
                     <button class="tab" onclick="switchTab('laser')">🔴 Laser</button>
                     <button class="tab" onclick="switchTab('presets')">📍 Presets</button>
                     <button class="tab" onclick="switchTab('object')">👤 Objects</button>
@@ -488,6 +489,119 @@
                             <span id="digital-gain" class="stat-value">--</span>
                         </div>
                     </div>
+                </div>
+
+                <!-- Camera Tracking Tab -->
+                <div id="tracking-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>📹 Tracking Mode</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Choose how objects are tracked: move crosshair (software) or move camera (hardware)
+                        </p>
+                        
+                        <div class="select-control">
+                            <label>Tracking Mode</label>
+                            <select id="tracking-mode" onchange="setTrackingMode()">
+                                <option value="crosshair">Crosshair Tracking (Software)</option>
+                                <option value="camera">Camera Tracking (Stepper Motors)</option>
+                            </select>
+                        </div>
+
+                        <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1565c0;">
+                            <strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.
+                        </div>
+                    </div>
+
+                    <div id="camera-tracking-controls" style="display: none;">
+                        <div class="control-group">
+                            <h3>🎮 Camera Control</h3>
+                            
+                            <div class="toggle-switch">
+                                <label class="switch">
+                                    <input type="checkbox" id="camera-tracking-enabled" onchange="toggleCameraTracking()">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-label">Enable Camera Movement</span>
+                            </div>
+
+                            <button class="btn-primary" onclick="homeCameraPosition()" style="margin-top: 10px;">
+                                🏠 Home Camera to Center
+                            </button>
+
+                            <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
+                                <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected and calibrated before enabling camera tracking.
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <h3>⚙️ Camera Settings</h3>
+
+                            <div class="slider-control">
+                                <label>Dead Zone (pixels)</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
+                                    <span id="camera-dead-zone-value" class="slider-value">20px</span>
+                                </div>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Movement Speed</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.001" step="0.0005" oninput="updateCameraStepDelayValue()">
+                                    <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" onclick="applyCameraTrackingSettings()">Apply Settings</button>
+                        </div>
+
+                        <div class="control-group">
+                            <h3>🔧 Calibration</h3>
+                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                                Calibrate steps-per-pixel ratio for accurate tracking
+                            </p>
+
+                            <div class="slider-control">
+                                <label>X-Axis Steps/Pixel</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
+                                    <span id="camera-x-steps-value" class="slider-value">0.10</span>
+                                </div>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Y-Axis Steps/Pixel</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
+                                    <span id="camera-y-steps-value" class="slider-value">0.10</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" onclick="applyCameraCalibration()">Save Calibration</button>
+                        </div>
+
+                        <div class="control-group">
+                            <h3>📊 Camera Status</h3>
+                            <div class="stat-row">
+                                <span class="stat-label">System Status</span>
+                                <span id="camera-system-status" class="stat-value">Initializing...</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Camera Enabled</span>
+                                <span id="camera-enabled-status" class="stat-value">No</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Position (X, Y)</span>
+                                <span id="camera-position" class="stat-value">0, 0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Moving</span>
+                                <span id="camera-moving" class="stat-value">No</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tracking-status-message" class="status-message"></div>
                 </div>
 
                 <!-- Laser Control Tab -->
@@ -1801,13 +1915,226 @@
             updatePatternStatus();
         }
 
+        // Camera tracking controls
+        function setTrackingMode() {
+            const mode = document.getElementById('tracking-mode').value;
+            
+            fetch('/tracking/mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    updateTrackingModeUI(mode);
+                    showStatus('tracking-status-message', true, 
+                        mode === 'crosshair' ? 'Crosshair tracking mode active' : 'Camera tracking mode active');
+                    updateCameraTrackingStatus();
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                    // Revert to previous mode on error
+                    document.getElementById('tracking-mode').value = 
+                        mode === 'crosshair' ? 'camera' : 'crosshair';
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to set tracking mode');
+                console.error('Error setting tracking mode:', error);
+            });
+        }
+
+        function updateTrackingModeUI(mode) {
+            const cameraControls = document.getElementById('camera-tracking-controls');
+            const infoBox = document.getElementById('tracking-mode-info');
+            
+            if (mode === 'camera') {
+                cameraControls.style.display = 'block';
+                infoBox.innerHTML = '<strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.';
+                infoBox.style.background = '#fff3cd';
+                infoBox.style.color = '#856404';
+            } else {
+                cameraControls.style.display = 'none';
+                infoBox.innerHTML = '<strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.';
+                infoBox.style.background = '#e3f2fd';
+                infoBox.style.color = '#1565c0';
+            }
+        }
+
+        function toggleCameraTracking() {
+            const enabled = document.getElementById('camera-tracking-enabled').checked;
+            
+            fetch('/tracking/camera/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 
+                        enabled ? 'Camera tracking enabled' : 'Camera tracking disabled');
+                    updateCameraTrackingStatus();
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                    document.getElementById('camera-tracking-enabled').checked = !enabled;
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to toggle camera tracking');
+                console.error('Error toggling camera tracking:', error);
+                document.getElementById('camera-tracking-enabled').checked = !enabled;
+            });
+        }
+
+        function homeCameraPosition() {
+            fetch('/tracking/camera/home', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'Homing camera to center position...');
+                    setTimeout(updateCameraTrackingStatus, 1000);
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to home camera');
+                console.error('Error homing camera:', error);
+            });
+        }
+
+        function updateCameraDeadZoneValue() {
+            const value = document.getElementById('camera-dead-zone').value;
+            document.getElementById('camera-dead-zone-value').textContent = value + 'px';
+        }
+
+        function updateCameraStepDelayValue() {
+            const value = parseFloat(document.getElementById('camera-step-delay').value);
+            document.getElementById('camera-step-delay-value').textContent = (value * 1000).toFixed(1) + 'ms';
+        }
+
+        function updateCameraXStepsValue() {
+            const value = parseFloat(document.getElementById('camera-x-steps-per-pixel').value).toFixed(2);
+            document.getElementById('camera-x-steps-value').textContent = value;
+        }
+
+        function updateCameraYStepsValue() {
+            const value = parseFloat(document.getElementById('camera-y-steps-per-pixel').value).toFixed(2);
+            document.getElementById('camera-y-steps-value').textContent = value;
+        }
+
+        function applyCameraTrackingSettings() {
+            const deadZone = parseInt(document.getElementById('camera-dead-zone').value);
+            const stepDelay = parseFloat(document.getElementById('camera-step-delay').value);
+            
+            fetch('/tracking/camera/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dead_zone_pixels: deadZone,
+                    step_delay: stepDelay
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'Camera tracking settings applied');
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to apply settings');
+                console.error('Error applying camera settings:', error);
+            });
+        }
+
+        function applyCameraCalibration() {
+            const xSteps = parseFloat(document.getElementById('camera-x-steps-per-pixel').value);
+            const ySteps = parseFloat(document.getElementById('camera-y-steps-per-pixel').value);
+            
+            fetch('/tracking/camera/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    x_steps_per_pixel: xSteps,
+                    y_steps_per_pixel: ySteps
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'Calibration saved');
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to save calibration');
+                console.error('Error saving calibration:', error);
+            });
+        }
+
+        function updateCameraTrackingStatus() {
+            fetch('/tracking/camera/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        if (data.available) {
+                            document.getElementById('camera-system-status').textContent = 'Available';
+                            document.getElementById('camera-enabled-status').textContent = 
+                                data.enabled ? 'Yes' : 'No';
+                            
+                            const controller = data.controller_status;
+                            if (controller) {
+                                document.getElementById('camera-position').textContent = 
+                                    `${controller.position.x}, ${controller.position.y}`;
+                                document.getElementById('camera-moving').textContent = 
+                                    controller.moving ? 'Yes' : 'No';
+                                
+                                // Update UI sliders with current values
+                                if (controller.calibration) {
+                                    document.getElementById('camera-x-steps-per-pixel').value = 
+                                        controller.calibration.x_steps_per_pixel;
+                                    document.getElementById('camera-y-steps-per-pixel').value = 
+                                        controller.calibration.y_steps_per_pixel;
+                                    document.getElementById('camera-dead-zone').value = 
+                                        controller.calibration.dead_zone_pixels;
+                                    
+                                    updateCameraXStepsValue();
+                                    updateCameraYStepsValue();
+                                    updateCameraDeadZoneValue();
+                                }
+                            }
+                            
+                            document.getElementById('camera-tracking-enabled').checked = data.enabled;
+                        } else {
+                            document.getElementById('camera-system-status').textContent = 'Not Available';
+                            document.getElementById('camera-enabled-status').textContent = 'N/A';
+                        }
+                    }
+                })
+                .catch(error => console.error('Error fetching camera tracking status:', error));
+        }
+
         // Load presets on page load
         loadPresetList();
         
         // Sync motion sliders on page load
         syncMotionSliders();
         
+        // Initialize camera tracking status
+        updateCameraTrackingStatus();
+        
         setInterval(updateStats, 1000);
+        
+        // Update camera tracking status every 2 seconds
+        setInterval(updateCameraTrackingStatus, 2000);
+        
         updateStats();
     </script>
 </body>
