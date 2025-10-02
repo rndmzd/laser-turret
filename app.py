@@ -233,15 +233,45 @@ def initialize_cascades():
     """Initialize Haar Cascade classifiers for object detection"""
     global face_cascade, eye_cascade, body_cascade, smile_cascade
     
-    try:
-        # Try to load cascades from OpenCV data directory
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-        body_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fullbody.xml')
-        smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_smile.xml')
-        print("Object detection cascades initialized successfully")
-    except Exception as e:
-        print(f"Warning: Could not load some cascade classifiers: {e}")
+    # List of possible cascade file locations
+    possible_paths = [
+        # Try cv2.data if available
+        (lambda: cv2.data.haarcascades if hasattr(cv2, 'data') else None)(),
+        # Common OpenCV installation paths
+        '/usr/share/opencv4/haarcascades/',
+        '/usr/local/share/opencv4/haarcascades/',
+        '/usr/share/opencv/haarcascades/',
+        # Relative path (if cascades are in local directory)
+        'haarcascades/',
+        './',
+    ]
+    
+    cascade_path = None
+    for path in possible_paths:
+        if path is None:
+            continue
+        try:
+            # Test if path exists by trying to load a cascade
+            test_path = path + 'haarcascade_frontalface_default.xml'
+            test_cascade = cv2.CascadeClassifier(test_path)
+            if not test_cascade.empty():
+                cascade_path = path
+                break
+        except:
+            continue
+    
+    if cascade_path:
+        try:
+            face_cascade = cv2.CascadeClassifier(cascade_path + 'haarcascade_frontalface_default.xml')
+            eye_cascade = cv2.CascadeClassifier(cascade_path + 'haarcascade_eye.xml')
+            body_cascade = cv2.CascadeClassifier(cascade_path + 'haarcascade_fullbody.xml')
+            smile_cascade = cv2.CascadeClassifier(cascade_path + 'haarcascade_smile.xml')
+            print(f"Object detection cascades initialized successfully from: {cascade_path}")
+        except Exception as e:
+            print(f"Warning: Could not load some cascade classifiers: {e}")
+    else:
+        print("Warning: Could not find Haar cascade files. Object detection will not work.")
+        print("Please install opencv-data package or download cascade files manually.")
 
 def detect_objects(frame):
     """Detect objects (faces, eyes, bodies) in frame"""
