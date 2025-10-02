@@ -37,6 +37,13 @@ exposure_stats = {
 }
 exposure_lock = threading.Lock()
 
+# Video recording
+is_recording = False
+video_writer = None
+recording_filename = None
+recording_lock = threading.Lock()
+recording_start_time = None
+
 def initialize_camera():
     """Initialize the Pi Camera with compatible auto exposure settings"""
     global picam2, crosshair_pos, last_frame_time
@@ -138,7 +145,7 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
 
 def generate_frames():
     """Generate frames with crosshair overlay and FPS monitoring"""
-    global output_frame, lock, last_frame_time
+    global output_frame, lock, last_frame_time, video_writer, is_recording
     
     # Check if camera is available
     if picam2 is None:
@@ -168,6 +175,16 @@ def generate_frames():
             
             # Add crosshair
             frame = create_crosshair(frame, opacity=0.5)
+            
+            # Write frame to video file if recording
+            with recording_lock:
+                if is_recording and video_writer is not None:
+                    try:
+                        # Convert RGB to BGR for OpenCV
+                        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                        video_writer.write(bgr_frame)
+                    except Exception as e:
+                        print(f"Error writing video frame: {e}")
             
             # Encode with high quality
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 95]
