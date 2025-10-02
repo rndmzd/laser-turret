@@ -40,46 +40,55 @@ exposure_lock = threading.Lock()
 def initialize_camera():
     """Initialize the Pi Camera with compatible auto exposure settings"""
     global picam2, crosshair_pos, last_frame_time
-    picam2 = Picamera2()
     
-    # Configure camera with supported settings
-    config = picam2.create_preview_configuration(
-        main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT),
-              "format": "RGB888"},
-        buffer_count=2,
-        transform=Transform(vflip=0, hflip=0),
-        controls={
-            # Basic exposure controls
-            "AeEnable": True,               # Enable Auto Exposure
-            "ExposureTime": 20000,          # Initial exposure time (microseconds)
-            "AnalogueGain": 1.0,            # Initial gain
-            
-            # White Balance
-            "AwbEnable": True,              # Enable Auto White Balance
-            "AwbMode": 1,                   # Auto WB mode
-            
-            # Basic image adjustments
-            "Brightness": 0.0,              # Default brightness
-            "Contrast": 1.0,                # Default contrast
-            "Saturation": 1.0,              # Default saturation
-        }
-    )
-    
-    picam2.configure(config)
-    
-    # Get supported controls for debugging
-    print("Supported controls:", picam2.camera_controls)
-    
-    picam2.start()
-    time.sleep(2)  # Allow time for AE and AWB to settle
-    
-    # Start exposure monitoring
-    threading.Thread(target=monitor_exposure, daemon=True).start()
-    
-    # Initialize positions
-    crosshair_pos['x'] = CAMERA_WIDTH // 2
-    crosshair_pos['y'] = CAMERA_HEIGHT // 2
-    last_frame_time = datetime.now()
+    try:
+        picam2 = Picamera2()
+        
+        # Configure camera with supported settings
+        config = picam2.create_preview_configuration(
+            main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT),
+                  "format": "RGB888"},
+            buffer_count=2,
+            transform=Transform(vflip=0, hflip=0),
+            controls={
+                # Basic exposure controls
+                "AeEnable": True,               # Enable Auto Exposure
+                "ExposureTime": 20000,          # Initial exposure time (microseconds)
+                "AnalogueGain": 1.0,            # Initial gain
+                
+                # White Balance
+                "AwbEnable": True,              # Enable Auto White Balance
+                "AwbMode": 1,                   # Auto WB mode
+                
+                # Basic image adjustments
+                "Brightness": 0.0,              # Default brightness
+                "Contrast": 1.0,                # Default contrast
+                "Saturation": 1.0,              # Default saturation
+            }
+        )
+        
+        picam2.configure(config)
+        
+        # Get supported controls for debugging
+        print("Supported controls:", picam2.camera_controls)
+        
+        picam2.start()
+        time.sleep(2)  # Allow time for AE and AWB to settle
+        
+        # Start exposure monitoring
+        threading.Thread(target=monitor_exposure, daemon=True).start()
+        
+        # Initialize positions
+        crosshair_pos['x'] = CAMERA_WIDTH // 2
+        crosshair_pos['y'] = CAMERA_HEIGHT // 2
+        last_frame_time = datetime.now()
+        
+        print("Camera initialized successfully")
+        
+    except Exception as e:
+        print(f"ERROR: Failed to initialize camera: {e}")
+        print("Camera will not be available. Check hardware connection.")
+        picam2 = None
 
 def monitor_exposure():
     """Monitor exposure settings in a separate thread"""
@@ -130,6 +139,19 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
 def generate_frames():
     """Generate frames with crosshair overlay and FPS monitoring"""
     global output_frame, lock, last_frame_time
+    
+    # Check if camera is available
+    if picam2 is None:
+        # Return a placeholder frame if camera failed to initialize
+        placeholder = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
+        cv2.putText(placeholder, "Camera Not Available", (CAMERA_WIDTH//2 - 300, CAMERA_HEIGHT//2), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3, cv2.LINE_AA)
+        _, encoded_frame = cv2.imencode('.jpg', placeholder)
+        placeholder_bytes = encoded_frame.tobytes()
+        while True:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + placeholder_bytes + b'\r\n')
+            time.sleep(1)
     
     while True:
         try:
