@@ -123,22 +123,7 @@ def initialize_camera():
             main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT),
                   "format": "RGB888"},
             buffer_count=2,
-            transform=Transform(vflip=0, hflip=0),
-            controls={
-                # Basic exposure controls
-                "AeEnable": True,               # Enable Auto Exposure
-                "ExposureTime": 20000,          # Initial exposure time (microseconds)
-                "AnalogueGain": 1.0,            # Initial gain
-                
-                # White Balance
-                "AwbEnable": True,              # Enable Auto White Balance
-                "AwbMode": 1,                   # Auto WB mode
-                
-                # Basic image adjustments
-                "Brightness": 0.0,              # Default brightness
-                "Contrast": 1.0,                # Default contrast
-                "Saturation": 1.0,              # Default saturation
-            }
+            transform=Transform(vflip=0, hflip=0)
         )
         
         picam2.configure(config)
@@ -147,6 +132,22 @@ def initialize_camera():
         print("Supported controls:", picam2.camera_controls)
         
         picam2.start()
+        
+        # Set controls after starting to ensure they apply correctly
+        picam2.set_controls({
+            # Basic exposure controls
+            "AeEnable": True,               # Enable Auto Exposure
+            
+            # White Balance
+            "AwbEnable": True,              # Enable Auto White Balance
+            "AwbMode": 1,                   # Auto WB mode
+            
+            # Basic image adjustments
+            "Brightness": 0.0,              # Default brightness
+            "Contrast": 1.0,                # Default contrast
+            "Saturation": 1.0,              # Default saturation
+        })
+        
         time.sleep(2)  # Allow time for AE and AWB to settle
         
         # Start exposure monitoring
