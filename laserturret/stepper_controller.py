@@ -196,11 +196,12 @@ class StepperController:
                     return self.gpio.input(self.x_cw_limit) == 0  # Active low
                 else:
                     return self.gpio.input(self.x_ccw_limit) == 0
-            else:  # y axis
+            else:  # y axis - inverted to match reversed direction signal
+                # Y-axis direction is inverted, so limit switches are also inverted
                 if direction > 0:
-                    return self.gpio.input(self.y_cw_limit) == 0
+                    return self.gpio.input(self.y_ccw_limit) == 0  # Check CCW when moving "positive"
                 else:
-                    return self.gpio.input(self.y_ccw_limit) == 0
+                    return self.gpio.input(self.y_cw_limit) == 0   # Check CW when moving "negative"
         except Exception as e:
             logger.error(f"Error reading limit switch: {e}")
             return False
