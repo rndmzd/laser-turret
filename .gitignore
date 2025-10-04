@@ -178,8 +178,10 @@ pip-audit-report.*
 camera_calibration.json
 
 # WINDSURF
-.windsurf
+#.windsurf
+#!.windsurf/workflows/*
 
 # Training data (allow requirements file)
 training/*
 !training/requirements-train.txt
+env*/

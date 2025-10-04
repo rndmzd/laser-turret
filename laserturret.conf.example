@@ -66,9 +66,10 @@ format = RGB888
 buffer_count = 2
 
 [Detection]
-# Object detection method: 'haar' (OpenCV Haar Cascades) or 'tflite' (TensorFlow Lite)
+# Object detection method: 'haar', 'tflite', or 'roboflow'
 # haar: Fast, simple, works for faces/bodies (legacy, lower accuracy)
-# tflite: Slower but more accurate, detects 80+ object classes
+# tflite: Slower but more accurate, detects 80+ object classes (local inference)
+# roboflow: Uses remote Roboflow Inference Server for custom trained models
 detection_method = haar
 
 # TensorFlow Lite model (only used if detection_method = tflite)
@@ -86,6 +87,29 @@ tflite_confidence = 0.5
 # Example: person,cat,dog,bird
 # See COCO_LABELS in tflite_detector.py for full list
 tflite_filter_classes =
+
+# Roboflow Inference Server settings (only used if detection_method = roboflow)
+# URL of the Roboflow Inference Server (running on another machine or localhost)
+# Default port is 9001. Use 0.0.0.0 in docker-compose to allow network access.
+# Example: http://192.168.1.100:9001
+roboflow_server_url = http://localhost:9001
+
+# Roboflow model ID in format: workspace/project/version
+# Example: myteam/balloon-detection/1
+# Get this from your Roboflow project dashboard
+roboflow_model_id = 
+
+# Roboflow API key (optional, only needed for private models or hosted inference)
+# Leave empty if using a self-hosted inference server with public models
+roboflow_api_key = 
+
+# Confidence threshold for Roboflow detections (0.0-1.0)
+# Higher = fewer false positives, lower = more detections
+roboflow_confidence = 0.5
+
+# Classes to detect with Roboflow (comma-separated, empty = all classes)
+# Example: balloon
+roboflow_class_filter = 
 
 # Balloon detection (HSV + shape-based), used when Detection Mode = balloon (Haar method)
 # HSV Value (brightness) threshold for "black" mask (0-255). Lower = darker.
