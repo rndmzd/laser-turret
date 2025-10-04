@@ -653,6 +653,27 @@ def reset_crosshair():
         'y': crosshair_pos['y']
     })
 
+@app.route('/get_crosshair_position')
+def get_crosshair_position():
+    """Get crosshair position in relative coordinates (centered at 0,0)"""
+    with crosshair_lock:
+        # Calculate relative position from center
+        # Center of frame is (0, 0)
+        # X increases to the right, Y increases upward (inverted from image coordinates)
+        center_x = CAMERA_WIDTH // 2
+        center_y = CAMERA_HEIGHT // 2
+        
+        relative_x = crosshair_pos['x'] - center_x
+        relative_y = center_y - crosshair_pos['y']  # Invert Y axis
+        
+        return jsonify({
+            'status': 'success',
+            'absolute_x': crosshair_pos['x'],
+            'absolute_y': crosshair_pos['y'],
+            'relative_x': relative_x,
+            'relative_y': relative_y
+        })
+
 @app.route('/get_fps')
 def get_fps():
     """Return current FPS value"""

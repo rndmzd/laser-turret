@@ -639,8 +639,12 @@
                                 <span id="camera-enabled-status" class="stat-value">No</span>
                             </div>
                             <div class="stat-row">
-                                <span class="stat-label">Position (X, Y)</span>
+                                <span class="stat-label">Camera Position (X, Y)</span>
                                 <span id="camera-position" class="stat-value">0, 0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Crosshair Position (X, Y)</span>
+                                <span id="crosshair-position" class="stat-value">0, 0</span>
                             </div>
                             <div class="stat-row">
                                 <span class="stat-label">Moving</span>
@@ -1949,6 +1953,19 @@
                 .catch(error => console.error('Error fetching motion status:', error));
         }
 
+        // Update crosshair position display
+        function updateCrosshairPosition() {
+            fetch('/get_crosshair_position')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('crosshair-position').textContent = 
+                            `${data.relative_x}, ${data.relative_y}`;
+                    }
+                })
+                .catch(error => console.error('Error fetching crosshair position:', error));
+        }
+
         // Update stats periodically
         function updateStats() {
             fetch('/exposure_stats')
@@ -1989,6 +2006,9 @@
             
             // Update pattern status
             updatePatternStatus();
+            
+            // Update crosshair position
+            updateCrosshairPosition();
         }
 
         // Camera tracking controls
@@ -2303,6 +2323,9 @@
                                     `${controller.position.x}, ${controller.position.y}`;
                                 document.getElementById('camera-moving').textContent = 
                                     controller.moving ? 'Yes' : 'No';
+                                
+                                // Update crosshair position
+                                updateCrosshairPosition();
                                 
                                 // Initialize calibration sliders ONLY on first load
                                 // After that, preserve user's values until they save or refresh page
