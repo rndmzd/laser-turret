@@ -93,6 +93,17 @@ camera_tracking_enabled = False
 stepper_controller = None
 tracking_mode_lock = threading.Lock()
 
+tracking_smoothing_alpha = 0.3
+target_lock_distance = 150
+target_switch_cooldown = 0.25
+object_track_smooth_center = None
+object_last_switch_time = 0.0
+motion_smooth_center = None
+crosshair_dead_zone_pixels = 20
+motion_bg_history = 500
+motion_learning_rate = 0.01
+motion_kernel_size = 5
+
 def initialize_stepper_controller():
     """Initialize stepper motor controller for camera tracking"""
     global stepper_controller
@@ -366,19 +377,21 @@ def detect_motion(frame):
     
     if background_subtractor is None:
         background_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=500, varThreshold=motion_sensitivity, detectShadows=False
+            history=motion_bg_history, varThreshold=motion_sensitivity, detectShadows=False
         )
     
     # Convert to BGR for processing
     bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    bgr_frame = cv2.GaussianBlur(bgr_frame, (5, 5), 0)
     
     # Apply background subtraction
-    fg_mask = background_subtractor.apply(bgr_frame)
+    fg_mask = background_subtractor.apply(bgr_frame, learningRate=motion_learning_rate)
     
     # Apply morphological operations to reduce noise
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (motion_kernel_size, motion_kernel_size))
     fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
     fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+    fg_mask = cv2.dilate(fg_mask, kernel, iterations=1)
     
     # Find contours
     contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -426,29 +439,59 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 if object_auto_track and objects:
                     target = get_priority_target(objects)
                     if target:
+                        global object_track_smooth_center, object_last_switch_time
                         x, y, w, h = target['rect']
-                        # Calculate center
-                        center_x = x + w // 2
-                        center_y = y + h // 2
-                        
-                        # Draw target indicator
-                        cv2.circle(overlay, (center_x, center_y), 15, (0, 255, 255), 3)
-                        cv2.circle(overlay, (center_x, center_y), 5, (0, 255, 255), -1)
-                        
-                        # Update tracking based on mode
+                        cx = x + w // 2
+                        cy = y + h // 2
+
+                        use_cx, use_cy = cx, cy
+                        if object_track_smooth_center is not None and len(objects) > 0:
+                            px, py = object_track_smooth_center
+                            best_obj = None
+                            best_dist = None
+                            for obj in objects:
+                                ox, oy, ow, oh = obj['rect']
+                                ocx = ox + ow // 2
+                                ocy = oy + oh // 2
+                                d = ((ocx - px) ** 2 + (ocy - py) ** 2) ** 0.5
+                                if best_dist is None or d < best_dist:
+                                    best_dist = d
+                                    best_obj = (ocx, ocy)
+                            if best_obj is not None and best_dist is not None:
+                                if best_dist < target_lock_distance:
+                                    use_cx, use_cy = best_obj
+                                else:
+                                    if (time.time() - object_last_switch_time) < target_switch_cooldown:
+                                        use_cx, use_cy = int(px), int(py)
+                                    else:
+                                        object_last_switch_time = time.time()
+
+                        if object_track_smooth_center is None:
+                            object_track_smooth_center = (float(use_cx), float(use_cy))
+                        else:
+                            sx = object_track_smooth_center[0] + tracking_smoothing_alpha * (use_cx - object_track_smooth_center[0])
+                            sy = object_track_smooth_center[1] + tracking_smoothing_alpha * (use_cy - object_track_smooth_center[1])
+                            object_track_smooth_center = (sx, sy)
+
+                        sx_i = int(object_track_smooth_center[0])
+                        sy_i = int(object_track_smooth_center[1])
+
+                        cv2.circle(overlay, (sx_i, sy_i), 15, (0, 255, 255), 3)
+                        cv2.circle(overlay, (sx_i, sy_i), 5, (0, 255, 255), -1)
+
                         with tracking_mode_lock:
                             if tracking_mode == 'crosshair':
-                                # Traditional mode: move crosshair to object
                                 with crosshair_lock:
-                                    crosshair_pos['x'] = center_x
-                                    crosshair_pos['y'] = center_y
+                                    dx = sx_i - crosshair_pos['x']
+                                    dy = sy_i - crosshair_pos['y']
+                                    if (dx * dx + dy * dy) ** 0.5 > crosshair_dead_zone_pixels:
+                                        crosshair_pos['x'] = sx_i
+                                        crosshair_pos['y'] = sy_i
                             elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
-                                # Camera tracking mode: move camera to center object
-                                # Only spawn thread if not already moving to prevent queue buildup
                                 if not stepper_controller.moving:
                                     threading.Thread(
                                         target=lambda: stepper_controller.move_to_center_object(
-                                            center_x, center_y, CAMERA_WIDTH, CAMERA_HEIGHT
+                                            sx_i, sy_i, CAMERA_WIDTH, CAMERA_HEIGHT
                                         ),
                                         daemon=True
                                     ).start()
@@ -469,27 +512,38 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 
                 # Draw motion center
                 if motion_center:
-                    cv2.circle(overlay, motion_center, 10, (255, 0, 255), 2)
-                    cv2.circle(overlay, motion_center, 3, (255, 0, 255), -1)
+                    global motion_smooth_center
+                    if motion_smooth_center is None:
+                        motion_smooth_center = (float(motion_center[0]), float(motion_center[1]))
+                    else:
+                        mx = motion_smooth_center[0] + tracking_smoothing_alpha * (motion_center[0] - motion_smooth_center[0])
+                        my = motion_smooth_center[1] + tracking_smoothing_alpha * (motion_center[1] - motion_smooth_center[1])
+                        motion_smooth_center = (mx, my)
+
+                    msx = int(motion_smooth_center[0])
+                    msy = int(motion_smooth_center[1])
+                    cv2.circle(overlay, (msx, msy), 10, (255, 0, 255), 2)
+                    cv2.circle(overlay, (msx, msy), 3, (255, 0, 255), -1)
                     
-                    # Auto-track: update tracking based on mode (only if object tracking is off)
                     if motion_auto_track and not object_auto_track:
                         with tracking_mode_lock:
                             if tracking_mode == 'crosshair':
-                                # Traditional mode: move crosshair to motion
                                 with crosshair_lock:
-                                    crosshair_pos['x'] = motion_center[0]
-                                    crosshair_pos['y'] = motion_center[1]
+                                    dx = msx - crosshair_pos['x']
+                                    dy = msy - crosshair_pos['y']
+                                    if (dx * dx + dy * dy) ** 0.5 > crosshair_dead_zone_pixels:
+                                        crosshair_pos['x'] = msx
+                                        crosshair_pos['y'] = msy
                             elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
-                                # Camera tracking mode: move camera to center motion
-                                # Only spawn thread if not already moving to prevent queue buildup
                                 if not stepper_controller.moving:
                                     threading.Thread(
                                         target=lambda: stepper_controller.move_to_center_object(
-                                            motion_center[0], motion_center[1], CAMERA_WIDTH, CAMERA_HEIGHT
+                                            msx, msy, CAMERA_WIDTH, CAMERA_HEIGHT
                                         ),
                                         daemon=True
                                     ).start()
+                else:
+                    motion_smooth_center = None
             except Exception as e:
                 print(f"Motion detection error: {e}")
     
