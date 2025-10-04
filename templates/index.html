@@ -1105,7 +1105,6 @@
             const clickY = (e.clientY - rect.top);
             const cameraX = Math.round(clickX * scaleX);
             const cameraY = Math.round(clickY * scaleY);
-            document.getElementById('position').textContent = `X: ${cameraX}, Y: ${cameraY}`;
             
             // Check if camera tracking is enabled and active
             const trackingMode = document.getElementById('tracking-mode').value;
@@ -1113,6 +1112,7 @@
             
             if (trackingMode === 'camera' && cameraTrackingEnabled) {
                 // Camera movement mode: move camera to recenter clicked position
+                // Crosshair stays centered, don't update position display
                 fetch('/tracking/camera/move_to_position', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1132,7 +1132,8 @@
                     showStatus('tracking-status-message', false, 'Failed to move camera');
                 });
             } else {
-                // Crosshair mode: just update crosshair position
+                // Crosshair mode: update crosshair position
+                document.getElementById('position').textContent = `X: ${cameraX}, Y: ${cameraY}`;
                 fetch('/update_crosshair', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

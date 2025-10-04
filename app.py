@@ -489,9 +489,17 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
             except Exception as e:
                 print(f"Motion detection error: {e}")
     
-    with crosshair_lock:
-        center_x = crosshair_pos['x']
-        center_y = crosshair_pos['y']
+    # Determine crosshair position based on tracking mode
+    with tracking_mode_lock:
+        if tracking_mode == 'camera' and camera_tracking_enabled:
+            # Camera tracking mode: crosshair stays centered
+            center_x = CAMERA_WIDTH // 2
+            center_y = CAMERA_HEIGHT // 2
+        else:
+            # Crosshair mode: use crosshair position
+            with crosshair_lock:
+                center_x = crosshair_pos['x']
+                center_y = crosshair_pos['y']
     
     # Draw crosshair
     line_length = 40
@@ -656,23 +664,35 @@ def reset_crosshair():
 @app.route('/get_crosshair_position')
 def get_crosshair_position():
     """Get crosshair position in relative coordinates (centered at 0,0)"""
-    with crosshair_lock:
-        # Calculate relative position from center
-        # Center of frame is (0, 0)
-        # X increases to the right, Y increases upward (inverted from image coordinates)
-        center_x = CAMERA_WIDTH // 2
-        center_y = CAMERA_HEIGHT // 2
-        
-        relative_x = crosshair_pos['x'] - center_x
-        relative_y = center_y - crosshair_pos['y']  # Invert Y axis
-        
-        return jsonify({
-            'status': 'success',
-            'absolute_x': crosshair_pos['x'],
-            'absolute_y': crosshair_pos['y'],
-            'relative_x': relative_x,
-            'relative_y': relative_y
-        })
+    with tracking_mode_lock:
+        if tracking_mode == 'camera' and camera_tracking_enabled:
+            # In camera tracking mode, crosshair is always centered
+            return jsonify({
+                'status': 'success',
+                'absolute_x': CAMERA_WIDTH // 2,
+                'absolute_y': CAMERA_HEIGHT // 2,
+                'relative_x': 0,
+                'relative_y': 0
+            })
+        else:
+            # In crosshair mode, calculate actual crosshair position
+            with crosshair_lock:
+                # Calculate relative position from center
+                # Center of frame is (0, 0)
+                # X increases to the right, Y increases upward (inverted from image coordinates)
+                center_x = CAMERA_WIDTH // 2
+                center_y = CAMERA_HEIGHT // 2
+                
+                relative_x = crosshair_pos['x'] - center_x
+                relative_y = center_y - crosshair_pos['y']  # Invert Y axis
+                
+                return jsonify({
+                    'status': 'success',
+                    'absolute_x': crosshair_pos['x'],
+                    'absolute_y': crosshair_pos['y'],
+                    'relative_x': relative_x,
+                    'relative_y': relative_y
+                })
 
 @app.route('/get_fps')
 def get_fps():
@@ -1547,10 +1567,8 @@ def move_camera_to_position():
         click_x = int(data.get('x'))
         click_y = int(data.get('y'))
         
-        # Update crosshair to clicked position first
-        with crosshair_lock:
-            crosshair_pos['x'] = click_x
-            crosshair_pos['y'] = click_y
+        # In camera tracking mode, crosshair stays centered - don't update it
+        # Only the camera moves to recenter the clicked position
         
         # Move camera to recenter the clicked position in background thread
         def move_camera():
