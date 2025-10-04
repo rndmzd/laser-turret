@@ -12,6 +12,13 @@ from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
 from laserturret.stepper_controller import StepperController
 
+# Try to import TFLite detector
+try:
+    from laserturret.tflite_detector import TFLiteDetector, TFLITE_AVAILABLE
+except ImportError:
+    TFLITE_AVAILABLE = False
+    print("Warning: TFLite detector not available")
+
 app = Flask(__name__)
 
 # Global variables
@@ -60,13 +67,20 @@ last_motion_center = None
 object_detection_enabled = False
 object_auto_track = False
 detection_mode = 'face'  # 'face', 'eye', 'body', 'smile'
+detection_method = 'haar'  # 'haar' or 'tflite' - loaded from config
 target_priority = 'largest'  # 'largest', 'closest', 'leftmost', 'rightmost'
 object_lock = threading.Lock()
 detected_objects = []
+
+# Haar Cascade classifiers (legacy)
 face_cascade = None
 eye_cascade = None
 body_cascade = None
 smile_cascade = None
+
+# TensorFlow Lite detector
+tflite_detector = None
+tflite_filter_classes = []  # Empty = detect all classes
 
 # Preset positions
 preset_positions = {}  # {slot: {'x': int, 'y': int, 'label': str}}
@@ -268,6 +282,48 @@ def run_pattern_sequence():
         if not pattern_running:
             break
 
+def initialize_tflite_detector():
+    """Initialize TensorFlow Lite detector from config"""
+    global tflite_detector, tflite_filter_classes, detection_method
+    
+    if not TFLITE_AVAILABLE:
+        print("TensorFlow Lite not available. Using Haar Cascades.")
+        detection_method = 'haar'
+        return
+    
+    try:
+        config = get_config()
+        
+        # Load detection settings from config
+        detection_method = config.get_detection_method()
+        
+        if detection_method == 'tflite':
+            model_name = config.get_tflite_model()
+            use_coral = config.get_use_coral()
+            confidence = config.get_tflite_confidence()
+            tflite_filter_classes = config.get_tflite_filter_classes()
+            
+            print(f"Initializing TFLite detector: {model_name}")
+            print(f"  Coral accelerator: {use_coral}")
+            print(f"  Confidence threshold: {confidence}")
+            if tflite_filter_classes:
+                print(f"  Filter classes: {', '.join(tflite_filter_classes)}")
+            
+            tflite_detector = TFLiteDetector(
+                model_name=model_name,
+                use_coral=use_coral,
+                confidence_threshold=confidence
+            )
+            
+            print("TFLite detector initialized successfully")
+            print(f"  Stats: {tflite_detector.get_stats()}")
+    
+    except Exception as e:
+        print(f"Warning: Failed to initialize TFLite detector: {e}")
+        print("Falling back to Haar Cascades")
+        detection_method = 'haar'
+        tflite_detector = None
+
 def initialize_cascades():
     """Initialize Haar Cascade classifiers for object detection"""
     global face_cascade, eye_cascade, body_cascade, smile_cascade
@@ -313,34 +369,55 @@ def initialize_cascades():
         print("Please install opencv-data package or download cascade files manually.")
 
 def detect_objects(frame):
-    """Detect objects (faces, eyes, bodies) in frame"""
+    """Detect objects using either Haar Cascades or TensorFlow Lite"""
     global detected_objects, face_cascade, eye_cascade, body_cascade, smile_cascade
-    
-    # Initialize cascades if needed
-    if face_cascade is None:
-        initialize_cascades()
-    
-    # Convert to grayscale for detection
-    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    global tflite_detector, tflite_filter_classes, detection_method
     
     objects = []
     
     try:
-        if detection_mode == 'face' and face_cascade is not None:
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-            objects = [{'type': 'face', 'rect': (x, y, w, h)} for x, y, w, h in faces]
+        # Use TensorFlow Lite detection
+        if detection_method == 'tflite':
+            if tflite_detector is None:
+                initialize_tflite_detector()
+            
+            if tflite_detector is not None:
+                # Run TFLite detection
+                detections = tflite_detector.detect(frame)
+                
+                # Filter by class if specified
+                if tflite_filter_classes:
+                    detections = [d for d in detections if d['type'] in tflite_filter_classes]
+                
+                objects = detections
+            else:
+                # Fall back to Haar if TFLite failed
+                detection_method = 'haar'
         
-        elif detection_mode == 'eye' and eye_cascade is not None:
-            eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=10, minSize=(20, 20))
-            objects = [{'type': 'eye', 'rect': (x, y, w, h)} for x, y, w, h in eyes]
-        
-        elif detection_mode == 'body' and body_cascade is not None:
-            bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 100))
-            objects = [{'type': 'body', 'rect': (x, y, w, h)} for x, y, w, h in bodies]
-        
-        elif detection_mode == 'smile' and smile_cascade is not None:
-            smiles = smile_cascade.detectMultiScale(gray, scaleFactor=1.8, minNeighbors=20, minSize=(25, 25))
-            objects = [{'type': 'smile', 'rect': (x, y, w, h)} for x, y, w, h in smiles]
+        # Use Haar Cascade detection
+        if detection_method == 'haar':
+            # Initialize cascades if needed
+            if face_cascade is None:
+                initialize_cascades()
+            
+            # Convert to grayscale for detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            
+            if detection_mode == 'face' and face_cascade is not None:
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                objects = [{'type': 'face', 'rect': (x, y, w, h)} for x, y, w, h in faces]
+            
+            elif detection_mode == 'eye' and eye_cascade is not None:
+                eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=10, minSize=(20, 20))
+                objects = [{'type': 'eye', 'rect': (x, y, w, h)} for x, y, w, h in eyes]
+            
+            elif detection_mode == 'body' and body_cascade is not None:
+                bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 100))
+                objects = [{'type': 'body', 'rect': (x, y, w, h)} for x, y, w, h in bodies]
+            
+            elif detection_mode == 'smile' and smile_cascade is not None:
+                smiles = smile_cascade.detectMultiScale(gray, scaleFactor=1.8, minNeighbors=20, minSize=(25, 25))
+                objects = [{'type': 'smile', 'rect': (x, y, w, h)} for x, y, w, h in smiles]
     
     except Exception as e:
         print(f"Object detection error: {e}")
@@ -1125,15 +1202,69 @@ def update_object_settings():
 def object_detection_status():
     """Get current object detection status and settings"""
     with object_lock:
+        # Get TFLite stats if available
+        tflite_stats = None
+        if detection_method == 'tflite' and tflite_detector is not None:
+            tflite_stats = tflite_detector.get_stats()
+        
         return jsonify({
             'status': 'success',
             'enabled': object_detection_enabled,
             'auto_track': object_auto_track,
             'mode': detection_mode,
+            'detection_method': detection_method,
             'priority': target_priority,
             'objects_detected': len(detected_objects),
-            'objects': [{'type': obj['type'], 'rect': [int(v) for v in obj['rect']]} for obj in detected_objects]
+            'objects': [{'type': obj['type'], 'rect': [int(v) for v in obj['rect']]} for obj in detected_objects],
+            'tflite_available': TFLITE_AVAILABLE,
+            'tflite_stats': tflite_stats
         })
+
+@app.route('/detection_method/switch', methods=['POST'])
+def switch_detection_method():
+    """Switch between Haar Cascades and TensorFlow Lite"""
+    global detection_method, tflite_detector
+    
+    try:
+        data = request.get_json()
+        method = data.get('method', 'haar')
+        
+        if method not in ['haar', 'tflite']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid method. Must be "haar" or "tflite"'
+            }), 400
+        
+        if method == 'tflite' and not TFLITE_AVAILABLE:
+            return jsonify({
+                'status': 'error',
+                'message': 'TensorFlow Lite is not available. Install with: pip install tflite-runtime'
+            }), 400
+        
+        # Switch method
+        old_method = detection_method
+        detection_method = method
+        
+        # Initialize TFLite if needed
+        if method == 'tflite' and tflite_detector is None:
+            initialize_tflite_detector()
+            
+            if tflite_detector is None:
+                detection_method = old_method
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to initialize TFLite detector'
+                }), 500
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Switched to {method}',
+            'detection_method': detection_method,
+            'tflite_stats': tflite_detector.get_stats() if tflite_detector else None
+        })
+    
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/presets/save', methods=['POST'])
 def save_preset():
@@ -1745,4 +1876,5 @@ def auto_calibrate_camera():
 if __name__ == '__main__':
     initialize_camera()
     initialize_stepper_controller()  # Initialize stepper controller
+    initialize_tflite_detector()  # Initialize TFLite detector if configured
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

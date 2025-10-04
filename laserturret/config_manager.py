@@ -62,6 +62,13 @@ class ConfigManager:
             'height': 1080,
             'format': 'RGB888',
             'buffer_count': 2,
+        },
+        'Detection': {
+            'detection_method': 'haar',
+            'tflite_model': 'ssd_mobilenet_v2',
+            'use_coral': False,
+            'tflite_confidence': 0.5,
+            'tflite_filter_classes': '',
         }
     }
     
@@ -268,6 +275,35 @@ class ConfigManager:
     def get_camera_buffer_count(self) -> int:
         """Get camera buffer count"""
         return self._get('Camera', 'buffer_count', int)
+    
+    # Detection Configuration
+    def get_detection_method(self) -> str:
+        """Get detection method ('haar' or 'tflite')"""
+        method = self._get('Detection', 'detection_method', str)
+        if method not in ['haar', 'tflite']:
+            logger.warning(f"Invalid detection method: {method}, defaulting to 'haar'")
+            return 'haar'
+        return method
+    
+    def get_tflite_model(self) -> str:
+        """Get TensorFlow Lite model name"""
+        return self._get('Detection', 'tflite_model', str)
+    
+    def get_use_coral(self) -> bool:
+        """Get whether to use Coral USB Accelerator"""
+        return self._get('Detection', 'use_coral', bool)
+    
+    def get_tflite_confidence(self) -> float:
+        """Get TFLite confidence threshold (0.0-1.0)"""
+        confidence = self._get('Detection', 'tflite_confidence', float)
+        return max(0.0, min(1.0, confidence))  # Clamp between 0 and 1
+    
+    def get_tflite_filter_classes(self) -> List[str]:
+        """Get list of classes to filter for TFLite detection"""
+        classes_str = self._get('Detection', 'tflite_filter_classes', str)
+        if not classes_str or classes_str.strip() == '':
+            return []
+        return [c.strip() for c in classes_str.split(',') if c.strip()]
     
     # Convenience methods
     def get_motor_config(self, axis: str) -> Dict[str, int]:
