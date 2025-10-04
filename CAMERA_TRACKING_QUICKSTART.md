@@ -7,6 +7,7 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 ## Quick Setup (5 Minutes)
 
 ### 1. Hardware Check
+
 - ✅ 2x Stepper motors (NEMA 17 recommended)
 - ✅ 2x Stepper drivers (A4988 or DRV8825)
 - ✅ 12V power supply
@@ -14,6 +15,7 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 - ✅ All wired according to `laserturret.conf`
 
 ### 2. Enable Camera Tracking
+
 1. Start the app: `python app.py`
 2. Open web UI: `http://localhost:5000`
 3. Click **📹 Track** tab
@@ -21,6 +23,7 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 5. Toggle **"Enable Camera Movement"** ON
 
 ### 3. Quick Calibration
+
 1. Enable object detection (👤 Objects tab)
 2. Place a target in frame
 3. Adjust **X-Axis Steps/Pixel** slider until horizontal tracking works
@@ -28,6 +31,7 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 5. Click **Save Calibration**
 
 ### 4. Start Tracking
+
 1. Enable **Auto-Track Objects**
 2. Watch the camera follow your target!
 
@@ -57,12 +61,14 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 ## When to Use Each Mode
 
 **Crosshair Tracking (Default)**
+
 - ✅ No hardware needed
 - ✅ Instant response
 - ✅ Good for viewing/monitoring
 - ❌ Laser must aim at crosshair position
 
 **Camera Tracking (New)**
+
 - ✅ Physical precision
 - ✅ Laser always aims at center
 - ✅ Better for active targeting

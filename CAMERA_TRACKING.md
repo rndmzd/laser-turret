@@ -173,23 +173,27 @@ curl -X POST http://localhost:5000/tracking/camera/calibrate \
 ### Settings
 
 **Dead Zone (pixels)**: Minimum offset before camera moves
+
 - Range: 5-100 pixels
 - Lower = more responsive but may oscillate
 - Higher = smoother but less precise
 - Default: 20 pixels
 
 **Movement Speed**: Step delay between motor steps
+
 - Range: 0.5-5.0 ms
 - Lower = faster movement
 - Higher = smoother, more controlled
 - Default: 1.0 ms
 
 **Steps Per Pixel**: Calibration ratio for each axis
+
 - Depends on motor, gearing, and camera FOV
 - Requires manual calibration
 - Save after calibration
 
 **Max Steps**: Software limits to prevent overextension
+
 - Default: 2000 steps per axis from center
 - Adjust based on physical constraints
 - Acts as safety limit if limit switches fail
@@ -197,22 +201,26 @@ curl -X POST http://localhost:5000/tracking/camera/calibrate \
 ## Safety Features
 
 ### Software Limits
+
 - Maximum step count per axis from center position
 - Prevents camera from moving beyond safe range
 - Configurable via settings or API
 
 ### Hardware Limit Switches
+
 - Optional but recommended
 - Immediately stops movement when triggered
 - Active-low configuration (triggered when pin reads LOW)
 - Configured in GPIO section of config file
 
 ### Movement Lock
+
 - Thread-safe movement control
 - Prevents simultaneous movements from conflicting
 - Only one movement command executes at a time
 
 ### Auto-Disable
+
 - Motors disable when switching to crosshair mode
 - Prevents accidental movement
 - Must explicitly enable in camera mode
@@ -220,6 +228,7 @@ curl -X POST http://localhost:5000/tracking/camera/calibrate \
 ## API Reference
 
 ### Set Tracking Mode
+
 ```bash
 POST /tracking/mode
 Content-Type: application/json
@@ -230,6 +239,7 @@ Content-Type: application/json
 ```
 
 ### Toggle Camera Tracking
+
 ```bash
 POST /tracking/camera/toggle
 Content-Type: application/json
@@ -240,11 +250,13 @@ Content-Type: application/json
 ```
 
 ### Home Camera
+
 ```bash
 POST /tracking/camera/home
 ```
 
 ### Update Settings
+
 ```bash
 POST /tracking/camera/settings
 Content-Type: application/json
@@ -260,11 +272,13 @@ Content-Type: application/json
 ```
 
 ### Get Status
+
 ```bash
 GET /tracking/camera/status
 ```
 
 Response:
+
 ```json
 {
   "status": "success",
@@ -293,6 +307,7 @@ Response:
 ### Camera Not Moving
 
 **Check:**
+
 - Is camera tracking mode selected?
 - Is "Enable Camera Movement" toggled on?
 - Are motors physically connected and powered?
@@ -300,6 +315,7 @@ Response:
 - Verify stepper controller initialized (check console logs)
 
 **Solution:**
+
 ```bash
 # Check logs
 python app.py
@@ -311,11 +327,13 @@ python app.py
 **Symptoms:** Camera rapidly moves back and forth
 
 **Causes:**
+
 - Dead zone too small
 - Steps-per-pixel ratio too high
 - Object detection unstable
 
 **Solution:**
+
 - Increase dead zone to 30-40 pixels
 - Reduce steps-per-pixel calibration values
 - Improve lighting for better object detection
@@ -325,6 +343,7 @@ python app.py
 **Cause:** Stepper motor direction inverted
 
 **Solution:**
+
 - Swap motor direction pin wiring, or
 - Modify direction logic in code (invert HIGH/LOW in `step()` method)
 
@@ -333,6 +352,7 @@ python app.py
 **Cause:** Position tracking lost or accumulated error
 
 **Solution:**
+
 - Click "Home Camera to Center"
 - Check limit switches if equipped
 - Recalibrate if issue persists
@@ -340,11 +360,13 @@ python app.py
 ### Limit Switch Triggered Unexpectedly
 
 **Check:**
+
 - Limit switch wiring (should be normally open, active low)
 - Pull-up resistors enabled in GPIO configuration
 - Physical alignment of switches
 
 **Solution:**
+
 ```python
 # In stepper_controller.py, verify:
 self.gpio.setup(self.x_cw_limit, PinMode.INPUT, PullMode.UP)
@@ -355,14 +377,17 @@ self.gpio.setup(self.x_cw_limit, PinMode.INPUT, PullMode.UP)
 **Message:** "Camera tracking not available. Stepper controller not initialized."
 
 **Causes:**
+
 - Hardware not connected
 - Missing configuration file
 - GPIO initialization failed
 
 **Solution:**
+
 1. Check `laserturret.conf` exists
 2. Verify GPIO library installed (lgpio or RPi.GPIO)
 3. Run with mock mode for testing:
+
    ```python
    # In app.py, line 103:
    gpio = get_gpio_backend(mock=True)
@@ -371,17 +396,20 @@ self.gpio.setup(self.x_cw_limit, PinMode.INPUT, PullMode.UP)
 ## Performance Considerations
 
 ### Latency
+
 - Object detection: ~30-50ms
 - Step calculation: <1ms
 - Motor movement: Depends on distance and speed
 - Total latency: 50-500ms depending on distance
 
 ### Accuracy
+
 - Positioning accuracy: ±5-10 pixels with proper calibration
 - Repeatability: High (stepper motors don't lose steps under normal load)
 - Drift: Minimal if motors maintain position hold
 
 ### Object Tracking Compatibility
+
 - Works with face detection
 - Works with eye detection
 - Works with body detection
@@ -391,6 +419,7 @@ self.gpio.setup(self.x_cw_limit, PinMode.INPUT, PullMode.UP)
 ## Integration with Existing Features
 
 ### Compatible Features
+
 - ✅ Object detection (face, eye, body, smile)
 - ✅ Motion detection
 - ✅ Laser fire control
@@ -400,11 +429,13 @@ self.gpio.setup(self.x_cw_limit, PinMode.INPUT, PullMode.UP)
 - ✅ FPS monitoring
 
 ### Incompatible Features
+
 - ❌ Preset positions (designed for crosshair mode)
 - ❌ Pattern sequences (designed for crosshair mode)
 - ❌ Manual crosshair click (no effect in camera mode)
 
 ### Mode Switching
+
 - Switching modes automatically disables incompatible features
 - Camera returns to center when switching to crosshair mode
 - Previous tracking settings preserved
@@ -427,6 +458,7 @@ templates/
 ### Key Classes
 
 **StepperController**: Main controller for stepper motors
+
 - `enable()` / `disable()`: Control motor power
 - `step()`: Execute steps on an axis with acceleration
 - `move_to_center_object()`: Calculate and execute tracking movement
@@ -434,12 +466,14 @@ templates/
 - `calibrate_steps_per_pixel()`: Update calibration
 
 **StepperCalibration**: Configuration data class
+
 - Steps-per-pixel ratios
 - Current position tracking
 - Movement limits
 - Speed and dead zone settings
 
 ### Threading Model
+
 - Main thread: Flask app and frame generation
 - Movement threads: Spawned for each tracking movement
 - Thread-safe with locks on shared state
@@ -448,6 +482,7 @@ templates/
 ## Future Enhancements
 
 ### Planned Features
+
 - [ ] Auto-calibration routine using known markers
 - [ ] Saved calibration profiles for different setups
 - [ ] Velocity-based tracking (predict object movement)
@@ -457,6 +492,7 @@ templates/
 - [ ] Movement logging and replay
 
 ### Hardware Improvements
+
 - Support for servo motors as alternative to steppers
 - Closed-loop stepper control with encoders
 - Multi-camera support
@@ -469,6 +505,7 @@ This camera tracking feature is part of the laser-turret project and follows the
 ## Support
 
 For issues, questions, or contributions:
+
 - Check existing issues on GitHub
 - Review this documentation thoroughly
 - Test with mock mode before hardware deployment
