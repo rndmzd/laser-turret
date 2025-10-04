@@ -2276,6 +2276,12 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
+                        // Update tracking mode dropdown if needed
+                        if (data.mode) {
+                            document.getElementById('tracking-mode').value = data.mode;
+                            updateTrackingModeUI(data.mode);
+                        }
+                        
                         if (data.available) {
                             document.getElementById('camera-system-status').textContent = 'Available';
                             document.getElementById('camera-enabled-status').textContent = 
