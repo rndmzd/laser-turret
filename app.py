@@ -1502,6 +1502,48 @@ def tracking_status():
             }
         })
 
+@app.route('/tracking/camera/move_to_position', methods=['POST'])
+def move_camera_to_position():
+    """
+    Move camera to recenter a clicked position.
+    User clicks on video at position (x, y), and camera moves to bring that point to center.
+    """
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        if not camera_tracking_enabled:
+            return jsonify({'status': 'error', 'message': 'Camera tracking not enabled'}), 400
+        
+        data = request.get_json()
+        click_x = int(data.get('x'))
+        click_y = int(data.get('y'))
+        
+        # Update crosshair to clicked position first
+        with crosshair_lock:
+            crosshair_pos['x'] = click_x
+            crosshair_pos['y'] = click_y
+        
+        # Move camera to recenter the clicked position in background thread
+        def move_camera():
+            moved = stepper_controller.move_to_center_object(
+                click_x, click_y, CAMERA_WIDTH, CAMERA_HEIGHT
+            )
+            if moved:
+                logger.info(f"Camera moved to recenter position ({click_x}, {click_y})")
+            else:
+                logger.debug(f"Click at ({click_x}, {click_y}) within dead zone, no movement needed")
+        
+        threading.Thread(target=move_camera, daemon=True).start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Camera moving to recenter clicked position',
+            'position': {'x': click_x, 'y': click_y}
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 if __name__ == '__main__':
     initialize_camera()
     initialize_stepper_controller()  # Initialize stepper controller

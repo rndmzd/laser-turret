@@ -1044,7 +1044,7 @@
             event.target.classList.add('active');
         }
 
-        // Crosshair positioning
+        // Crosshair positioning with camera movement support
         document.getElementById('video-stream').addEventListener('click', function(e) {
             const rect = this.getBoundingClientRect();
             const scaleX = CAMERA_WIDTH / this.offsetWidth;
@@ -1054,11 +1054,39 @@
             const cameraX = Math.round(clickX * scaleX);
             const cameraY = Math.round(clickY * scaleY);
             document.getElementById('position').textContent = `X: ${cameraX}, Y: ${cameraY}`;
-            fetch('/update_crosshair', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ x: cameraX, y: cameraY })
-            });
+            
+            // Check if camera tracking is enabled and active
+            const trackingMode = document.getElementById('tracking-mode').value;
+            const cameraTrackingEnabled = document.getElementById('camera-tracking-enabled').checked;
+            
+            if (trackingMode === 'camera' && cameraTrackingEnabled) {
+                // Camera movement mode: move camera to recenter clicked position
+                fetch('/tracking/camera/move_to_position', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: cameraX, y: cameraY })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Visual feedback
+                        showStatus('tracking-status-message', true, 'Camera moving to recenter position...');
+                    } else {
+                        showStatus('tracking-status-message', false, data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error moving camera to position:', error);
+                    showStatus('tracking-status-message', false, 'Failed to move camera');
+                });
+            } else {
+                // Crosshair mode: just update crosshair position
+                fetch('/update_crosshair', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: cameraX, y: cameraY })
+                });
+            }
         });
 
         // Reset crosshair to center
@@ -2017,14 +2045,22 @@
             document.getElementById('camera-step-delay-value').textContent = (value * 1000).toFixed(1) + 'ms';
         }
 
+        // Track when sliders are being actively modified
+        let lastSliderModification = {
+            xSteps: 0,
+            ySteps: 0
+        };
+
         function updateCameraXStepsValue() {
             const value = parseFloat(document.getElementById('camera-x-steps-per-pixel').value).toFixed(2);
             document.getElementById('camera-x-steps-value').textContent = value;
+            lastSliderModification.xSteps = Date.now();
         }
 
         function updateCameraYStepsValue() {
             const value = parseFloat(document.getElementById('camera-y-steps-per-pixel').value).toFixed(2);
             document.getElementById('camera-y-steps-value').textContent = value;
+            lastSliderModification.ySteps = Date.now();
         }
 
         function applyCameraTrackingSettings() {
@@ -2096,17 +2132,31 @@
                                 document.getElementById('camera-moving').textContent = 
                                     controller.moving ? 'Yes' : 'No';
                                 
-                                // Update UI sliders with current values
+                                // Update UI sliders with current values only if not recently modified
+                                // This prevents the sliders from resetting while the user is adjusting them
                                 if (controller.calibration) {
-                                    document.getElementById('camera-x-steps-per-pixel').value = 
-                                        controller.calibration.x_steps_per_pixel;
-                                    document.getElementById('camera-y-steps-per-pixel').value = 
-                                        controller.calibration.y_steps_per_pixel;
+                                    const now = Date.now();
+                                    const modificationThreshold = 3000; // 3 seconds
+                                    
+                                    // Only update X steps slider if it hasn't been modified recently
+                                    if (now - lastSliderModification.xSteps > modificationThreshold) {
+                                        document.getElementById('camera-x-steps-per-pixel').value = 
+                                            controller.calibration.x_steps_per_pixel;
+                                        document.getElementById('camera-x-steps-value').textContent = 
+                                            controller.calibration.x_steps_per_pixel.toFixed(2);
+                                    }
+                                    
+                                    // Only update Y steps slider if it hasn't been modified recently
+                                    if (now - lastSliderModification.ySteps > modificationThreshold) {
+                                        document.getElementById('camera-y-steps-per-pixel').value = 
+                                            controller.calibration.y_steps_per_pixel;
+                                        document.getElementById('camera-y-steps-value').textContent = 
+                                            controller.calibration.y_steps_per_pixel.toFixed(2);
+                                    }
+                                    
+                                    // Dead zone can always be updated (not reported as problematic)
                                     document.getElementById('camera-dead-zone').value = 
                                         controller.calibration.dead_zone_pixels;
-                                    
-                                    updateCameraXStepsValue();
-                                    updateCameraYStepsValue();
                                     updateCameraDeadZoneValue();
                                 }
                             }
