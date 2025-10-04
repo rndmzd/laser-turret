@@ -180,5 +180,6 @@ camera_calibration.json
 # WINDSURF
 .windsurf
 
-# Training data
-training/
+# Training data (allow requirements file)
+training/*
+!training/requirements-train.txt
