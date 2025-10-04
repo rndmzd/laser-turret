@@ -167,9 +167,9 @@ pip install tflite-runtime
 
 For complete details, see:
 - **[TENSORFLOW_INTEGRATION.md](TENSORFLOW_INTEGRATION.md)** - Complete guide
-- **[laserturret.conf.example](laserturret.conf.example)** - Configuration options
-- **[scripts/benchmark_detection.py](scripts/benchmark_detection.py)** - Benchmark tool
-- **[laserturret/tflite_detector.py](laserturret/tflite_detector.py)** - Source code
+- **[laserturret.conf.example](../laserturret.conf.example)** - Configuration options
+- **[scripts/benchmark_detection.py](../scripts/benchmark_detection.py)** - Benchmark tool
+- **[laserturret/tflite_detector.py](../laserturret/tflite_detector.py)** - Source code
 
 ## Comparison
 

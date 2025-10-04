@@ -333,7 +333,7 @@ laser-turret/
 
 ## Contributing
 
-See `REVIEW.md` for:
+See `docs/REVIEW.md` for:
 
 - Known issues and bugs
 - Refactoring opportunities
