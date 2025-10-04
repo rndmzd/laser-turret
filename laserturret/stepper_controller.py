@@ -235,7 +235,7 @@ class StepperController:
         
         return steps
     
-    def step(self, axis: str, steps: int, delay: Optional[float] = None):
+    def step(self, axis: str, steps: int, delay: Optional[float] = None, bypass_limits: bool = False):
         """
         Execute steps on specified axis with acceleration.
         
@@ -243,6 +243,7 @@ class StepperController:
             axis: 'x' or 'y'
             steps: Number of steps (signed - positive or negative for direction)
             delay: Optional delay between steps (uses calibration default if None)
+            bypass_limits: If True, bypass software position limits (used during calibration)
         """
         if not self.enabled:
             logger.warning("Cannot step - motors not enabled")
@@ -251,11 +252,12 @@ class StepperController:
         if steps == 0:
             return
         
-        # Apply software limits
-        steps = self.check_software_limits(axis, steps)
-        if steps == 0:
-            logger.debug(f"Movement constrained by software limits on {axis} axis")
-            return
+        # Apply software limits unless bypassed (e.g., during calibration)
+        if not bypass_limits:
+            steps = self.check_software_limits(axis, steps)
+            if steps == 0:
+                logger.debug(f"Movement constrained by software limits on {axis} axis")
+                return
         
         # Determine pins and direction
         if axis == 'x':
@@ -469,9 +471,9 @@ class StepperController:
                 
                 report('info', f'Moving to center position: X={x_center}, Y={y_center}')
                 
-                # Move to center
-                self.step('x', x_center - self.calibration.x_position)
-                self.step('y', y_center - self.calibration.y_position)
+                # Move to center (bypass limits since we're still calibrating)
+                self.step('x', x_center - self.calibration.x_position, bypass_limits=True)
+                self.step('y', y_center - self.calibration.y_position, bypass_limits=True)
                 
                 # Set this as home (0, 0)
                 self.calibration.x_position = 0
@@ -534,7 +536,7 @@ class StepperController:
                 report('info', f'{axis.upper()} axis: positive limit switch found')
                 break
             
-            self.step(axis, 1, delay=search_speed)
+            self.step(axis, 1, delay=search_speed, bypass_limits=True)
             steps_moved += 1
             
             # Report progress every 500 steps
@@ -547,7 +549,7 @@ class StepperController:
         
         # Return to start
         report('info', f'{axis.upper()} axis: returning to start position')
-        self.step(axis, -steps_moved, delay=search_speed)
+        self.step(axis, -steps_moved, delay=search_speed, bypass_limits=True)
         
         # Find negative limit
         report('info', f'{axis.upper()} axis: searching negative direction')
@@ -558,7 +560,7 @@ class StepperController:
                 report('info', f'{axis.upper()} axis: negative limit switch found')
                 break
             
-            self.step(axis, -1, delay=search_speed)
+            self.step(axis, -1, delay=search_speed, bypass_limits=True)
             steps_moved += 1
             
             # Report progress every 500 steps
