@@ -57,8 +57,8 @@ background_subtractor = None
 last_motion_center = None
 
 # Object/Face detection
-object_detection_enabled = True  # Enabled by default for crosshair tracking
-object_auto_track = True  # Auto-track enabled by default
+object_detection_enabled = False
+object_auto_track = False
 detection_mode = 'face'  # 'face', 'eye', 'body', 'smile'
 target_priority = 'largest'  # 'largest', 'closest', 'leftmost', 'rightmost'
 object_lock = threading.Lock()
