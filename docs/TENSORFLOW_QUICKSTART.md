@@ -43,24 +43,28 @@ The first run will download the model (~4MB). Subsequent runs are instant.
 ## Example Configurations
 
 ### Track People Only
+
 ```ini
 detection_method = tflite
 tflite_filter_classes = person
 ```
 
 ### Track Pets
+
 ```ini
 detection_method = tflite
 tflite_filter_classes = cat,dog,bird
 ```
 
 ### Track Everything (Default)
+
 ```ini
 detection_method = tflite
 tflite_filter_classes =
 ```
 
 ### Use Old Method (Faces Only)
+
 ```ini
 detection_method = haar
 ```
@@ -74,6 +78,7 @@ python scripts/benchmark_detection.py
 ```
 
 Example output:
+
 ```
 HAAR:        117.4 FPS, Avg Detections: 1.2
 TFLITE:       23.7 FPS, Avg Detections: 2.8
@@ -115,22 +120,26 @@ curl http://localhost:5000/object_detection/status
 ## Performance Tips
 
 1. **Lower camera resolution** for faster inference:
+
    ```python
    CAMERA_WIDTH = 1280  # Instead of 1920
    CAMERA_HEIGHT = 720  # Instead of 1080
    ```
 
 2. **Filter to specific classes**:
+
    ```ini
    tflite_filter_classes = person,cat,dog
    ```
 
 3. **Increase confidence threshold** (fewer false positives):
+
    ```ini
    tflite_confidence = 0.7  # Instead of 0.5
    ```
 
 4. **Use Coral USB Accelerator** ($60, 2-3x speedup):
+
    ```ini
    use_coral = true
    ```
@@ -140,6 +149,7 @@ curl http://localhost:5000/object_detection/status
 **Problem:** `TensorFlow Lite not available`
 
 **Solution:**
+
 ```bash
 pip install tflite-runtime
 ```
@@ -149,6 +159,7 @@ pip install tflite-runtime
 **Problem:** Low FPS (< 15)
 
 **Solutions:**
+
 - Lower camera resolution
 - Increase confidence threshold
 - Switch to `ssd_mobilenet_v2` (faster model)
@@ -160,12 +171,14 @@ pip install tflite-runtime
 **Problem:** Too many false detections
 
 **Solutions:**
+
 - Increase confidence: `tflite_confidence = 0.7`
 - Filter classes: `tflite_filter_classes = person`
 
 ## Full Documentation
 
 For complete details, see:
+
 - **[TENSORFLOW_INTEGRATION.md](TENSORFLOW_INTEGRATION.md)** - Complete guide
 - **[laserturret.conf.example](../laserturret.conf.example)** - Configuration options
 - **[scripts/benchmark_detection.py](../scripts/benchmark_detection.py)** - Benchmark tool
@@ -184,11 +197,13 @@ For complete details, see:
 ## Recommendation
 
 **Use TFLite** if you want:
+
 - Multiple object types (pets, toys, people, etc.)
 - Better accuracy and fewer false positives
 - Future-proof solution
 
 **Use Haar** if you:
+
 - Only need face detection
 - Want maximum simplicity
 - Need guaranteed 30+ FPS without extra hardware
