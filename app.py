@@ -1616,8 +1616,8 @@ def auto_calibrate_camera():
         if stepper_controller is None:
             return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
         
-        if not camera_tracking_enabled:
-            return jsonify({'status': 'error', 'message': 'Camera tracking not enabled'}), 400
+        # Auto-calibration can run independently to establish initial calibration values
+        # No need to check if camera_tracking_enabled - calibration comes first!
         
         # Run calibration in background thread
         def calibrate():
