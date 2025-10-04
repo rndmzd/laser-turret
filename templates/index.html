@@ -554,7 +554,7 @@
                             <div class="slider-control">
                                 <label>Movement Speed</label>
                                 <div class="slider-wrapper">
-                                    <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.001" step="0.0005" oninput="updateCameraStepDelayValue()">
+                                    <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
                                     <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
                                 </div>
                             </div>
@@ -2110,8 +2110,10 @@
         }
 
         function updateCameraStepDelayValue() {
-            const value = parseFloat(document.getElementById('camera-step-delay').value);
-            document.getElementById('camera-step-delay-value').textContent = (value * 1000).toFixed(1) + 'ms';
+            const sliderValue = parseFloat(document.getElementById('camera-step-delay').value);
+            // Invert slider: higher slider value = lower delay (faster)
+            const actualDelay = 0.0055 - sliderValue;
+            document.getElementById('camera-step-delay-value').textContent = (actualDelay * 1000).toFixed(1) + 'ms';
         }
 
         // Track whether calibration sliders have been initialized from server
@@ -2129,7 +2131,9 @@
 
         function applyCameraTrackingSettings() {
             const deadZone = parseInt(document.getElementById('camera-dead-zone').value);
-            const stepDelay = parseFloat(document.getElementById('camera-step-delay').value);
+            const sliderValue = parseFloat(document.getElementById('camera-step-delay').value);
+            // Invert slider: higher slider value = lower delay (faster)
+            const stepDelay = 0.0055 - sliderValue;
             
             fetch('/tracking/camera/settings', {
                 method: 'POST',
@@ -2376,6 +2380,9 @@
         
         // Initialize camera tracking status
         updateCameraTrackingStatus();
+        
+        // Initialize camera step delay display
+        updateCameraStepDelayValue();
         
         setInterval(updateStats, 1000);
         
