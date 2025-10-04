@@ -1621,8 +1621,20 @@ def auto_calibrate_camera():
         
         # Run calibration in background thread
         def calibrate():
-            result = stepper_controller.auto_calibrate()
-            print(f"Auto-calibration completed: {result}")
+            # Temporarily enable motors for calibration if not already enabled
+            was_enabled = stepper_controller.enabled
+            if not was_enabled:
+                print("Temporarily enabling motors for auto-calibration")
+                stepper_controller.enable()
+            
+            try:
+                result = stepper_controller.auto_calibrate()
+                print(f"Auto-calibration completed: {result}")
+            finally:
+                # Restore previous motor state
+                if not was_enabled:
+                    print("Disabling motors after auto-calibration")
+                    stepper_controller.disable()
         
         threading.Thread(target=calibrate, daemon=True).start()
         
