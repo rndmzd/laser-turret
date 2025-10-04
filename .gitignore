@@ -184,3 +184,5 @@ camera_calibration.json
 training/*
 !training/requirements-train.txt
 env*/
+
+laserturret.conf
