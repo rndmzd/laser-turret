@@ -68,6 +68,15 @@ AVAILABLE_MODELS = {
         'labels': COCO_LABELS,
         'description': 'Better accuracy, slightly slower (80 classes)',
         'fps_estimate': '15-20 FPS on Pi 5'
+    },
+    'balloon_lite0': {
+        'name': 'Balloon Detector (EfficientDet-Lite0)',
+        'url': 'local',
+        'file': 'balloon_lite0.tflite',
+        'input_size': (320, 320),
+        'labels': ['balloon'],
+        'description': 'Custom trained balloon detector',
+        'fps_estimate': '15-25 FPS on Pi 5'
     }
 }
 
@@ -118,6 +127,9 @@ class TFLiteDetector:
             print(f"Using cached model: {model_path}")
             return model_path
         
+        if model_info.get('url') == 'local':
+            raise FileNotFoundError(f"Local model not found: {model_path}. Place your TFLite file at this path.")
+
         print(f"Downloading {model_info['name']}...")
         print(f"URL: {model_info['url']}")
         

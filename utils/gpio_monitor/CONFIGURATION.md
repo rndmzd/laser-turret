@@ -69,26 +69,33 @@ buffer_count = 2
 ## Features
 
 ### ✅ Type Safety
+
 All values are properly typed and converted:
+
 - `int` for pin numbers and counts
 - `float` for delays and scaling
 - `str` for addresses and topics
 - `bool` for flags
 
 ### ✅ Validation
+
 Configuration is validated on load:
+
 - Pin numbers must be valid BCM GPIO (2-27)
 - No duplicate pin assignments
 - Microsteps must be 1, 2, 4, 8, or 16
 - MQTT port must be 1-65535
 
 ### ✅ Defaults
+
 Built-in defaults for all values, so config file is optional:
+
 ```python
 config = get_config()  # Works even without laserturret.conf
 ```
 
 ### ✅ Caching
+
 Values are cached after first access for performance.
 
 ## API Reference
@@ -272,15 +279,18 @@ except ConfigurationError as e:
 The config manager validates:
 
 ### Pin Assignments
+
 - All pins must be valid BCM GPIO (2-27)
 - No duplicate pin assignments
 - Raises `ConfigurationError` if invalid
 
 ### Motor Settings
+
 - Microsteps must be 1, 2, 4, 8, or 16
 - Steps per revolution must be positive
 
 ### MQTT Settings
+
 - Port must be 1-65535
 
 ### Error Handling
@@ -432,7 +442,8 @@ signal.signal(signal.SIGHUP, reload_config)
 ConfigurationError: Configuration file not found: laserturret.conf
 ```
 
-**Solution:** 
+**Solution:**
+
 - Copy `laserturret.conf.example` to `laserturret.conf`
 - Or use `config.load(required=False)` to use defaults
 
@@ -464,7 +475,7 @@ ConfigurationError: Invalid microsteps value: 5. Must be 1, 2, 4, 8, or 16
 
 1. **Use global instance** - `get_config()` for singleton pattern
 2. **Load early** - Load config at application startup
-3. **Validate on load** - Always call `config.load()` 
+3. **Validate on load** - Always call `config.load()`
 4. **Use type-safe methods** - `get_laser_pin()` instead of raw access
 5. **Handle errors** - Catch `ConfigurationError` appropriately
 6. **Document custom sections** - If extending config

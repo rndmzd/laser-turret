@@ -62,6 +62,7 @@ pip install -r requirements.txt
 ```
 
 This will install:
+
 - `tflite-runtime` - TensorFlow Lite runtime (~10MB)
 
 ### 2. Optional: Coral USB Accelerator
@@ -107,12 +108,14 @@ tflite_filter_classes =
 ### Available Models
 
 #### ssd_mobilenet_v2 (Recommended)
+
 - **Speed**: 20-25 FPS on Pi 5
 - **Accuracy**: Good
 - **Classes**: 80 (COCO dataset)
 - **Best for**: General-purpose detection
 
 #### efficientdet_lite0
+
 - **Speed**: 15-20 FPS on Pi 5
 - **Accuracy**: Better
 - **Classes**: 80 (COCO dataset)
@@ -145,12 +148,14 @@ python app.py
 ```
 
 The application will:
+
 1. Load configuration from `laserturret.conf`
 2. Initialize the selected detection method
 3. Download TFLite model if needed (first run only)
 4. Start the web interface
 
 Console output:
+
 ```
 Initializing TFLite detector: ssd_mobilenet_v2
   Coral accelerator: False
@@ -167,6 +172,7 @@ TFLite detector initialized successfully
 **Method 1: Configuration File**
 
 Edit `laserturret.conf`:
+
 ```ini
 detection_method = haar  # or 'tflite'
 ```
@@ -196,6 +202,7 @@ python scripts/benchmark_detection.py --test-images
 ```
 
 **Example Output:**
+
 ```
 BENCHMARK RESULTS
 ================================================================================
@@ -230,6 +237,7 @@ Recommendation:
 ### 1. Lower Resolution
 
 Edit camera configuration:
+
 ```python
 CAMERA_WIDTH = 1280  # Instead of 1920
 CAMERA_HEIGHT = 720  # Instead of 1080
@@ -268,6 +276,7 @@ tflite_filter_classes = person,cat,dog
 **Error**: `TensorFlow Lite not available`
 
 **Solution**:
+
 ```bash
 pip install tflite-runtime
 # or
@@ -279,6 +288,7 @@ pip install tensorflow-lite
 **Error**: `Error downloading model`
 
 **Solution**: Download manually and place in `models/tflite/`:
+
 - [SSD MobileNet V2](https://storage.googleapis.com/download.tensorflow.org/models/tflite/coco_ssd_mobilenet_v1_1.0_quant_2018_06_29.zip)
 
 ### Low FPS
@@ -286,6 +296,7 @@ pip install tensorflow-lite
 **Symptoms**: < 15 FPS on Pi 5
 
 **Solutions**:
+
 1. Use lower camera resolution
 2. Switch to faster model (`ssd_mobilenet_v2`)
 3. Consider Coral USB Accelerator
@@ -296,6 +307,7 @@ pip install tensorflow-lite
 **Error**: `Could not open any GPIO chip` (wrong error, should be Coral-specific)
 
 **Solution**:
+
 ```bash
 # Check Coral is connected
 lsusb | grep "Global Unichip"
@@ -327,6 +339,7 @@ AVAILABLE_MODELS = {
 ```
 
 4. Update config:
+
 ```ini
 tflite_model = my_model
 ```
@@ -370,19 +383,22 @@ stats = detector.get_stats()
 
 ## Recommendations
 
-### Use Haar Cascades If:
+### Use Haar Cascades If
+
 - ✅ You only need face detection
 - ✅ You prioritize simplicity
 - ✅ You need 30+ FPS guaranteed
 - ✅ You have no budget for Coral
 
-### Use TFLite (CPU) If:
+### Use TFLite (CPU) If
+
 - ✅ You need multiple object classes
 - ✅ You want better accuracy
 - ✅ 15-25 FPS is acceptable
 - ✅ You want to future-proof your system
 
-### Use TFLite (Coral) If:
+### Use TFLite (Coral) If
+
 - ✅ You need both speed AND accuracy
 - ✅ You can invest $60 in hardware
 - ✅ You want 30+ FPS with 80+ classes
@@ -404,6 +420,7 @@ TensorFlow Lite provides a significant upgrade in detection capability while mai
 ## Support
 
 Issues or questions? Check:
+
 - Configuration: `laserturret.conf.example`
 - Source code: `laserturret/tflite_detector.py`
 - Benchmark: `scripts/benchmark_detection.py`

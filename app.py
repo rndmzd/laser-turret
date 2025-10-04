@@ -11,6 +11,7 @@ from datetime import datetime
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
 from laserturret.stepper_controller import StepperController
+from laserturret.lasercontrol import LaserControl
 
 # Try to import TFLite detector
 try:
@@ -97,9 +98,11 @@ laser_burst_count = 1  # Number of pulses in burst mode
 laser_burst_delay = 0.1  # Delay between burst pulses
 laser_cooldown = 0.5  # Minimum time between fire commands
 laser_auto_fire = False  # Auto-fire when object/motion detected
+laser_power = 100  # Laser power level (0-100%)
 laser_lock = threading.Lock()
 last_fire_time = None
 fire_count = 0  # Track total fires
+laser_control = None  # LaserControl instance
 
 # Camera tracking mode (stepper motor control)
 tracking_mode = 'crosshair'  # 'crosshair' or 'camera'
@@ -117,6 +120,47 @@ crosshair_dead_zone_pixels = 20
 motion_bg_history = 500
 motion_learning_rate = 0.01
 motion_kernel_size = 5
+
+balloon_v_threshold = 60
+balloon_min_area = 2000
+balloon_circularity_min = 0.55
+balloon_fill_ratio_min = 0.5
+balloon_aspect_ratio_min = 0.6
+balloon_aspect_ratio_max = 1.6
+
+def initialize_laser_control():
+    """Initialize laser control with PWM"""
+    global laser_control, laser_power
+    
+    try:
+        # Get configuration and GPIO backend
+        config = get_config()
+        gpio = get_gpio_backend(mock=False)  # Set to True for testing without hardware
+        
+        # Get laser configuration
+        laser_pin = config.get('Laser', 'laser_pin', fallback=12)
+        laser_max_power = config.get('Laser', 'laser_max_power', fallback=100)
+        
+        # Initialize laser control
+        laser_control = LaserControl(
+            gpio_pin=int(laser_pin),
+            pwm_frequency=1000,
+            initial_power=0,
+            name="MainLaser",
+            gpio_backend=gpio
+        )
+        
+        # Set initial power from config (capped by max power)
+        laser_power = min(laser_power, int(laser_max_power))
+        laser_control.set_power(laser_power)
+        
+        print(f"Laser control initialized successfully on GPIO {laser_pin}")
+        print(f"Max power: {laser_max_power}%, Current power: {laser_power}%")
+        
+    except Exception as e:
+        print(f"WARNING: Failed to initialize laser control: {e}")
+        print("Laser will operate in simulation mode only.")
+        laser_control = None
 
 def initialize_stepper_controller():
     """Initialize stepper motor controller for camera tracking"""
@@ -204,7 +248,7 @@ def monitor_exposure():
         time.sleep(0.2)
 
 def fire_laser():
-    """Fire the laser (simulate pulse - integrate with GPIO for actual hardware)"""
+    """Fire the laser using LaserControl with PWM power control"""
     global last_fire_time, fire_count
     
     current_time = time.time()
@@ -219,16 +263,14 @@ def fire_laser():
     try:
         # Execute burst
         for pulse_num in range(laser_burst_count):
-            # Simulate laser pulse (replace with GPIO control for real hardware)
-            print(f"🔴 LASER FIRE! Pulse {pulse_num + 1}/{laser_burst_count} - Duration: {laser_pulse_duration}s")
-            
-            # In real implementation, turn GPIO pin HIGH here
-            # GPIO.output(LASER_PIN, GPIO.HIGH)
-            
-            time.sleep(laser_pulse_duration)
-            
-            # In real implementation, turn GPIO pin LOW here
-            # GPIO.output(LASER_PIN, GPIO.LOW)
+            if laser_control:
+                # Real hardware: Use LaserControl with PWM
+                print(f"🔴 LASER FIRE! Pulse {pulse_num + 1}/{laser_burst_count} - Power: {laser_power}% - Duration: {laser_pulse_duration}s")
+                laser_control.pulse(laser_pulse_duration, power_level=laser_power)
+            else:
+                # Simulation mode
+                print(f"🔴 LASER FIRE (SIM)! Pulse {pulse_num + 1}/{laser_burst_count} - Power: {laser_power}% - Duration: {laser_pulse_duration}s")
+                time.sleep(laser_pulse_duration)
             
             fire_count += 1
             
@@ -237,7 +279,7 @@ def fire_laser():
                 time.sleep(laser_burst_delay)
         
         last_fire_time = current_time
-        return True, f'Fired {laser_burst_count} pulse(s)'
+        return True, f'Fired {laser_burst_count} pulse(s) at {laser_power}% power'
     
     except Exception as e:
         return False, str(e)
@@ -368,6 +410,22 @@ def initialize_cascades():
         print("Warning: Could not find Haar cascade files. Object detection will not work.")
         print("Please install opencv-data package or download cascade files manually.")
 
+def initialize_balloon_settings():
+    """Initialize balloon detection thresholds from config"""
+    global balloon_v_threshold, balloon_min_area, balloon_circularity_min
+    global balloon_fill_ratio_min, balloon_aspect_ratio_min, balloon_aspect_ratio_max
+    try:
+        config = get_config()
+        balloon_v_threshold = int(config.get_balloon_v_threshold())
+        balloon_min_area = int(config.get_balloon_min_area())
+        balloon_circularity_min = float(config.get_balloon_circularity_min())
+        balloon_fill_ratio_min = float(config.get_balloon_fill_ratio_min())
+        balloon_aspect_ratio_min = float(config.get_balloon_aspect_ratio_min())
+        balloon_aspect_ratio_max = float(config.get_balloon_aspect_ratio_max())
+        print("Balloon settings initialized from config")
+    except Exception as e:
+        print(f"Warning: Failed to initialize balloon settings from config: {e}")
+
 def detect_objects(frame):
     """Detect objects using either Haar Cascades or TensorFlow Lite"""
     global detected_objects, face_cascade, eye_cascade, body_cascade, smile_cascade
@@ -418,6 +476,36 @@ def detect_objects(frame):
             elif detection_mode == 'smile' and smile_cascade is not None:
                 smiles = smile_cascade.detectMultiScale(gray, scaleFactor=1.8, minNeighbors=20, minSize=(25, 25))
                 objects = [{'type': 'smile', 'rect': (x, y, w, h)} for x, y, w, h in smiles]
+            
+            elif detection_mode == 'balloon':
+                hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+                lower = np.array([0, 0, 0], dtype=np.uint8)
+                upper = np.array([179, 255, int(balloon_v_threshold)], dtype=np.uint8)
+                mask = cv2.inRange(hsv, lower, upper)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                detections = []
+                for c in contours:
+                    area = cv2.contourArea(c)
+                    if area < balloon_min_area:
+                        continue
+                    x, y, w, h = cv2.boundingRect(c)
+                    ar = w / float(h) if h > 0 else 0
+                    if ar < balloon_aspect_ratio_min or ar > balloon_aspect_ratio_max:
+                        continue
+                    peri = cv2.arcLength(c, True)
+                    if peri <= 0:
+                        continue
+                    circ = 4.0 * np.pi * area / (peri * peri)
+                    if circ < balloon_circularity_min:
+                        continue
+                    fill = area / float(w * h) if w > 0 and h > 0 else 0
+                    if fill < balloon_fill_ratio_min:
+                        continue
+                    detections.append({'type': 'balloon', 'rect': (x, y, w, h)})
+                objects = detections
     
     except Exception as e:
         print(f"Object detection error: {e}")
@@ -1217,7 +1305,15 @@ def object_detection_status():
             'objects_detected': len(detected_objects),
             'objects': [{'type': obj['type'], 'rect': [int(v) for v in obj['rect']]} for obj in detected_objects],
             'tflite_available': TFLITE_AVAILABLE,
-            'tflite_stats': tflite_stats
+            'tflite_stats': tflite_stats,
+            'balloon_settings': {
+                'v_threshold': int(balloon_v_threshold),
+                'min_area': int(balloon_min_area),
+                'circularity_min': float(balloon_circularity_min),
+                'fill_ratio_min': float(balloon_fill_ratio_min),
+                'aspect_ratio_min': float(balloon_aspect_ratio_min),
+                'aspect_ratio_max': float(balloon_aspect_ratio_max),
+            }
         })
 
 @app.route('/detection_method/switch', methods=['POST'])
@@ -1530,7 +1626,7 @@ def toggle_auto_fire():
 @app.route('/laser/settings', methods=['POST'])
 def update_laser_settings():
     """Update laser fire settings"""
-    global laser_pulse_duration, laser_burst_count, laser_burst_delay, laser_cooldown
+    global laser_pulse_duration, laser_burst_count, laser_burst_delay, laser_cooldown, laser_power
     
     try:
         data = request.get_json()
@@ -1546,13 +1642,23 @@ def update_laser_settings():
             
             if 'cooldown' in data:
                 laser_cooldown = float(data['cooldown'])
+            
+            if 'power' in data:
+                power = int(data['power'])
+                if 0 <= power <= 100:
+                    laser_power = power
+                    if laser_control:
+                        laser_control.set_power(laser_power)
+                else:
+                    return jsonify({'status': 'error', 'message': 'Power must be 0-100'}), 400
         
         return jsonify({
             'status': 'success',
             'pulse_duration': laser_pulse_duration,
             'burst_count': laser_burst_count,
             'burst_delay': laser_burst_delay,
-            'cooldown': laser_cooldown
+            'cooldown': laser_cooldown,
+            'power': laser_power
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -1576,7 +1682,9 @@ def laser_status():
             'cooldown': laser_cooldown,
             'cooldown_remaining': cooldown_remaining,
             'fire_count': fire_count,
-            'ready_to_fire': cooldown_remaining == 0
+            'ready_to_fire': cooldown_remaining == 0,
+            'power': laser_power,
+            'hardware_available': laser_control is not None
         })
 
 @app.route('/laser/reset_count', methods=['POST'])
@@ -1591,6 +1699,72 @@ def reset_fire_count():
         'status': 'success',
         'fire_count': 0
     })
+
+@app.route('/balloon/settings', methods=['POST'])
+def update_balloon_settings():
+    """Update balloon detection thresholds at runtime"""
+    global balloon_v_threshold, balloon_min_area, balloon_circularity_min
+    global balloon_fill_ratio_min, balloon_aspect_ratio_min, balloon_aspect_ratio_max
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({'status': 'error', 'message': 'Invalid JSON'}), 400
+
+        if 'v_threshold' in data:
+            v = int(data['v_threshold'])
+            if 0 <= v <= 255:
+                balloon_v_threshold = v
+            else:
+                return jsonify({'status': 'error', 'message': 'v_threshold must be 0-255'}), 400
+
+        if 'min_area' in data:
+            a = int(data['min_area'])
+            if a >= 0:
+                balloon_min_area = a
+            else:
+                return jsonify({'status': 'error', 'message': 'min_area must be >= 0'}), 400
+
+        if 'circularity_min' in data:
+            c = float(data['circularity_min'])
+            if 0.0 <= c <= 1.0:
+                balloon_circularity_min = c
+            else:
+                return jsonify({'status': 'error', 'message': 'circularity_min must be 0.0-1.0'}), 400
+
+        if 'fill_ratio_min' in data:
+            f = float(data['fill_ratio_min'])
+            if 0.0 <= f <= 1.0:
+                balloon_fill_ratio_min = f
+            else:
+                return jsonify({'status': 'error', 'message': 'fill_ratio_min must be 0.0-1.0'}), 400
+
+        if 'aspect_ratio_min' in data:
+            ar_min = float(data['aspect_ratio_min'])
+            if ar_min >= 0.0:
+                balloon_aspect_ratio_min = ar_min
+            else:
+                return jsonify({'status': 'error', 'message': 'aspect_ratio_min must be >= 0.0'}), 400
+
+        if 'aspect_ratio_max' in data:
+            ar_max = float(data['aspect_ratio_max'])
+            if ar_max >= 0.0:
+                balloon_aspect_ratio_max = ar_max
+            else:
+                return jsonify({'status': 'error', 'message': 'aspect_ratio_max must be >= 0.0'}), 400
+
+        return jsonify({
+            'status': 'success',
+            'balloon_settings': {
+                'v_threshold': int(balloon_v_threshold),
+                'min_area': int(balloon_min_area),
+                'circularity_min': float(balloon_circularity_min),
+                'fill_ratio_min': float(balloon_fill_ratio_min),
+                'aspect_ratio_min': float(balloon_aspect_ratio_min),
+                'aspect_ratio_max': float(balloon_aspect_ratio_max),
+            }
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 # Camera tracking mode endpoints
 @app.route('/tracking/mode', methods=['POST'])
@@ -1927,6 +2101,8 @@ def auto_calibrate_camera():
 
 if __name__ == '__main__':
     initialize_camera()
+    initialize_laser_control()  # Initialize laser control with PWM
     initialize_stepper_controller()  # Initialize stepper controller
     initialize_tflite_detector()  # Initialize TFLite detector if configured
+    initialize_balloon_settings()  # Initialize balloon settings from config
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
