@@ -513,6 +513,13 @@
                     </div>
 
                     <div id="camera-tracking-controls" style="display: none;">
+                        <!-- Calibration Required Warning -->
+                        <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
+                            <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
+                            <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
+                            <p style="font-size: 12px; opacity: 0.9;">This only needs to be done once. Calibration data will be saved and reloaded on restart.</p>
+                        </div>
+
                         <div class="control-group">
                             <h3>🎮 Camera Control</h3>
                             
@@ -524,12 +531,12 @@
                                 <span class="toggle-label">Enable Camera Movement</span>
                             </div>
 
-                            <button class="btn-primary" onclick="homeCameraPosition()" style="margin-top: 10px;">
+                            <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
                                 🏠 Home Camera to Center
                             </button>
 
                             <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
-                                <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected and calibrated before enabling camera tracking.
+                                <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
                             </div>
                         </div>
 
@@ -556,10 +563,43 @@
                         </div>
 
                         <div class="control-group">
+                            <h3>🎯 Manual Position Control</h3>
+                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                                Manually adjust camera position with arrow controls
+                            </p>
+
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 15px;">
+                                <button class="btn-secondary" onclick="manualMove('y', -100)" style="width: 60px; padding: 8px;">▲</button>
+                                <div style="display: flex; gap: 5px;">
+                                    <button class="btn-secondary" onclick="manualMove('x', -100)" style="width: 60px; padding: 8px;">◄</button>
+                                    <button class="btn-secondary" onclick="setHomePosition()" style="width: 80px; padding: 8px; font-size: 11px;">🏠 Set Home</button>
+                                    <button class="btn-secondary" onclick="manualMove('x', 100)" style="width: 60px; padding: 8px;">►</button>
+                                </div>
+                                <button class="btn-secondary" onclick="manualMove('y', 100)" style="width: 60px; padding: 8px;">▼</button>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Step Size</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="manual-step-size" min="10" max="500" value="100" step="10" oninput="updateManualStepSize()">
+                                    <span id="manual-step-size-value" class="slider-value">100</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
                             <h3>🔧 Calibration</h3>
                             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Calibrate steps-per-pixel ratio for accurate tracking
+                                Automatically find limits and set home position, or manually calibrate steps-per-pixel
                             </p>
+
+                            <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
+                                🤖 Auto-Calibrate & Home
+                            </button>
+
+                            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
+                                <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
+                            </div>
 
                             <div class="slider-control">
                                 <label>X-Axis Steps/Pixel</label>
@@ -577,7 +617,7 @@
                                 </div>
                             </div>
 
-                            <button class="btn-primary" onclick="applyCameraCalibration()">Save Calibration</button>
+                            <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
                         </div>
 
                         <div class="control-group">
@@ -587,7 +627,11 @@
                                 <span id="camera-system-status" class="stat-value">Initializing...</span>
                             </div>
                             <div class="stat-row">
-                                <span class="stat-label">Camera Enabled</span>
+                                <span class="stat-label">Calibration Status</span>
+                                <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Camera Movement Enabled</span>
                                 <span id="camera-enabled-status" class="stat-value">No</span>
                             </div>
                             <div class="stat-row">
@@ -2045,22 +2089,17 @@
             document.getElementById('camera-step-delay-value').textContent = (value * 1000).toFixed(1) + 'ms';
         }
 
-        // Track when sliders are being actively modified
-        let lastSliderModification = {
-            xSteps: 0,
-            ySteps: 0
-        };
+        // Track whether calibration sliders have been initialized from server
+        let calibrationSlidersInitialized = false;
 
         function updateCameraXStepsValue() {
             const value = parseFloat(document.getElementById('camera-x-steps-per-pixel').value).toFixed(2);
             document.getElementById('camera-x-steps-value').textContent = value;
-            lastSliderModification.xSteps = Date.now();
         }
 
         function updateCameraYStepsValue() {
             const value = parseFloat(document.getElementById('camera-y-steps-per-pixel').value).toFixed(2);
             document.getElementById('camera-y-steps-value').textContent = value;
-            lastSliderModification.ySteps = Date.now();
         }
 
         function applyCameraTrackingSettings() {
@@ -2115,6 +2154,123 @@
             });
         }
 
+        function updateManualStepSize() {
+            const value = document.getElementById('manual-step-size').value;
+            document.getElementById('manual-step-size-value').textContent = value;
+        }
+
+        function manualMove(axis, steps) {
+            // Use the step size from slider instead of hardcoded value
+            const stepSize = parseInt(document.getElementById('manual-step-size').value);
+            const actualSteps = steps > 0 ? stepSize : -stepSize;
+            
+            fetch('/tracking/camera/manual_move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    axis: axis,
+                    steps: actualSteps
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, data.message);
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to move camera');
+                console.error('Error moving camera:', error);
+            });
+        }
+
+        function setHomePosition() {
+            if (!confirm('Set current position as home (0, 0)?')) return;
+            
+            fetch('/tracking/camera/set_home', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, data.message);
+                    updateCameraTrackingStatus();
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to set home position');
+                console.error('Error setting home position:', error);
+            });
+        }
+
+        function runAutoCalibration() {
+            if (!confirm('Run automatic calibration? This will move the camera through its full range of motion and may take several minutes. Ensure the area is clear.')) return;
+            
+            fetch('/tracking/camera/auto_calibrate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, data.message);
+                    // Poll status more frequently during calibration
+                    setTimeout(() => {
+                        updateCameraTrackingStatus();
+                    }, 5000);
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to start auto-calibration');
+                console.error('Error starting auto-calibration:', error);
+            });
+        }
+
+        function updateCalibrationUI(isCalibrated, timestamp) {
+            // Update calibration status display
+            if (isCalibrated) {
+                document.getElementById('camera-calibration-status').textContent = 'Calibrated ✓';
+                document.getElementById('camera-calibration-status').style.color = '#28a745';
+                document.getElementById('calibration-required-warning').style.display = 'none';
+                
+                // Enable controls
+                document.getElementById('camera-tracking-enabled').disabled = false;
+                document.getElementById('home-camera-btn').disabled = false;
+                
+                // Enable manual control buttons
+                document.querySelectorAll('[onclick^="manualMove"]').forEach(btn => {
+                    btn.disabled = false;
+                });
+                document.querySelectorAll('[onclick="setHomePosition()"]').forEach(btn => {
+                    btn.disabled = false;
+                });
+            } else {
+                document.getElementById('camera-calibration-status').textContent = 'Not Calibrated';
+                document.getElementById('camera-calibration-status').style.color = '#dc3545';
+                document.getElementById('calibration-required-warning').style.display = 'block';
+                
+                // Disable controls
+                document.getElementById('camera-tracking-enabled').disabled = true;
+                document.getElementById('camera-tracking-enabled').checked = false;
+                document.getElementById('home-camera-btn').disabled = true;
+                
+                // Disable manual control buttons
+                document.querySelectorAll('[onclick^="manualMove"]').forEach(btn => {
+                    btn.disabled = true;
+                });
+                document.querySelectorAll('[onclick="setHomePosition()"]').forEach(btn => {
+                    btn.disabled = true;
+                });
+            }
+        }
+
         function updateCameraTrackingStatus() {
             fetch('/tracking/camera/status')
                 .then(response => response.json())
@@ -2132,32 +2288,33 @@
                                 document.getElementById('camera-moving').textContent = 
                                     controller.moving ? 'Yes' : 'No';
                                 
-                                // Update UI sliders with current values only if not recently modified
-                                // This prevents the sliders from resetting while the user is adjusting them
-                                if (controller.calibration) {
-                                    const now = Date.now();
-                                    const modificationThreshold = 3000; // 3 seconds
+                                // Initialize calibration sliders ONLY on first load
+                                // After that, preserve user's values until they save or refresh page
+                                if (controller.calibration && !calibrationSlidersInitialized) {
+                                    document.getElementById('camera-x-steps-per-pixel').value = 
+                                        controller.calibration.x_steps_per_pixel;
+                                    document.getElementById('camera-x-steps-value').textContent = 
+                                        controller.calibration.x_steps_per_pixel.toFixed(2);
                                     
-                                    // Only update X steps slider if it hasn't been modified recently
-                                    if (now - lastSliderModification.xSteps > modificationThreshold) {
-                                        document.getElementById('camera-x-steps-per-pixel').value = 
-                                            controller.calibration.x_steps_per_pixel;
-                                        document.getElementById('camera-x-steps-value').textContent = 
-                                            controller.calibration.x_steps_per_pixel.toFixed(2);
-                                    }
+                                    document.getElementById('camera-y-steps-per-pixel').value = 
+                                        controller.calibration.y_steps_per_pixel;
+                                    document.getElementById('camera-y-steps-value').textContent = 
+                                        controller.calibration.y_steps_per_pixel.toFixed(2);
                                     
-                                    // Only update Y steps slider if it hasn't been modified recently
-                                    if (now - lastSliderModification.ySteps > modificationThreshold) {
-                                        document.getElementById('camera-y-steps-per-pixel').value = 
-                                            controller.calibration.y_steps_per_pixel;
-                                        document.getElementById('camera-y-steps-value').textContent = 
-                                            controller.calibration.y_steps_per_pixel.toFixed(2);
-                                    }
-                                    
-                                    // Dead zone can always be updated (not reported as problematic)
                                     document.getElementById('camera-dead-zone').value = 
                                         controller.calibration.dead_zone_pixels;
                                     updateCameraDeadZoneValue();
+                                    
+                                    // Mark as initialized so we don't overwrite user changes
+                                    calibrationSlidersInitialized = true;
+                                }
+                                
+                                // Update calibration status UI
+                                if (controller.calibration) {
+                                    updateCalibrationUI(
+                                        controller.calibration.is_calibrated,
+                                        controller.calibration.calibration_timestamp
+                                    );
                                 }
                             }
                             

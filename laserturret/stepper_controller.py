@@ -8,8 +8,10 @@ Includes calibration, safety limits, and smooth motion control.
 import time
 import threading
 import logging
+import json
+import os
 from typing import Tuple, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,10 @@ class StepperCalibration:
     
     # Dead zone in pixels - don't move if object is this close to center
     dead_zone_pixels: int = 20
+    
+    # Calibration status
+    is_calibrated: bool = False  # Must be True before camera movement enabled
+    calibration_timestamp: Optional[str] = None  # When calibration was performed
 
 
 class StepperController:
@@ -45,16 +51,18 @@ class StepperController:
     centered in the frame.
     """
     
-    def __init__(self, gpio_interface, config_manager):
+    def __init__(self, gpio_interface, config_manager, calibration_file='camera_calibration.json'):
         """
         Initialize stepper controller.
         
         Args:
             gpio_interface: GPIOInterface instance for hardware control
             config_manager: ConfigManager instance for pin configuration
+            calibration_file: Path to calibration data file
         """
         self.gpio = gpio_interface
         self.config = config_manager
+        self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
         
         # Motor pins
@@ -89,6 +97,9 @@ class StepperController:
         
         # Initialize GPIO
         self._setup_gpio()
+        
+        # Load calibration if available
+        self.load_calibration()
         
         logger.info("StepperController initialized")
     
@@ -371,6 +382,200 @@ class StepperController:
         
         logger.info("Camera homed to center position")
     
+    def set_home_position(self):
+        """
+        Set the current position as the new home position (0, 0).
+        Useful for manual calibration adjustments.
+        Requires calibration to have been performed.
+        """
+        if not self.calibration.is_calibrated:
+            logger.error("Cannot set home position - calibration required")
+            return False
+        
+        logger.info(f"Setting current position "
+                   f"({self.calibration.x_position}, {self.calibration.y_position}) as home")
+        self.calibration.x_position = 0
+        self.calibration.y_position = 0
+        logger.info("Home position updated")
+        
+        # Save updated calibration
+        self.save_calibration()
+        return True
+    
+    def manual_move(self, axis: str, steps: int):
+        """
+        Manually move camera by specified steps.
+        
+        Args:
+            axis: 'x' or 'y'
+            steps: Number of steps (signed for direction)
+        """
+        if not self.enabled:
+            logger.warning("Cannot move - motors not enabled")
+            return False
+        
+        with self.movement_lock:
+            self.moving = True
+            try:
+                self.step(axis, steps)
+                return True
+            finally:
+                self.moving = False
+    
+    def auto_calibrate(self, callback=None) -> dict:
+        """
+        Automatically calibrate camera by finding limits and centering.
+        
+        This will:
+        1. Find limit switches or max range in each direction for both axes
+        2. Calculate the center position
+        3. Move to center and set as home (0, 0)
+        4. Update max_steps limits based on discovered range
+        
+        Args:
+            callback: Optional function(status, message) to report progress
+        
+        Returns:
+            dict with calibration results
+        """
+        if not self.enabled:
+            return {'success': False, 'message': 'Motors not enabled'}
+        
+        def report(status, message):
+            logger.info(f"Auto-calibration: {message}")
+            if callback:
+                callback(status, message)
+        
+        report('info', 'Starting automatic calibration...')
+        
+        with self.movement_lock:
+            self.moving = True
+            try:
+                results = {}
+                
+                # Calibrate X axis
+                report('info', 'Calibrating X axis - finding limits')
+                x_range = self._find_axis_limits('x', report)
+                results['x_range'] = x_range
+                
+                # Calibrate Y axis
+                report('info', 'Calibrating Y axis - finding limits')
+                y_range = self._find_axis_limits('y', report)
+                results['y_range'] = y_range
+                
+                # Calculate center and move there
+                x_center = (x_range['min'] + x_range['max']) // 2
+                y_center = (y_range['min'] + y_range['max']) // 2
+                
+                report('info', f'Moving to center position: X={x_center}, Y={y_center}')
+                
+                # Move to center
+                self.step('x', x_center - self.calibration.x_position)
+                self.step('y', y_center - self.calibration.y_position)
+                
+                # Set this as home (0, 0)
+                self.calibration.x_position = 0
+                self.calibration.y_position = 0
+                
+                # Update max limits based on discovered range
+                x_half_range = (x_range['max'] - x_range['min']) // 2
+                y_half_range = (y_range['max'] - y_range['min']) // 2
+                
+                self.calibration.x_max_steps = x_half_range
+                self.calibration.y_max_steps = y_half_range
+                
+                # Mark as calibrated and save timestamp
+                from datetime import datetime
+                self.calibration.is_calibrated = True
+                self.calibration.calibration_timestamp = datetime.now().isoformat()
+                
+                # Save calibration to file
+                self.save_calibration()
+                
+                report('success', f'Calibration complete! Range: X=±{x_half_range}, Y=±{y_half_range}')
+                
+                return {
+                    'success': True,
+                    'x_range': x_half_range,
+                    'y_range': y_half_range,
+                    'message': 'Calibration successful'
+                }
+                
+            except Exception as e:
+                error_msg = f'Calibration failed: {str(e)}'
+                report('error', error_msg)
+                return {'success': False, 'message': error_msg}
+            
+            finally:
+                self.moving = False
+    
+    def _find_axis_limits(self, axis: str, report) -> dict:
+        """
+        Find the limits of movement for an axis.
+        
+        Returns:
+            dict with 'min' and 'max' step positions
+        """
+        max_search_steps = 5000  # Maximum steps to search in each direction
+        search_speed = 0.002  # Slower for safety during calibration
+        
+        # Save current position
+        if axis == 'x':
+            start_pos = self.calibration.x_position
+        else:
+            start_pos = self.calibration.y_position
+        
+        # Find positive limit
+        report('info', f'{axis.upper()} axis: searching positive direction')
+        steps_moved = 0
+        
+        for i in range(max_search_steps):
+            if self.has_limit_switches and self.check_limit_switch(axis, 1):
+                report('info', f'{axis.upper()} axis: positive limit switch found')
+                break
+            
+            self.step(axis, 1, delay=search_speed)
+            steps_moved += 1
+            
+            # Report progress every 500 steps
+            if steps_moved % 500 == 0:
+                report('info', f'{axis.upper()} axis: {steps_moved} steps positive')
+        else:
+            report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
+        
+        positive_limit = steps_moved
+        
+        # Return to start
+        report('info', f'{axis.upper()} axis: returning to start position')
+        self.step(axis, -steps_moved, delay=search_speed)
+        
+        # Find negative limit
+        report('info', f'{axis.upper()} axis: searching negative direction')
+        steps_moved = 0
+        
+        for i in range(max_search_steps):
+            if self.has_limit_switches and self.check_limit_switch(axis, -1):
+                report('info', f'{axis.upper()} axis: negative limit switch found')
+                break
+            
+            self.step(axis, -1, delay=search_speed)
+            steps_moved += 1
+            
+            # Report progress every 500 steps
+            if steps_moved % 500 == 0:
+                report('info', f'{axis.upper()} axis: {steps_moved} steps negative')
+        else:
+            report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
+        
+        negative_limit = -steps_moved
+        
+        report('info', f'{axis.upper()} axis range: {negative_limit} to {positive_limit} steps')
+        
+        return {
+            'min': negative_limit,
+            'max': positive_limit
+        }
+    
     def calibrate_steps_per_pixel(self, axis: str, pixels_moved: float, 
                                    steps_executed: int):
         """
@@ -394,6 +599,59 @@ class StepperController:
             self.calibration.y_steps_per_pixel = steps_per_pixel
             logger.info(f"Y axis calibrated: {steps_per_pixel:.3f} steps/pixel")
     
+    def save_calibration(self):
+        """Save calibration data to file"""
+        try:
+            # Convert calibration to dict
+            cal_data = asdict(self.calibration)
+            
+            # Save to JSON file
+            with open(self.calibration_file, 'w') as f:
+                json.dump(cal_data, f, indent=2)
+            
+            logger.info(f"Calibration saved to {self.calibration_file}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save calibration: {e}")
+            return False
+    
+    def load_calibration(self):
+        """Load calibration data from file if it exists"""
+        try:
+            if os.path.exists(self.calibration_file):
+                with open(self.calibration_file, 'r') as f:
+                    cal_data = json.load(f)
+                
+                # Update calibration object
+                self.calibration.x_steps_per_pixel = cal_data.get('x_steps_per_pixel', 0.1)
+                self.calibration.y_steps_per_pixel = cal_data.get('y_steps_per_pixel', 0.1)
+                self.calibration.x_position = cal_data.get('x_position', 0)
+                self.calibration.y_position = cal_data.get('y_position', 0)
+                self.calibration.x_max_steps = cal_data.get('x_max_steps', 2000)
+                self.calibration.y_max_steps = cal_data.get('y_max_steps', 2000)
+                self.calibration.step_delay = cal_data.get('step_delay', 0.001)
+                self.calibration.acceleration_steps = cal_data.get('acceleration_steps', 50)
+                self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
+                self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
+                self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
+                
+                logger.info(f"Calibration loaded from {self.calibration_file}")
+                if self.calibration.is_calibrated:
+                    logger.info(f"System is calibrated (timestamp: {self.calibration.calibration_timestamp})")
+                else:
+                    logger.warning("Calibration file exists but system not marked as calibrated")
+                return True
+            else:
+                logger.info("No calibration file found - calibration required")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to load calibration: {e}")
+            return False
+    
+    def is_calibrated(self) -> bool:
+        """Check if system has been calibrated"""
+        return self.calibration.is_calibrated
+    
     def get_status(self) -> dict:
         """Get current controller status"""
         return {
@@ -406,7 +664,9 @@ class StepperController:
             'calibration': {
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
-                'dead_zone_pixels': self.calibration.dead_zone_pixels
+                'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'is_calibrated': self.calibration.is_calibrated,
+                'calibration_timestamp': self.calibration.calibration_timestamp
             },
             'limits': {
                 'x_max_steps': self.calibration.x_max_steps,

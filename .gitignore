@@ -174,5 +174,8 @@ semgrep-report.*
 safety-report.*
 pip-audit-report.*
 
+# Camera calibration data (runtime configuration)
+camera_calibration.json
+
 # WINDSURF
 .windsurf

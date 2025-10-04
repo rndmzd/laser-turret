@@ -1368,6 +1368,13 @@ def toggle_camera_tracking():
                     'message': 'Must be in camera tracking mode first'
                 }), 400
             
+            # Check calibration requirement before enabling
+            if enabled and not stepper_controller.is_calibrated():
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Calibration required before enabling camera movement. Please run Auto-Calibrate first.'
+                }), 400
+            
             camera_tracking_enabled = enabled
             
             if enabled:
@@ -1540,6 +1547,88 @@ def move_camera_to_position():
             'status': 'success',
             'message': 'Camera moving to recenter clicked position',
             'position': {'x': click_x, 'y': click_y}
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/manual_move', methods=['POST'])
+def manual_move_camera():
+    """Manually move camera by specified steps"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        if not camera_tracking_enabled:
+            return jsonify({'status': 'error', 'message': 'Camera tracking not enabled'}), 400
+        
+        data = request.get_json()
+        axis = data.get('axis')  # 'x' or 'y'
+        steps = int(data.get('steps'))
+        
+        if axis not in ['x', 'y']:
+            return jsonify({'status': 'error', 'message': 'Invalid axis'}), 400
+        
+        # Move in background thread
+        def move():
+            stepper_controller.manual_move(axis, steps)
+        
+        threading.Thread(target=move, daemon=True).start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Moving {axis} axis by {steps} steps'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/set_home', methods=['POST'])
+def set_home_position():
+    """Set current position as home (0, 0)"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        if not stepper_controller.is_calibrated():
+            return jsonify({
+                'status': 'error',
+                'message': 'Calibration required before setting home position. Please run Auto-Calibrate first.'
+            }), 400
+        
+        success = stepper_controller.set_home_position()
+        
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': 'Home position set to current location'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to set home position'
+            }), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/auto_calibrate', methods=['POST'])
+def auto_calibrate_camera():
+    """Run automatic calibration sequence"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        
+        if not camera_tracking_enabled:
+            return jsonify({'status': 'error', 'message': 'Camera tracking not enabled'}), 400
+        
+        # Run calibration in background thread
+        def calibrate():
+            result = stepper_controller.auto_calibrate()
+            logger.info(f"Auto-calibration completed: {result}")
+        
+        threading.Thread(target=calibrate, daemon=True).start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Auto-calibration started. This may take several minutes.'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
