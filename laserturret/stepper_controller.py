@@ -524,7 +524,7 @@ class StepperController:
             dict with 'min' and 'max' step positions
         """
         max_search_steps = 5000  # Maximum steps to search in each direction
-        search_speed = 0.002  # Slower for safety during calibration
+        search_speed = 0.001  # Step delay during calibration (doubled speed from 0.002)
         
         # Save current position
         if axis == 'x':
