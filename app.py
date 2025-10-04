@@ -1266,6 +1266,58 @@ def switch_detection_method():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+@app.route('/tflite/settings', methods=['POST'])
+def update_tflite_settings():
+    """Update TensorFlow Lite detection settings at runtime"""
+    global tflite_detector, tflite_filter_classes
+    
+    try:
+        if detection_method != 'tflite':
+            return jsonify({
+                'status': 'error',
+                'message': 'TensorFlow Lite is not currently active'
+            }), 400
+        
+        if tflite_detector is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'TensorFlow Lite detector not initialized'
+            }), 400
+        
+        data = request.get_json()
+        confidence = data.get('confidence')
+        filter_classes = data.get('filter_classes', '')
+        
+        # Update confidence threshold if provided
+        if confidence is not None:
+            confidence = float(confidence)
+            if 0.0 <= confidence <= 1.0:
+                tflite_detector.confidence_threshold = confidence
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Confidence must be between 0.0 and 1.0'
+                }), 400
+        
+        # Update class filter if provided
+        if filter_classes is not None:
+            # Parse comma-separated classes
+            if filter_classes.strip():
+                tflite_filter_classes = [c.strip() for c in filter_classes.split(',') if c.strip()]
+            else:
+                tflite_filter_classes = []
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'TFLite settings applied',
+            'confidence': tflite_detector.confidence_threshold,
+            'filter_classes': tflite_filter_classes,
+            'stats': tflite_detector.get_stats()
+        })
+    
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/presets/save', methods=['POST'])
 def save_preset():
     """Save current crosshair position to a preset slot"""
