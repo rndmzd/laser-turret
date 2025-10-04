@@ -1537,9 +1537,9 @@ def move_camera_to_position():
                 click_x, click_y, CAMERA_WIDTH, CAMERA_HEIGHT
             )
             if moved:
-                logger.info(f"Camera moved to recenter position ({click_x}, {click_y})")
+                print(f"Camera moved to recenter position ({click_x}, {click_y})")
             else:
-                logger.debug(f"Click at ({click_x}, {click_y}) within dead zone, no movement needed")
+                print(f"Click at ({click_x}, {click_y}) within dead zone, no movement needed")
         
         threading.Thread(target=move_camera, daemon=True).start()
         
@@ -1622,7 +1622,7 @@ def auto_calibrate_camera():
         # Run calibration in background thread
         def calibrate():
             result = stepper_controller.auto_calibrate()
-            logger.info(f"Auto-calibration completed: {result}")
+            print(f"Auto-calibration completed: {result}")
         
         threading.Thread(target=calibrate, daemon=True).start()
         
