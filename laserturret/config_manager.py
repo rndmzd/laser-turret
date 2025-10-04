@@ -69,6 +69,12 @@ class ConfigManager:
             'use_coral': False,
             'tflite_confidence': 0.5,
             'tflite_filter_classes': '',
+            'balloon_v_threshold': 60,           # 0-255 (lower V = darker)
+            'balloon_min_area': 2000,            # pixels
+            'balloon_circularity_min': 0.55,     # 0.0-1.0
+            'balloon_fill_ratio_min': 0.5,       # 0.0-1.0
+            'balloon_aspect_ratio_min': 0.6,     # w/h
+            'balloon_aspect_ratio_max': 1.6,     # w/h
         }
     }
     
@@ -304,6 +310,34 @@ class ConfigManager:
         if not classes_str or classes_str.strip() == '':
             return []
         return [c.strip() for c in classes_str.split(',') if c.strip()]
+    
+    # Balloon Detection Configuration
+    def get_balloon_v_threshold(self) -> int:
+        """Get HSV V-threshold for black balloon mask (0-255)"""
+        v = self._get('Detection', 'balloon_v_threshold', int)
+        return max(0, min(255, v))
+
+    def get_balloon_min_area(self) -> int:
+        """Get minimum contour area (pixels) for balloons"""
+        return max(0, self._get('Detection', 'balloon_min_area', int))
+
+    def get_balloon_circularity_min(self) -> float:
+        """Get minimum circularity for balloon contours (0.0-1.0)"""
+        c = self._get('Detection', 'balloon_circularity_min', float)
+        return max(0.0, min(1.0, c))
+
+    def get_balloon_fill_ratio_min(self) -> float:
+        """Get minimum fill ratio (area / bbox area) for balloons (0.0-1.0)"""
+        f = self._get('Detection', 'balloon_fill_ratio_min', float)
+        return max(0.0, min(1.0, f))
+
+    def get_balloon_aspect_ratio_min(self) -> float:
+        """Get minimum aspect ratio (w/h) for balloons"""
+        return max(0.0, self._get('Detection', 'balloon_aspect_ratio_min', float))
+
+    def get_balloon_aspect_ratio_max(self) -> float:
+        """Get maximum aspect ratio (w/h) for balloons"""
+        return max(0.0, self._get('Detection', 'balloon_aspect_ratio_max', float))
     
     # Convenience methods
     def get_motor_config(self, axis: str) -> Dict[str, int]:

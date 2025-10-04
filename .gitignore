@@ -179,3 +179,6 @@ camera_calibration.json
 
 # WINDSURF
 .windsurf
+
+# Training data
+training/

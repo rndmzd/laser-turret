@@ -843,20 +843,67 @@
                             </small>
                         </div>
 
-                        <!-- Haar Cascade Settings (shown when haar is selected) -->
                         <div id="haar-settings" style="display: none;">
-                            <div class="select-control">
-                                <label>Detection Mode</label>
-                                <select id="detection-mode" onchange="applyObjectSettings()">
-                                    <option value="face">Face Detection</option>
-                                    <option value="eye">Eye Detection</option>
-                                    <option value="body">Full Body Detection</option>
-                                    <option value="smile">Smile Detection</option>
-                                </select>
-                            </div>
+            <div class="select-control">
+                <label>Detection Mode</label>
+                <select id="detection-mode" onchange="applyObjectSettings()">
+                    <option value="face">Face Detection</option>
+                    <option value="eye">Eye Detection</option>
+                    <option value="body">Full Body Detection</option>
+                    <option value="smile">Smile Detection</option>
+                    <option value="balloon">Balloon Detection</option>
+                </select>
+            </div>
+            <div id="balloon-settings" style="display: none; margin-top: 10px;">
+                <h4 style="font-size: 14px; color: #333; margin-bottom: 8px;">🎈 Balloon Tuning</h4>
+                <div class="slider-control">
+                    <label>Brightness Threshold (V 0-255)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="balloon-v-threshold" min="0" max="255" value="60" step="5" oninput="updateBalloonVValue()">
+                        <span id="balloon-v-value" class="slider-value">60</span>
+                    </div>
+                </div>
+                <div class="slider-control">
+                    <label>Minimum Area (pixels)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="balloon-min-area" min="0" max="20000" value="2000" step="100" oninput="updateBalloonMinAreaValue()">
+                        <span id="balloon-min-area-value" class="slider-value">2000</span>
+                    </div>
+                </div>
+                <div class="slider-control">
+                    <label>Min Circularity (0.00-1.00)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="balloon-circularity" min="0" max="1" value="0.55" step="0.05" oninput="updateBalloonCircularityValue()">
+                        <span id="balloon-circularity-value" class="slider-value">0.55</span>
+                    </div>
+                </div>
+                <div class="slider-control">
+                    <label>Min Fill Ratio (0.00-1.00)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="balloon-fill" min="0" max="1" value="0.5" step="0.05" oninput="updateBalloonFillValue()">
+                        <span id="balloon-fill-value" class="slider-value">0.50</span>
+                    </div>
+                </div>
+                <div class="slider-control">
+                    <label>Aspect Ratio Min (w/h)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="balloon-ar-min" min="0" max="2" value="0.6" step="0.05" oninput="updateBalloonARMinValue()">
+                        <span id="balloon-ar-min-value" class="slider-value">0.60</span>
+                    </div>
+                </div>
+                <div class="slider-control">
+                    <label>Aspect Ratio Max (w/h)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="balloon-ar-max" min="0" max="3" value="1.6" step="0.05" oninput="updateBalloonARMaxValue()">
+                        <span id="balloon-ar-max-value" class="slider-value">1.60</span>
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="applyBalloonSettings()">Apply Balloon Settings</button>
+            </div>
+        </div>
+                    </div>
                         </div>
 
-                        <!-- TensorFlow Lite Settings (shown when tflite is selected) -->
                         <div id="tflite-settings" style="display: none;">
                             <div class="slider-control">
                                 <label>
@@ -1849,6 +1896,8 @@
         function applyObjectSettings() {
             const mode = document.getElementById('detection-mode').value;
             const priority = document.getElementById('target-priority').value;
+            // Update balloon settings visibility immediately
+            showHideBalloonSettings();
             
             fetch('/object_detection/settings', {
                 method: 'POST',
@@ -1888,12 +1937,16 @@
                 currentModeRow.style.display = 'flex';
                 tfliteStats.style.display = 'none';
                 document.getElementById('detection-method-display').textContent = 'Haar Cascades';
+                showHideBalloonSettings();
             } else {
                 haarSettings.style.display = 'none';
                 tfliteSettings.style.display = 'block';
                 currentModeRow.style.display = 'none';
                 tfliteStats.style.display = 'block';
                 document.getElementById('detection-method-display').textContent = 'TensorFlow Lite';
+                // Hide balloon settings when not in Haar
+                const balloonSettings = document.getElementById('balloon-settings');
+                if (balloonSettings) balloonSettings.style.display = 'none';
             }
             
             // Switch method on server
@@ -1983,6 +2036,24 @@
                             document.getElementById('current-mode').textContent = 
                                 data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
                             document.getElementById('detection-mode').value = data.mode;
+                            // Sync balloon sliders from status
+                            const bs = data.balloon_settings || {};
+                            if (document.getElementById('balloon-v-threshold')) {
+                                document.getElementById('balloon-v-threshold').value = bs.v_threshold ?? 60;
+                                document.getElementById('balloon-v-value').textContent = bs.v_threshold ?? 60;
+                                document.getElementById('balloon-min-area').value = bs.min_area ?? 2000;
+                                document.getElementById('balloon-min-area-value').textContent = bs.min_area ?? 2000;
+                                document.getElementById('balloon-circularity').value = bs.circularity_min ?? 0.55;
+                                document.getElementById('balloon-circularity-value').textContent = (bs.circularity_min ?? 0.55).toFixed(2);
+                                document.getElementById('balloon-fill').value = bs.fill_ratio_min ?? 0.5;
+                                document.getElementById('balloon-fill-value').textContent = (bs.fill_ratio_min ?? 0.5).toFixed(2);
+                                document.getElementById('balloon-ar-min').value = bs.aspect_ratio_min ?? 0.6;
+                                document.getElementById('balloon-ar-min-value').textContent = (bs.aspect_ratio_min ?? 0.6).toFixed(2);
+                                document.getElementById('balloon-ar-max').value = bs.aspect_ratio_max ?? 1.6;
+                                document.getElementById('balloon-ar-max-value').textContent = (bs.aspect_ratio_max ?? 1.6).toFixed(2);
+                                // Show/hide balloon settings based on mode
+                                showHideBalloonSettings();
+                            }
                         } else {
                             haarSettings.style.display = 'none';
                             tfliteSettings.style.display = 'block';
@@ -2007,6 +2078,9 @@
                                         stats.confidence_threshold.toFixed(2);
                                 }
                             }
+                            // Hide balloon settings when not in Haar
+                            const balloonSettings = document.getElementById('balloon-settings');
+                            if (balloonSettings) balloonSettings.style.display = 'none';
                         }
                         
                         // Sync UI with server state
@@ -2016,6 +2090,74 @@
                     }
                 })
                 .catch(error => console.error('Error fetching object status:', error));
+        }
+
+        // Balloon UI helpers
+        function showHideBalloonSettings() {
+            const method = document.getElementById('detection-method').value;
+            const modeEl = document.getElementById('detection-mode');
+            const mode = modeEl ? modeEl.value : 'face';
+            const balloonSettings = document.getElementById('balloon-settings');
+            if (!balloonSettings) return;
+            if (method === 'haar' && mode === 'balloon') {
+                balloonSettings.style.display = 'block';
+            } else {
+                balloonSettings.style.display = 'none';
+            }
+        }
+
+        function updateBalloonVValue() {
+            const v = document.getElementById('balloon-v-threshold').value;
+            document.getElementById('balloon-v-value').textContent = v;
+        }
+        function updateBalloonMinAreaValue() {
+            const v = document.getElementById('balloon-min-area').value;
+            document.getElementById('balloon-min-area-value').textContent = v;
+        }
+        function updateBalloonCircularityValue() {
+            const v = parseFloat(document.getElementById('balloon-circularity').value).toFixed(2);
+            document.getElementById('balloon-circularity-value').textContent = v;
+        }
+        function updateBalloonFillValue() {
+            const v = parseFloat(document.getElementById('balloon-fill').value).toFixed(2);
+            document.getElementById('balloon-fill-value').textContent = v;
+        }
+        function updateBalloonARMinValue() {
+            const v = parseFloat(document.getElementById('balloon-ar-min').value).toFixed(2);
+            document.getElementById('balloon-ar-min-value').textContent = v;
+        }
+        function updateBalloonARMaxValue() {
+            const v = parseFloat(document.getElementById('balloon-ar-max').value).toFixed(2);
+            document.getElementById('balloon-ar-max-value').textContent = v;
+        }
+
+        function applyBalloonSettings() {
+            const payload = {
+                v_threshold: parseInt(document.getElementById('balloon-v-threshold').value),
+                min_area: parseInt(document.getElementById('balloon-min-area').value),
+                circularity_min: parseFloat(document.getElementById('balloon-circularity').value),
+                fill_ratio_min: parseFloat(document.getElementById('balloon-fill').value),
+                aspect_ratio_min: parseFloat(document.getElementById('balloon-ar-min').value),
+                aspect_ratio_max: parseFloat(document.getElementById('balloon-ar-max').value)
+            };
+            fetch('/balloon/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 'Balloon settings applied');
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply balloon settings');
+                console.error('Error applying balloon settings:', error);
+            });
         }
 
         // Motion detection controls

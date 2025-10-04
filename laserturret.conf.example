@@ -86,3 +86,20 @@ tflite_confidence = 0.5
 # Example: person,cat,dog,bird
 # See COCO_LABELS in tflite_detector.py for full list
 tflite_filter_classes =
+
+# Balloon detection (HSV + shape-based), used when Detection Mode = balloon (Haar method)
+# HSV Value (brightness) threshold for "black" mask (0-255). Lower = darker.
+balloon_v_threshold = 60
+
+# Minimum contour area in pixels
+balloon_min_area = 2000
+
+# Minimum circularity (0.0-1.0), higher is more round
+balloon_circularity_min = 0.55
+
+# Minimum fill ratio (area / bounding-box area)
+balloon_fill_ratio_min = 0.5
+
+# Allowed aspect ratio range (w/h)
+balloon_aspect_ratio_min = 0.6
+balloon_aspect_ratio_max = 1.6
