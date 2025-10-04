@@ -1537,9 +1537,9 @@ def move_camera_to_position():
                 click_x, click_y, CAMERA_WIDTH, CAMERA_HEIGHT
             )
             if moved:
-                logger.info(f"Camera moved to recenter position ({click_x}, {click_y})")
+                print(f"Camera moved to recenter position ({click_x}, {click_y})")
             else:
-                logger.debug(f"Click at ({click_x}, {click_y}) within dead zone, no movement needed")
+                print(f"Click at ({click_x}, {click_y}) within dead zone, no movement needed")
         
         threading.Thread(target=move_camera, daemon=True).start()
         
@@ -1616,13 +1616,25 @@ def auto_calibrate_camera():
         if stepper_controller is None:
             return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
         
-        if not camera_tracking_enabled:
-            return jsonify({'status': 'error', 'message': 'Camera tracking not enabled'}), 400
+        # Auto-calibration can run independently to establish initial calibration values
+        # No need to check if camera_tracking_enabled - calibration comes first!
         
         # Run calibration in background thread
         def calibrate():
-            result = stepper_controller.auto_calibrate()
-            logger.info(f"Auto-calibration completed: {result}")
+            # Enable motors for calibration if not already enabled
+            if not stepper_controller.enabled:
+                print("Enabling motors for auto-calibration")
+                stepper_controller.enable()
+            
+            try:
+                result = stepper_controller.auto_calibrate()
+                print(f"Auto-calibration completed: {result}")
+                # Keep motors enabled after calibration to prevent drift
+                print("Motors remain enabled after calibration to maintain position")
+            except Exception as e:
+                print(f"Auto-calibration error: {e}")
+                # Keep motors enabled even on error to maintain position
+                raise
         
         threading.Thread(target=calibrate, daemon=True).start()
         

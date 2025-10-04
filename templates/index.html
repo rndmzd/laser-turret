@@ -578,6 +578,10 @@
                                 <button class="btn-secondary" onclick="manualMove('y', 100)" style="width: 60px; padding: 8px;">▼</button>
                             </div>
 
+                            <button class="btn-primary" onclick="homeCameraPosition()" style="width: 100%; margin-bottom: 15px;">
+                                🏠 Return to Home Position
+                            </button>
+
                             <div class="slider-control">
                                 <label>Step Size</label>
                                 <div class="slider-wrapper">
@@ -2251,6 +2255,9 @@
                 document.querySelectorAll('[onclick="setHomePosition()"]').forEach(btn => {
                     btn.disabled = false;
                 });
+                document.querySelectorAll('[onclick="homeCameraPosition()"]').forEach(btn => {
+                    btn.disabled = false;
+                });
             } else {
                 document.getElementById('camera-calibration-status').textContent = 'Not Calibrated';
                 document.getElementById('camera-calibration-status').style.color = '#dc3545';
@@ -2268,6 +2275,9 @@
                 document.querySelectorAll('[onclick="setHomePosition()"]').forEach(btn => {
                     btn.disabled = true;
                 });
+                document.querySelectorAll('[onclick="homeCameraPosition()"]').forEach(btn => {
+                    btn.disabled = true;
+                });
             }
         }
 
@@ -2276,6 +2286,12 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
+                        // Update tracking mode dropdown if needed
+                        if (data.mode) {
+                            document.getElementById('tracking-mode').value = data.mode;
+                            updateTrackingModeUI(data.mode);
+                        }
+                        
                         if (data.available) {
                             document.getElementById('camera-system-status').textContent = 'Available';
                             document.getElementById('camera-enabled-status').textContent = 
