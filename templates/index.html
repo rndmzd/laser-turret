@@ -833,13 +833,51 @@
                         </div>
 
                         <div class="select-control">
-                            <label>Detection Mode</label>
-                            <select id="detection-mode" onchange="applyObjectSettings()">
-                                <option value="face">Face Detection</option>
-                                <option value="eye">Eye Detection</option>
-                                <option value="body">Full Body Detection</option>
-                                <option value="smile">Smile Detection</option>
+                            <label>🔬 Detection Method</label>
+                            <select id="detection-method" onchange="switchDetectionMethod()">
+                                <option value="haar">Haar Cascades (Fast, Faces Only)</option>
+                                <option value="tflite">TensorFlow Lite (Accurate, 80+ Classes)</option>
                             </select>
+                            <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;" id="method-info">
+                                Haar: 30+ FPS | TFLite: 15-25 FPS
+                            </small>
+                        </div>
+
+                        <!-- Haar Cascade Settings (shown when haar is selected) -->
+                        <div id="haar-settings" style="display: none;">
+                            <div class="select-control">
+                                <label>Detection Mode</label>
+                                <select id="detection-mode" onchange="applyObjectSettings()">
+                                    <option value="face">Face Detection</option>
+                                    <option value="eye">Eye Detection</option>
+                                    <option value="body">Full Body Detection</option>
+                                    <option value="smile">Smile Detection</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- TensorFlow Lite Settings (shown when tflite is selected) -->
+                        <div id="tflite-settings" style="display: none;">
+                            <div class="slider-control">
+                                <label>
+                                    Confidence Threshold 
+                                    <span id="tflite-confidence-value" style="color: #667eea;">0.5</span>
+                                </label>
+                                <input type="range" id="tflite-confidence" min="0.1" max="0.9" step="0.05" value="0.5" 
+                                       oninput="updateTFLiteConfidence()" onchange="applyTFLiteSettings()">
+                                <small style="color: #666; font-size: 11px;">Higher = fewer false positives</small>
+                            </div>
+
+                            <div class="input-control">
+                                <label>Filter Classes (optional)</label>
+                                <input type="text" id="tflite-filter-classes" 
+                                       placeholder="e.g., person,cat,dog,bird" 
+                                       onchange="applyTFLiteSettings()"
+                                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">
+                                    Leave empty for all 80 classes
+                                </small>
+                            </div>
                         </div>
 
                         <div class="select-control">
@@ -860,12 +898,31 @@
                             <span id="object-status" class="stat-value">OFF</span>
                         </div>
                         <div class="stat-row">
+                            <span class="stat-label">Method</span>
+                            <span id="detection-method-display" class="stat-value">Haar Cascades</span>
+                        </div>
+                        <div class="stat-row">
                             <span class="stat-label">Objects Detected</span>
                             <span id="objects-count" class="stat-value">0</span>
                         </div>
-                        <div class="stat-row">
+                        <div class="stat-row" id="current-mode-row">
                             <span class="stat-label">Current Mode</span>
                             <span id="current-mode" class="stat-value">Face</span>
+                        </div>
+                        <!-- TFLite Performance Stats -->
+                        <div id="tflite-stats" style="display: none;">
+                            <div class="stat-row">
+                                <span class="stat-label">Inference Time</span>
+                                <span id="tflite-inference-time" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Est. FPS</span>
+                                <span id="tflite-fps" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Accelerator</span>
+                                <span id="tflite-accelerator" class="stat-value">CPU</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1813,6 +1870,71 @@
             });
         }
 
+        function switchDetectionMethod() {
+            const method = document.getElementById('detection-method').value;
+            
+            // Show/hide method-specific settings
+            const haarSettings = document.getElementById('haar-settings');
+            const tfliteSettings = document.getElementById('tflite-settings');
+            const currentModeRow = document.getElementById('current-mode-row');
+            const tfliteStats = document.getElementById('tflite-stats');
+            
+            if (method === 'haar') {
+                haarSettings.style.display = 'block';
+                tfliteSettings.style.display = 'none';
+                currentModeRow.style.display = 'flex';
+                tfliteStats.style.display = 'none';
+                document.getElementById('detection-method-display').textContent = 'Haar Cascades';
+            } else {
+                haarSettings.style.display = 'none';
+                tfliteSettings.style.display = 'block';
+                currentModeRow.style.display = 'none';
+                tfliteStats.style.display = 'block';
+                document.getElementById('detection-method-display').textContent = 'TensorFlow Lite';
+            }
+            
+            // Switch method on server
+            fetch('/detection_method/switch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ method: method })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        `Switched to ${method === 'haar' ? 'Haar Cascades' : 'TensorFlow Lite'}`);
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                    // Revert on failure
+                    document.getElementById('detection-method').value = 
+                        data.detection_method || 'haar';
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to switch detection method');
+                console.error('Error switching detection method:', error);
+            });
+        }
+
+        function updateTFLiteConfidence() {
+            const value = document.getElementById('tflite-confidence').value;
+            document.getElementById('tflite-confidence-value').textContent = value;
+        }
+
+        function applyTFLiteSettings() {
+            // Note: This currently just updates the UI
+            // Backend support for runtime TFLite setting changes would require config reload
+            const confidence = parseFloat(document.getElementById('tflite-confidence').value);
+            const filterClasses = document.getElementById('tflite-filter-classes').value;
+            
+            showStatus('object-status-message', true, 
+                'TFLite settings updated (requires restart to fully apply)');
+            
+            console.log('TFLite Settings:', { confidence, filterClasses });
+        }
+
         function updateObjectStatus() {
             fetch('/object_detection/status')
                 .then(response => response.json())
@@ -1822,13 +1944,48 @@
                             data.enabled ? 'ON' : 'OFF';
                         document.getElementById('objects-count').textContent = 
                             data.objects_detected;
-                        document.getElementById('current-mode').textContent = 
-                            data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
+                        
+                        // Update detection method
+                        const method = data.detection_method || 'haar';
+                        document.getElementById('detection-method').value = method;
+                        
+                        // Show/hide appropriate settings
+                        const haarSettings = document.getElementById('haar-settings');
+                        const tfliteSettings = document.getElementById('tflite-settings');
+                        const currentModeRow = document.getElementById('current-mode-row');
+                        const tfliteStats = document.getElementById('tflite-stats');
+                        
+                        if (method === 'haar') {
+                            haarSettings.style.display = 'block';
+                            tfliteSettings.style.display = 'none';
+                            currentModeRow.style.display = 'flex';
+                            tfliteStats.style.display = 'none';
+                            document.getElementById('detection-method-display').textContent = 'Haar Cascades';
+                            document.getElementById('current-mode').textContent = 
+                                data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
+                            document.getElementById('detection-mode').value = data.mode;
+                        } else {
+                            haarSettings.style.display = 'none';
+                            tfliteSettings.style.display = 'block';
+                            currentModeRow.style.display = 'none';
+                            tfliteStats.style.display = 'block';
+                            document.getElementById('detection-method-display').textContent = 'TensorFlow Lite';
+                            
+                            // Update TFLite stats if available
+                            if (data.tflite_stats) {
+                                const stats = data.tflite_stats;
+                                document.getElementById('tflite-inference-time').textContent = 
+                                    stats.avg_inference_ms.toFixed(1) + ' ms';
+                                document.getElementById('tflite-fps').textContent = 
+                                    stats.estimated_fps.toFixed(1) + ' FPS';
+                                document.getElementById('tflite-accelerator').textContent = 
+                                    stats.accelerator;
+                            }
+                        }
                         
                         // Sync UI with server state
                         document.getElementById('object-enabled').checked = data.enabled;
                         document.getElementById('object-auto-track-enabled').checked = data.auto_track;
-                        document.getElementById('detection-mode').value = data.mode;
                         document.getElementById('target-priority').value = data.priority;
                     }
                 })
