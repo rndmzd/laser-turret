@@ -351,9 +351,9 @@ class StepperController:
             return False  # Object already centered
         
         # Convert pixel offset to steps
-        # Negative because camera moves opposite to object offset
-        steps_x = -int(offset_x * self.calibration.x_steps_per_pixel)
-        steps_y = -int(offset_y * self.calibration.y_steps_per_pixel)
+        # Camera moves in same direction as offset to center the clicked position
+        steps_x = int(offset_x * self.calibration.x_steps_per_pixel)
+        steps_y = int(offset_y * self.calibration.y_steps_per_pixel)
         
         # Execute movement in a thread to not block
         with self.movement_lock:
@@ -524,7 +524,7 @@ class StepperController:
             dict with 'min' and 'max' step positions
         """
         max_search_steps = 5000  # Maximum steps to search in each direction
-        search_speed = 0.002  # Slower for safety during calibration
+        search_speed = 0.001  # Step delay during calibration (doubled speed from 0.002)
         
         # Save current position
         if axis == 'x':
