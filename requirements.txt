@@ -9,3 +9,9 @@ adafruit-blinka>=8.0.0
 # - lgpio for Raspberry Pi 5
 # - RPi.GPIO for Raspberry Pi 4 and earlier
 lgpio>=0.2.0.0
+
+# TensorFlow Lite for advanced object detection (optional but recommended)
+# Use tflite-runtime for smaller footprint (~10MB vs ~200MB for full TensorFlow)
+tflite-runtime>=2.14.0
+# For Coral USB Accelerator support (optional, requires Coral hardware)
+# pycoral>=2.0.0
