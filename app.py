@@ -444,12 +444,14 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     crosshair_pos['y'] = center_y
                             elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
                                 # Camera tracking mode: move camera to center object
-                                threading.Thread(
-                                    target=lambda: stepper_controller.move_to_center_object(
-                                        center_x, center_y, CAMERA_WIDTH, CAMERA_HEIGHT
-                                    ),
-                                    daemon=True
-                                ).start()
+                                # Only spawn thread if not already moving to prevent queue buildup
+                                if not stepper_controller.moving:
+                                    threading.Thread(
+                                        target=lambda: stepper_controller.move_to_center_object(
+                                            center_x, center_y, CAMERA_WIDTH, CAMERA_HEIGHT
+                                        ),
+                                        daemon=True
+                                    ).start()
             except Exception as e:
                 print(f"Object detection error: {e}")
     
@@ -480,12 +482,14 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     crosshair_pos['y'] = motion_center[1]
                             elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
                                 # Camera tracking mode: move camera to center motion
-                                threading.Thread(
-                                    target=lambda: stepper_controller.move_to_center_object(
-                                        motion_center[0], motion_center[1], CAMERA_WIDTH, CAMERA_HEIGHT
-                                    ),
-                                    daemon=True
-                                ).start()
+                                # Only spawn thread if not already moving to prevent queue buildup
+                                if not stepper_controller.moving:
+                                    threading.Thread(
+                                        target=lambda: stepper_controller.move_to_center_object(
+                                            motion_center[0], motion_center[1], CAMERA_WIDTH, CAMERA_HEIGHT
+                                        ),
+                                        daemon=True
+                                    ).start()
             except Exception as e:
                 print(f"Motion detection error: {e}")
     
