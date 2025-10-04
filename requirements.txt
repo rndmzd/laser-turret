@@ -1,9 +1,11 @@
-Flask>=2.0.0
-paho-mqtt>=1.6.1
-adafruit-circuitpython-motorkit>=1.6.0
-adafruit-circuitpython-motor>=3.3.0
+Flask>=2.3.0
+# Pin NumPy <2.0 for compatibility with Raspberry Pi's simplejpeg/picamera2
+numpy<2.0
+opencv-python>=4.8.0
+#adafruit-circuitpython-motorkit>=1.6.0
+#adafruit-circuitpython-motor>=3.3.0
 pytest>=7.0.0
-adafruit-blinka>=8.0.0
+#adafruit-blinka>=8.0.0
 
 # GPIO library (auto-detected by hardware_interface.py):
 # - lgpio for Raspberry Pi 5
