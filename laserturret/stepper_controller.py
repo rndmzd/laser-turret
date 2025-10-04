@@ -270,8 +270,12 @@ class StepperController:
         direction = 1 if steps > 0 else -1
         steps = abs(steps)
         
-        # Set direction
-        self.gpio.output(dir_pin, 1 if direction > 0 else 0)
+        # Set direction (invert Y-axis direction to correct for physical motor orientation)
+        if axis == 'y':
+            # Y-axis is physically reversed, so invert the direction signal
+            self.gpio.output(dir_pin, 0 if direction > 0 else 1)
+        else:
+            self.gpio.output(dir_pin, 1 if direction > 0 else 0)
         time.sleep(0.000001)  # Direction setup time
         
         # Use calibration delay if not specified
