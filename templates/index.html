@@ -717,6 +717,14 @@
                             </div>
                         </div>
 
+                        <div class="slider-control">
+                            <label>💡 Laser Power (%)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="laser-power" min="0" max="100" value="100" step="5" oninput="updateLaserPowerValue()">
+                                <span id="laser-power-value" class="slider-value">100%</span>
+                            </div>
+                        </div>
+
                         <button class="btn-primary" onclick="applyLaserSettings()">Apply Fire Settings</button>
                     </div>
 
@@ -737,6 +745,14 @@
                         <div class="stat-row">
                             <span class="stat-label">Cooldown</span>
                             <span id="laser-cooldown-remaining" class="stat-value">Ready</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Power Level</span>
+                            <span id="laser-power-level" class="stat-value">100%</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Hardware</span>
+                            <span id="laser-hardware-status" class="stat-value">--</span>
                         </div>
                         <button class="btn-secondary" onclick="resetFireCount()" style="margin-top: 10px;">
                             🔄 Reset Counter
@@ -1565,11 +1581,17 @@
             document.getElementById('laser-cooldown-value').textContent = value + 's';
         }
 
+        function updateLaserPowerValue() {
+            const value = parseInt(document.getElementById('laser-power').value);
+            document.getElementById('laser-power-value').textContent = value + '%';
+        }
+
         function applyLaserSettings() {
             const pulseDuration = parseFloat(document.getElementById('pulse-duration').value) / 1000;
             const burstCount = parseInt(document.getElementById('burst-count').value);
             const burstDelay = parseFloat(document.getElementById('burst-delay').value) / 1000;
             const cooldown = parseFloat(document.getElementById('laser-cooldown').value);
+            const power = parseInt(document.getElementById('laser-power').value);
             
             fetch('/laser/settings', {
                 method: 'POST',
@@ -1578,13 +1600,14 @@
                     pulse_duration: pulseDuration,
                     burst_count: burstCount,
                     burst_delay: burstDelay,
-                    cooldown: cooldown
+                    cooldown: cooldown,
+                    power: power
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('laser-status-message', true, 'Laser settings applied');
+                    showStatus('laser-status-message', true, `Laser settings applied (Power: ${data.power}%)`);
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
@@ -1614,6 +1637,13 @@
                             document.getElementById('laser-cooldown-remaining').textContent = 'Ready';
                         }
                         
+                        // Display power level and hardware status
+                        if (data.power !== undefined) {
+                            document.getElementById('laser-power-level').textContent = data.power + '%';
+                        }
+                        document.getElementById('laser-hardware-status').textContent = 
+                            data.hardware_available ? 'Connected' : 'Simulation';
+                        
                         // Sync UI with server state
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
@@ -1621,11 +1651,15 @@
                         document.getElementById('burst-count').value = data.burst_count;
                         document.getElementById('burst-delay').value = data.burst_delay * 1000;
                         document.getElementById('laser-cooldown').value = data.cooldown;
+                        if (data.power !== undefined) {
+                            document.getElementById('laser-power').value = data.power;
+                        }
                         
                         updatePulseDurationValue();
                         updateBurstCountValue();
                         updateBurstDelayValue();
                         updateLaserCooldownValue();
+                        updateLaserPowerValue();
                         
                         // Update fire button state
                         document.getElementById('fire-button').disabled = !data.ready_to_fire || !data.enabled;
