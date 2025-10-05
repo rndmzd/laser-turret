@@ -5,7 +5,7 @@ import numpy as np
 import logging
 
 try:
-    from inference_sdk import InferenceHTTPClient
+    from inference_sdk import InferenceHTTPClient, InferenceConfiguration
     ROBOFLOW_CLIENT_AVAILABLE = True
 except Exception:
     ROBOFLOW_CLIENT_AVAILABLE = False
@@ -32,14 +32,39 @@ class RoboflowDetector:
         self.inference_times: List[float] = []
         self.frame_count = 0
         self.server_url = server_url
+        # Try to select API v1 and model for future infer() calls without model_id
+        try:
+            if hasattr(self.client, "select_api_v1"):
+                self.client.select_api_v1()
+        except Exception:
+            pass
+        try:
+            if hasattr(self.client, "select_model"):
+                self.client.select_model(self.model_id)
+        except Exception:
+            pass
+        # Apply initial configuration
+        self.apply_config()
+
+    def apply_config(self) -> None:
+        try:
+            if 'InferenceConfiguration' in globals():
+                cfg = InferenceConfiguration(
+                    confidence_threshold=float(self.confidence),
+                    class_filter=list(self.class_filter) if self.class_filter else None,
+                )
+                if hasattr(self.client, "configure"):
+                    self.client.configure(cfg)
+        except Exception as e:
+            logger.warning(f"Failed to apply Roboflow configuration: {e}")
 
     def detect(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         start = time.time()
         try:
-            params: Dict[str, Any] = {"confidence": float(self.confidence)}
-            if self.class_filter:
-                params["class_filter"] = list(self.class_filter)
-            result = self.client.infer(frame, model_id=self.model_id, **params)
+            # Ensure configuration is applied (cheap op even if repeated)
+            self.apply_config()
+            # Prefer calling without kwargs; pass model_id explicitly for compatibility
+            result = self.client.infer(frame, model_id=self.model_id)
             preds = result.get("predictions", [])
         except Exception as e:
             logger.error(f"Roboflow inference error: {e}")

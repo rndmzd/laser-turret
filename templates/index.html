@@ -1290,6 +1290,15 @@
             });
             document.getElementById(`${tabName}-tab`).classList.add('active');
             event.target.classList.add('active');
+
+            // If leaving Object tab, make sure method-specific panels are hidden
+            if (tabName !== 'object') {
+                ['haar-settings','tflite-settings','roboflow-settings','current-mode-row','tflite-stats','roboflow-stats']
+                    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+            } else {
+                // Refresh object status to show appropriate panel for selected method
+                updateObjectStatus();
+            }
         }
 
         // Crosshair positioning with camera movement support
