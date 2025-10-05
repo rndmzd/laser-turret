@@ -853,9 +853,10 @@
                             <select id="detection-method" onchange="switchDetectionMethod()">
                                 <option value="haar">Haar Cascades (Fast, Faces Only)</option>
                                 <option value="tflite">TensorFlow Lite (Accurate, 80+ Classes)</option>
+                                <option value="roboflow">Roboflow Inference (Custom Models)</option>
                             </select>
                             <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;" id="method-info">
-                                Haar: 30+ FPS | TFLite: 15-25 FPS
+                                Haar: 30+ FPS | TFLite: 15-25 FPS | Roboflow: Varies by network/model
                             </small>
                         </div>
 
@@ -917,8 +918,6 @@
                 <button class="btn-primary" onclick="applyBalloonSettings()">Apply Balloon Settings</button>
             </div>
         </div>
-                    </div>
-                        </div>
 
                         <div id="tflite-settings" style="display: none;">
                             <div class="slider-control">
@@ -943,6 +942,59 @@
 
                             <button onclick="applyTFLiteSettings()" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
                                 Apply TFLite Settings
+                            </button>
+                        </div>
+
+                        <div id="roboflow-settings" style="display: none;">
+                            <div class="input-control" style="margin-bottom: 15px;">
+                                <label>Server URL</label>
+                                <input type="text" id="roboflow-server-url" 
+                                       placeholder="http://192.168.1.100:9001"
+                                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">
+                                    IP address of the inference server
+                                </small>
+                            </div>
+
+                            <div class="input-control" style="margin-bottom: 15px;">
+                                <label>Model ID</label>
+                                <input type="text" id="roboflow-model-id" 
+                                       placeholder="project_id/version (e.g., soccer-players-5fuqs/1)"
+                                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">
+                                    Format: project_id/version. Find IDs in Roboflow (Project -> API)
+                                </small>
+                            </div>
+
+                            <div class="input-control" style="margin-bottom: 15px;">
+                                <label>API Key (optional)</label>
+                                <input type="password" id="roboflow-api-key" 
+                                       placeholder="Leave empty for public models"
+                                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            </div>
+
+                            <div class="slider-control">
+                                <label>
+                                    Confidence Threshold 
+                                    <span id="roboflow-confidence-value" style="color: #667eea;">0.5</span>
+                                </label>
+                                <input type="range" id="roboflow-confidence" min="0.1" max="0.9" step="0.05" value="0.5" 
+                                       oninput="updateRoboflowConfidence()">
+                                <small style="color: #666; font-size: 11px;">Higher = fewer false positives</small>
+                            </div>
+
+                            <div class="input-control" style="margin-bottom: 15px;">
+                                <label>Filter Classes (optional)</label>
+                                <input type="text" id="roboflow-filter-classes" 
+                                       placeholder="e.g., balloon"
+                                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">
+                                    Leave empty for all classes
+                                </small>
+                            </div>
+
+                            <button onclick="applyRoboflowSettings()" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                Apply Roboflow Settings
                             </button>
                         </div>
 
@@ -988,6 +1040,25 @@
                             <div class="stat-row">
                                 <span class="stat-label">Accelerator</span>
                                 <span id="tflite-accelerator" class="stat-value">CPU</span>
+                            </div>
+                        </div>
+                        <!-- Roboflow Performance Stats -->
+                        <div id="roboflow-stats" style="display: none;">
+                            <div class="stat-row">
+                                <span class="stat-label">Server URL</span>
+                                <span id="roboflow-server-display" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Model ID</span>
+                                <span id="roboflow-model-display" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Inference Time</span>
+                                <span id="roboflow-inference-time" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Est. FPS</span>
+                                <span id="roboflow-fps" class="stat-value">--</span>
                             </div>
                         </div>
                     </div>
@@ -1217,6 +1288,15 @@
             });
             document.getElementById(`${tabName}-tab`).classList.add('active');
             event.target.classList.add('active');
+
+            // If leaving Object tab, make sure method-specific panels are hidden
+            if (tabName !== 'object') {
+                ['haar-settings','tflite-settings','roboflow-settings','current-mode-row','tflite-stats','roboflow-stats']
+                    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+            } else {
+                // Refresh object status to show appropriate panel for selected method
+                updateObjectStatus();
+            }
         }
 
         // Crosshair positioning with camera movement support
@@ -1962,25 +2042,35 @@
             // Show/hide method-specific settings
             const haarSettings = document.getElementById('haar-settings');
             const tfliteSettings = document.getElementById('tflite-settings');
+            const roboflowSettings = document.getElementById('roboflow-settings');
             const currentModeRow = document.getElementById('current-mode-row');
             const tfliteStats = document.getElementById('tflite-stats');
+            const roboflowStats = document.getElementById('roboflow-stats');
+            const balloonSettings = document.getElementById('balloon-settings');
+            
+            // Hide all first
+            haarSettings.style.display = 'none';
+            tfliteSettings.style.display = 'none';
+            roboflowSettings.style.display = 'none';
+            tfliteStats.style.display = 'none';
+            roboflowStats.style.display = 'none';
+            if (balloonSettings) balloonSettings.style.display = 'none';
             
             if (method === 'haar') {
                 haarSettings.style.display = 'block';
-                tfliteSettings.style.display = 'none';
                 currentModeRow.style.display = 'flex';
-                tfliteStats.style.display = 'none';
                 document.getElementById('detection-method-display').textContent = 'Haar Cascades';
                 showHideBalloonSettings();
-            } else {
-                haarSettings.style.display = 'none';
+            } else if (method === 'tflite') {
                 tfliteSettings.style.display = 'block';
                 currentModeRow.style.display = 'none';
                 tfliteStats.style.display = 'block';
                 document.getElementById('detection-method-display').textContent = 'TensorFlow Lite';
-                // Hide balloon settings when not in Haar
-                const balloonSettings = document.getElementById('balloon-settings');
-                if (balloonSettings) balloonSettings.style.display = 'none';
+            } else if (method === 'roboflow') {
+                roboflowSettings.style.display = 'block';
+                currentModeRow.style.display = 'none';
+                roboflowStats.style.display = 'block';
+                document.getElementById('detection-method-display').textContent = 'Roboflow Inference';
             }
             
             // Switch method on server
@@ -1992,8 +2082,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
+                    const methodNames = {
+                        'haar': 'Haar Cascades',
+                        'tflite': 'TensorFlow Lite',
+                        'roboflow': 'Roboflow Inference'
+                    };
                     showStatus('object-status-message', true, 
-                        `Switched to ${method === 'haar' ? 'Haar Cascades' : 'TensorFlow Lite'}`);
+                        `Switched to ${methodNames[method] || method}`);
                     updateObjectStatus();
                 } else {
                     showStatus('object-status-message', false, data.message);
@@ -2041,6 +2136,62 @@
             });
         }
 
+        function updateRoboflowConfidence() {
+            const value = document.getElementById('roboflow-confidence').value;
+            document.getElementById('roboflow-confidence-value').textContent = value;
+        }
+
+        function applyRoboflowSettings() {
+            const serverUrl = document.getElementById('roboflow-server-url').value;
+            const modelId = document.getElementById('roboflow-model-id').value;
+            const apiKey = document.getElementById('roboflow-api-key').value;
+            const confidence = parseFloat(document.getElementById('roboflow-confidence').value);
+            const filterClasses = document.getElementById('roboflow-filter-classes').value;
+            
+            fetch('/roboflow/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    server_url: serverUrl || undefined,
+                    model_id: modelId || undefined,
+                    api_key: apiKey || undefined,
+                    confidence: confidence,
+                    filter_classes: filterClasses
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        `Roboflow settings applied - Confidence: ${data.confidence ? data.confidence.toFixed(2) : 'N/A'}`);
+                    // Switch to Roboflow method after applying settings
+                    fetch('/detection_method/switch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ method: 'roboflow' })
+                    })
+                    .then(r => r.json())
+                    .then(sw => {
+                        if (sw.status === 'success') {
+                            document.getElementById('detection-method').value = 'roboflow';
+                            updateObjectStatus();
+                        } else {
+                            showStatus('object-status-message', false, sw.message || 'Failed to switch to Roboflow');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error switching to Roboflow:', err);
+                    });
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply Roboflow settings');
+                console.error('Error applying Roboflow settings:', error);
+            });
+        }
+
         function updateObjectStatus() {
             fetch('/object_detection/status')
                 .then(response => response.json())
@@ -2058,14 +2209,23 @@
                         // Show/hide appropriate settings
                         const haarSettings = document.getElementById('haar-settings');
                         const tfliteSettings = document.getElementById('tflite-settings');
+                        const roboflowSettings = document.getElementById('roboflow-settings');
                         const currentModeRow = document.getElementById('current-mode-row');
                         const tfliteStats = document.getElementById('tflite-stats');
+                        const roboflowStats = document.getElementById('roboflow-stats');
+                        const balloonSettings = document.getElementById('balloon-settings');
+                        
+                        // Hide all first
+                        haarSettings.style.display = 'none';
+                        tfliteSettings.style.display = 'none';
+                        roboflowSettings.style.display = 'none';
+                        tfliteStats.style.display = 'none';
+                        roboflowStats.style.display = 'none';
+                        if (balloonSettings) balloonSettings.style.display = 'none';
                         
                         if (method === 'haar') {
                             haarSettings.style.display = 'block';
-                            tfliteSettings.style.display = 'none';
                             currentModeRow.style.display = 'flex';
-                            tfliteStats.style.display = 'none';
                             document.getElementById('detection-method-display').textContent = 'Haar Cascades';
                             document.getElementById('current-mode').textContent = 
                                 data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
@@ -2085,11 +2245,9 @@
                                 document.getElementById('balloon-ar-min-value').textContent = (bs.aspect_ratio_min ?? 0.6).toFixed(2);
                                 document.getElementById('balloon-ar-max').value = bs.aspect_ratio_max ?? 1.6;
                                 document.getElementById('balloon-ar-max-value').textContent = (bs.aspect_ratio_max ?? 1.6).toFixed(2);
-                                // Show/hide balloon settings based on mode
                                 showHideBalloonSettings();
                             }
-                        } else {
-                            haarSettings.style.display = 'none';
+                        } else if (method === 'tflite') {
                             tfliteSettings.style.display = 'block';
                             currentModeRow.style.display = 'none';
                             tfliteStats.style.display = 'block';
@@ -2105,16 +2263,57 @@
                                 document.getElementById('tflite-accelerator').textContent = 
                                     stats.accelerator;
                                 
-                                // Update TFLite settings controls with current values
                                 if (stats.confidence_threshold !== undefined) {
                                     document.getElementById('tflite-confidence').value = stats.confidence_threshold;
                                     document.getElementById('tflite-confidence-value').textContent = 
                                         stats.confidence_threshold.toFixed(2);
                                 }
                             }
-                            // Hide balloon settings when not in Haar
-                            const balloonSettings = document.getElementById('balloon-settings');
-                            if (balloonSettings) balloonSettings.style.display = 'none';
+                        } else if (method === 'roboflow') {
+                            roboflowSettings.style.display = 'block';
+                            currentModeRow.style.display = 'none';
+                            roboflowStats.style.display = 'block';
+                            document.getElementById('detection-method-display').textContent = 'Roboflow Inference';
+                            
+                            // Update Roboflow stats if available
+                            if (data.roboflow_stats) {
+                                const stats = data.roboflow_stats;
+                                document.getElementById('roboflow-server-display').textContent = 
+                                    stats.server_url || '--';
+                                document.getElementById('roboflow-model-display').textContent = 
+                                    stats.model_id || '--';
+                                document.getElementById('roboflow-inference-time').textContent = 
+                                    stats.avg_inference_ms ? stats.avg_inference_ms.toFixed(1) + ' ms' : '--';
+                                document.getElementById('roboflow-fps').textContent = 
+                                    stats.estimated_fps ? stats.estimated_fps.toFixed(1) + ' FPS' : '--';
+                                
+                                // Populate form fields with current settings
+                                if (stats.server_url) {
+                                    document.getElementById('roboflow-server-url').value = stats.server_url;
+                                }
+                                if (stats.model_id) {
+                                    document.getElementById('roboflow-model-id').value = stats.model_id;
+                                }
+                                if (stats.confidence !== undefined) {
+                                    document.getElementById('roboflow-confidence').value = stats.confidence;
+                                    document.getElementById('roboflow-confidence-value').textContent = 
+                                        stats.confidence.toFixed(2);
+                                }
+                                if (stats.class_filter && stats.class_filter.length > 0) {
+                                    document.getElementById('roboflow-filter-classes').value = 
+                                        stats.class_filter.join(',');
+                                }
+                                // Reflect API key presence without exposing it
+                                const apiKeyInput = document.getElementById('roboflow-api-key');
+                                if (apiKeyInput) {
+                                    if (stats.api_key_set) {
+                                        apiKeyInput.placeholder = 'Saved (hidden)';
+                                        apiKeyInput.value = '';
+                                    } else {
+                                        apiKeyInput.placeholder = 'Leave empty for public models';
+                                    }
+                                }
+                            }
                         }
                         
                         // Sync UI with server state

@@ -183,3 +183,6 @@ camera_calibration.json
 # Training data (allow requirements file)
 training/*
 !training/requirements-train.txt
+env*/
+
+laserturret.conf

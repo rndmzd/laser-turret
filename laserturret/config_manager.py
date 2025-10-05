@@ -75,6 +75,11 @@ class ConfigManager:
             'balloon_fill_ratio_min': 0.5,       # 0.0-1.0
             'balloon_aspect_ratio_min': 0.6,     # w/h
             'balloon_aspect_ratio_max': 1.6,     # w/h
+            'roboflow_server_url': 'http://localhost:9001',
+            'roboflow_model_id': '',
+            'roboflow_api_key': '',
+            'roboflow_confidence': 0.5,
+            'roboflow_class_filter': '',
         }
     }
     
@@ -89,7 +94,7 @@ class ConfigManager:
             config_file: Path to configuration file
         """
         self.config_file = config_file
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
         self._loaded = False
         self._cache: Dict[str, Any] = {}
         
@@ -286,7 +291,7 @@ class ConfigManager:
     def get_detection_method(self) -> str:
         """Get detection method ('haar' or 'tflite')"""
         method = self._get('Detection', 'detection_method', str)
-        if method not in ['haar', 'tflite']:
+        if method not in ['haar', 'tflite', 'roboflow']:
             logger.warning(f"Invalid detection method: {method}, defaulting to 'haar'")
             return 'haar'
         return method
@@ -307,6 +312,26 @@ class ConfigManager:
     def get_tflite_filter_classes(self) -> List[str]:
         """Get list of classes to filter for TFLite detection"""
         classes_str = self._get('Detection', 'tflite_filter_classes', str)
+        if not classes_str or classes_str.strip() == '':
+            return []
+        return [c.strip() for c in classes_str.split(',') if c.strip()]
+
+    # Roboflow Detection Configuration
+    def get_roboflow_server_url(self) -> str:
+        return self._get('Detection', 'roboflow_server_url', str)
+
+    def get_roboflow_model_id(self) -> str:
+        return self._get('Detection', 'roboflow_model_id', str)
+
+    def get_roboflow_api_key(self) -> str:
+        return self._get('Detection', 'roboflow_api_key', str)
+
+    def get_roboflow_confidence(self) -> float:
+        confidence = self._get('Detection', 'roboflow_confidence', float)
+        return max(0.0, min(1.0, confidence))
+
+    def get_roboflow_class_filter(self) -> List[str]:
+        classes_str = self._get('Detection', 'roboflow_class_filter', str)
         if not classes_str or classes_str.strip() == '':
             return []
         return [c.strip() for c in classes_str.split(',') if c.strip()]
