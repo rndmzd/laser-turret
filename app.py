@@ -52,6 +52,7 @@ crosshair_lock = threading.Lock()
 fps_buffer = deque(maxlen=30)
 last_frame_time = None
 fps_value = 0
+fps_lock = threading.Lock()
 
 # Exposure monitoring
 exposure_stats = {
