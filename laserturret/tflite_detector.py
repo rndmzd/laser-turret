@@ -148,10 +148,23 @@ class TFLiteDetector:
                 
                 zip_path.unlink()  # Delete zip file
                 
-                # Find the .tflite file
-                tflite_files = list(model_dir.glob('*.tflite'))
-                if tflite_files:
-                    tflite_files[0].rename(model_path)
+                # Find the .tflite file recursively (ZIPs often extract into a subfolder)
+                candidates = list(model_dir.rglob('*.tflite'))
+                if not candidates:
+                    raise FileNotFoundError(
+                        f"No .tflite file found after extracting ZIP to {model_dir}."
+                    )
+                # Prefer a file named exactly like the expected filename or 'detect.tflite'
+                preferred = None
+                for c in candidates:
+                    if c.name == model_info['file']:
+                        preferred = c
+                        break
+                if preferred is None:
+                    preferred = next((c for c in candidates if c.name.lower() == 'detect.tflite'), candidates[0])
+                if preferred.resolve() != model_path.resolve():
+                    # Move/copy into expected cache path
+                    preferred.replace(model_path)
             else:
                 # Direct download
                 urllib.request.urlretrieve(model_info['url'], model_path)

@@ -365,43 +365,34 @@ def initialize_tflite_detector():
     try:
         config = get_config()
 
-        # Load desired detection method from config first
-        detection_method = config.get_detection_method()
+        # Respect the current runtime selection; do not override detection_method from config here.
+        if not TFLITE_AVAILABLE:
+            print("TensorFlow Lite not available. Install with: pip install tflite-runtime")
+            return
 
-        # Only attempt to init TFLite if requested
-        if detection_method == 'tflite':
-            if not TFLITE_AVAILABLE:
-                print("TensorFlow Lite not available. Falling back to Haar Cascades.")
-                detection_method = 'haar'
-                return
+        model_name = config.get_tflite_model()
+        use_coral = config.get_use_coral()
+        confidence = config.get_tflite_confidence()
+        tflite_filter_classes = config.get_tflite_filter_classes()
 
-            model_name = config.get_tflite_model()
-            use_coral = config.get_use_coral()
-            confidence = config.get_tflite_confidence()
-            tflite_filter_classes = config.get_tflite_filter_classes()
+        print(f"Initializing TFLite detector: {model_name}")
+        print(f"  Coral USB Accelerator: {use_coral}")
+        print(f"  Confidence threshold: {confidence}")
+        if tflite_filter_classes:
+            print(f"  Filter classes: {', '.join(tflite_filter_classes)}")
 
-            print(f"Initializing TFLite detector: {model_name}")
-            print(f"  Coral USB Accelerator: {use_coral}")
-            print(f"  Confidence threshold: {confidence}")
-            if tflite_filter_classes:
-                print(f"  Filter classes: {', '.join(tflite_filter_classes)}")
+        tflite_detector = TFLiteDetector(
+            model_name=model_name,
+            use_coral=use_coral,
+            confidence_threshold=confidence
+        )
 
-            tflite_detector = TFLiteDetector(
-                model_name=model_name,
-                use_coral=use_coral,
-                confidence_threshold=confidence
-            )
-
-            print("TFLite detector initialized successfully")
-            print(f"  Stats: {tflite_detector.get_stats()}")
-        # If method is 'roboflow' or 'haar', TFLite init is not needed here
+        print("TFLite detector initialized successfully")
+        print(f"  Stats: {tflite_detector.get_stats()}")
 
     except Exception as e:
         print(f"Warning: Failed to initialize TFLite detector: {e}")
-        if detection_method == 'tflite':
-            print("Falling back to Haar Cascades")
-            detection_method = 'haar'
-            tflite_detector = None
+        tflite_detector = None
 
 def initialize_roboflow_detector():
     global roboflow_detector, roboflow_filter_classes, detection_method
