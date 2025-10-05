@@ -1277,6 +1277,8 @@
     <script>
         const CAMERA_WIDTH = 1920;
         const CAMERA_HEIGHT = 1080;
+        let laserEditing = false;
+        let lastLaserEditTs = 0;
 
         // Tab switching
         function switchTab(tabName) {
@@ -1644,26 +1646,36 @@
         function updatePulseDurationValue() {
             const value = document.getElementById('pulse-duration').value;
             document.getElementById('pulse-duration-value').textContent = value + 'ms';
+            lastLaserEditTs = Date.now();
+            laserEditing = true;
         }
 
         function updateBurstCountValue() {
             const value = document.getElementById('burst-count').value;
             document.getElementById('burst-count-value').textContent = value;
+            lastLaserEditTs = Date.now();
+            laserEditing = true;
         }
 
         function updateBurstDelayValue() {
             const value = document.getElementById('burst-delay').value;
             document.getElementById('burst-delay-value').textContent = value + 'ms';
+            lastLaserEditTs = Date.now();
+            laserEditing = true;
         }
 
         function updateLaserCooldownValue() {
             const value = parseFloat(document.getElementById('laser-cooldown').value).toFixed(1);
             document.getElementById('laser-cooldown-value').textContent = value + 's';
+            lastLaserEditTs = Date.now();
+            laserEditing = true;
         }
 
         function updateLaserPowerValue() {
             const value = parseInt(document.getElementById('laser-power').value);
             document.getElementById('laser-power-value').textContent = value + '%';
+            lastLaserEditTs = Date.now();
+            laserEditing = true;
         }
 
         function applyLaserSettings() {
@@ -1688,6 +1700,7 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('laser-status-message', true, `Laser settings applied (Power: ${data.power}%)`);
+                    laserEditing = false;
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
@@ -1724,22 +1737,39 @@
                         document.getElementById('laser-hardware-status').textContent = 
                             data.hardware_available ? 'Connected' : 'Simulation';
                         
-                        // Sync UI with server state
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
-                        document.getElementById('pulse-duration').value = data.pulse_duration * 1000;
-                        document.getElementById('burst-count').value = data.burst_count;
-                        document.getElementById('burst-delay').value = data.burst_delay * 1000;
-                        document.getElementById('laser-cooldown').value = data.cooldown;
-                        if (data.power !== undefined) {
-                            document.getElementById('laser-power').value = data.power;
+
+                        const now = Date.now();
+                        const allowSliderSync = !laserEditing || (now - lastLaserEditTs > 1500);
+                        if (allowSliderSync) {
+                            const pd = document.getElementById('pulse-duration');
+                            const bc = document.getElementById('burst-count');
+                            const bd = document.getElementById('burst-delay');
+                            const lcd = document.getElementById('laser-cooldown');
+                            const lp = document.getElementById('laser-power');
+
+                            pd.value = data.pulse_duration * 1000;
+                            bc.value = data.burst_count;
+                            bd.value = data.burst_delay * 1000;
+                            lcd.value = data.cooldown;
+                            if (data.power !== undefined) {
+                                lp.value = data.power;
+                            }
+
+                            // Update labels without toggling editing
+                            const pdv = document.getElementById('pulse-duration-value');
+                            const bcv = document.getElementById('burst-count-value');
+                            const bdv = document.getElementById('burst-delay-value');
+                            const lcdv = document.getElementById('laser-cooldown-value');
+                            const lpv = document.getElementById('laser-power-value');
+                            if (pdv) pdv.textContent = pd.value + 'ms';
+                            if (bcv) bcv.textContent = bc.value;
+                            if (bdv) bdv.textContent = bd.value + 'ms';
+                            if (lcdv) lcdv.textContent = parseFloat(lcd.value).toFixed(1) + 's';
+                            if (lpv) lpv.textContent = parseInt(lp.value) + '%';
                         }
                         
-                        updatePulseDurationValue();
-                        updateBurstCountValue();
-                        updateBurstDelayValue();
-                        updateLaserCooldownValue();
-                        updateLaserPowerValue();
                         
                         // Update fire button state
                         document.getElementById('fire-button').disabled = !data.ready_to_fire || !data.enabled;
