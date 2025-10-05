@@ -338,7 +338,11 @@ class RPiGPIO(GPIOInterface):
         else:
             pud = self.GPIO.PUD_OFF
         
-        self.GPIO.setup(pin, gpio_mode, pull_up_down=pud)
+        # For outputs, explicitly drive LOW on setup to avoid default HIGH/glitches
+        if mode == PinMode.OUTPUT:
+            self.GPIO.setup(pin, gpio_mode, pull_up_down=pud, initial=self.GPIO.LOW)
+        else:
+            self.GPIO.setup(pin, gpio_mode, pull_up_down=pud)
     
     def output(self, pin: int, value: int) -> None:
         self.GPIO.output(pin, self.GPIO.HIGH if value else self.GPIO.LOW)

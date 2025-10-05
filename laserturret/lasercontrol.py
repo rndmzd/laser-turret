@@ -37,10 +37,12 @@ class LaserControl:
         
         # Initialize PWM
         self.pwm = self.gpio.pwm(self.gpio_pin, pwm_frequency)
-        self.pwm.start(0)  # Start with 0% duty cycle
+        self.pwm.start(0)  # Start with 0% duty cycle (laser OFF)
         
-        # Set initial power level
+        # Store initial power level (do not drive output until turned ON)
+        self._power_level = 0
         self.set_power(initial_power)
+        self._apply_output()
         
         logger.info(f"[{self.name}] Initialized on GPIO {gpio_pin} with {pwm_frequency}Hz PWM")
 
@@ -65,8 +67,9 @@ class LaserControl:
             return False
 
         self._power_level = level
-        self.pwm.change_duty_cycle(level)
-        logger.debug(f"[{self.name}] Power level set to {level}%")
+        # Apply only if laser is ON; otherwise keep output at 0
+        self._apply_output()
+        logger.debug(f"[{self.name}] Power level set to {level}% (applied={self.is_on})")
         return True
 
     def on(self, power_level=None):
@@ -76,17 +79,19 @@ class LaserControl:
         :param power_level: Optional power level (0-100)
         """
         if power_level is not None:
-            self.set_power(power_level)
+            # Update stored power but don't double-apply below
+            if self._power_level != power_level:
+                self._power_level = power_level
         elif self._power_level == 0:
-            self.set_power(100)  # Default to full power if no level set
-            
+            self._power_level = 100  # Default to full power if no level set
         self.is_on = True
+        self._apply_output()
         logger.info(f"[{self.name}] Laser ON at {self._power_level}% power")
 
     def off(self):
         """Turn laser off while preserving last power level setting."""
-        self.pwm.change_duty_cycle(0)
         self.is_on = False
+        self._apply_output()
         logger.info(f"[{self.name}] Laser OFF")
 
     def pulse(self, duration, power_level=None):
@@ -99,16 +104,16 @@ class LaserControl:
         original_power = self._power_level
         
         if power_level is not None:
-            self.set_power(power_level)
-            
+            self._power_level = power_level
         self.on()
         sleep(duration)
         self.off()
         
         # Restore original power level
         if power_level is not None:
-            self.set_power(original_power)
-            
+            self._power_level = original_power
+            self._apply_output()
+        
         logger.debug(f"[{self.name}] Completed {duration}s pulse at {self._power_level}% power")
 
     def cleanup(self):
@@ -117,6 +122,14 @@ class LaserControl:
         self.pwm.stop()
         self.gpio.cleanup([self.gpio_pin])
         logger.info(f"[{self.name}] Cleaned up GPIO resources")
+
+    def _apply_output(self):
+        """Apply the current on/off state and power level to the PWM output."""
+        try:
+            duty = self._power_level if self.is_on else 0
+            self.pwm.change_duty_cycle(duty)
+        except Exception as e:
+            logger.error(f"[{self.name}] Failed to apply PWM output: {e}")
 
     def __enter__(self):
         """Context manager entry."""
