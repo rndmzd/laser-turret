@@ -476,7 +476,7 @@ class StepperController:
                 
                 report('info', f'Moving to center position: X={x_center}, Y={y_center}')
                 
-                # Move to center (bypass limits since we're still calibrating)
+                # Move to center (bypass limits since we're still calibrating) using default step delay
                 self.step('x', x_center - self.calibration.x_position, bypass_limits=True)
                 self.step('y', y_center - self.calibration.y_position, bypass_limits=True)
                 
@@ -524,7 +524,7 @@ class StepperController:
             dict with 'min' and 'max' step positions
         """
         max_search_steps = 5000  # Maximum steps to search in each direction
-        search_speed = 0.001  # Step delay during calibration (doubled speed from 0.002)
+        search_speed = 0.001  # Step delay during calibration
         
         # Save current position
         if axis == 'x':

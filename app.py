@@ -8,6 +8,9 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
+import os
+import json
+
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
 from laserturret.stepper_controller import StepperController
@@ -39,8 +42,10 @@ picam2 = None
 CAMERA_WIDTH = 1920
 CAMERA_HEIGHT = 1080
 
-# Crosshair position
+# Crosshair position and calibration offset
 crosshair_pos = {'x': CAMERA_WIDTH // 2, 'y': CAMERA_HEIGHT // 2}
+crosshair_offset = {'x': 0, 'y': 0}  # Offset from frame center in pixels (image coords)
+crosshair_calibration_file = 'crosshair_calibration.json'
 crosshair_lock = threading.Lock()
 
 # FPS monitoring
@@ -140,6 +145,21 @@ balloon_fill_ratio_min = 0.5
 balloon_aspect_ratio_min = 0.6
 balloon_aspect_ratio_max = 1.6
 
+def load_crosshair_calibration():
+    """Load crosshair calibration offset from file"""
+    global crosshair_offset
+    if os.path.exists(crosshair_calibration_file):
+        with open(crosshair_calibration_file, 'r') as f:
+            data = json.load(f)
+            crosshair_offset['x'] = data['x']
+            crosshair_offset['y'] = data['y']
+
+def save_crosshair_calibration():
+    """Save crosshair calibration offset to file"""
+    global crosshair_offset
+    with open(crosshair_calibration_file, 'w') as f:
+        json.dump(crosshair_offset, f)
+
 def initialize_laser_control():
     """Initialize laser control with PWM"""
     global laser_control, laser_power
@@ -234,9 +254,11 @@ def initialize_camera():
         # Start exposure monitoring
         threading.Thread(target=monitor_exposure, daemon=True).start()
         
-        # Initialize positions
-        crosshair_pos['x'] = CAMERA_WIDTH // 2
-        crosshair_pos['y'] = CAMERA_HEIGHT // 2
+        # Initialize positions using crosshair calibration offset
+        load_crosshair_calibration()
+        with crosshair_lock:
+            crosshair_pos['x'] = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+            crosshair_pos['y'] = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
         last_frame_time = datetime.now()
         
         print("Camera initialized successfully")
@@ -343,43 +365,34 @@ def initialize_tflite_detector():
     try:
         config = get_config()
 
-        # Load desired detection method from config first
-        detection_method = config.get_detection_method()
+        # Respect the current runtime selection; do not override detection_method from config here.
+        if not TFLITE_AVAILABLE:
+            print("TensorFlow Lite not available. Install with: pip install tflite-runtime")
+            return
 
-        # Only attempt to init TFLite if requested
-        if detection_method == 'tflite':
-            if not TFLITE_AVAILABLE:
-                print("TensorFlow Lite not available. Falling back to Haar Cascades.")
-                detection_method = 'haar'
-                return
+        model_name = config.get_tflite_model()
+        use_coral = config.get_use_coral()
+        confidence = config.get_tflite_confidence()
+        tflite_filter_classes = config.get_tflite_filter_classes()
 
-            model_name = config.get_tflite_model()
-            use_coral = config.get_use_coral()
-            confidence = config.get_tflite_confidence()
-            tflite_filter_classes = config.get_tflite_filter_classes()
+        print(f"Initializing TFLite detector: {model_name}")
+        print(f"  Coral USB Accelerator: {use_coral}")
+        print(f"  Confidence threshold: {confidence}")
+        if tflite_filter_classes:
+            print(f"  Filter classes: {', '.join(tflite_filter_classes)}")
 
-            print(f"Initializing TFLite detector: {model_name}")
-            print(f"  Coral USB Accelerator: {use_coral}")
-            print(f"  Confidence threshold: {confidence}")
-            if tflite_filter_classes:
-                print(f"  Filter classes: {', '.join(tflite_filter_classes)}")
+        tflite_detector = TFLiteDetector(
+            model_name=model_name,
+            use_coral=use_coral,
+            confidence_threshold=confidence
+        )
 
-            tflite_detector = TFLiteDetector(
-                model_name=model_name,
-                use_coral=use_coral,
-                confidence_threshold=confidence
-            )
-
-            print("TFLite detector initialized successfully")
-            print(f"  Stats: {tflite_detector.get_stats()}")
-        # If method is 'roboflow' or 'haar', TFLite init is not needed here
+        print("TFLite detector initialized successfully")
+        print(f"  Stats: {tflite_detector.get_stats()}")
 
     except Exception as e:
         print(f"Warning: Failed to initialize TFLite detector: {e}")
-        if detection_method == 'tflite':
-            print("Falling back to Haar Cascades")
-            detection_method = 'haar'
-            tflite_detector = None
+        tflite_detector = None
 
 def initialize_roboflow_detector():
     global roboflow_detector, roboflow_filter_classes, detection_method
@@ -716,9 +729,12 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                         crosshair_pos['y'] = sy_i
                             elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
                                 if not stepper_controller.moving:
+                                    with crosshair_lock:
+                                        tx = sx_i - int(crosshair_offset['x'])
+                                        ty = sy_i - int(crosshair_offset['y'])
                                     threading.Thread(
                                         target=lambda: stepper_controller.move_to_center_object(
-                                            sx_i, sy_i, CAMERA_WIDTH, CAMERA_HEIGHT
+                                            tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT
                                         ),
                                         daemon=True
                                     ).start()
@@ -763,9 +779,12 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                         crosshair_pos['y'] = msy
                             elif tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
                                 if not stepper_controller.moving:
+                                    with crosshair_lock:
+                                        tx = msx - int(crosshair_offset['x'])
+                                        ty = msy - int(crosshair_offset['y'])
                                     threading.Thread(
                                         target=lambda: stepper_controller.move_to_center_object(
-                                            msx, msy, CAMERA_WIDTH, CAMERA_HEIGHT
+                                            tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT
                                         ),
                                         daemon=True
                                     ).start()
@@ -777,11 +796,10 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
     # Determine crosshair position based on tracking mode
     with tracking_mode_lock:
         if tracking_mode == 'camera' and camera_tracking_enabled:
-            # Camera tracking mode: crosshair stays centered
-            center_x = CAMERA_WIDTH // 2
-            center_y = CAMERA_HEIGHT // 2
+            with crosshair_lock:
+                center_x = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+                center_y = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
         else:
-            # Crosshair mode: use crosshair position
             with crosshair_lock:
                 center_x = crosshair_pos['x']
                 center_y = crosshair_pos['y']
@@ -945,8 +963,9 @@ def update_crosshair():
 def reset_crosshair():
     """Reset crosshair to center position"""
     with crosshair_lock:
-        crosshair_pos['x'] = CAMERA_WIDTH // 2
-        crosshair_pos['y'] = CAMERA_HEIGHT // 2
+        # Reset to calibrated default (center + offset)
+        crosshair_pos['x'] = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+        crosshair_pos['y'] = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
     return jsonify({
         'status': 'success',
         'x': crosshair_pos['x'],
@@ -958,13 +977,18 @@ def get_crosshair_position():
     """Get crosshair position in relative coordinates (centered at 0,0)"""
     with tracking_mode_lock:
         if tracking_mode == 'camera' and camera_tracking_enabled:
-            # In camera tracking mode, crosshair is always centered
+            # In camera tracking mode, crosshair shown at center + offset
+            with crosshair_lock:
+                abs_x = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+                abs_y = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
+                rel_x = int(crosshair_offset['x'])
+                rel_y = -int(crosshair_offset['y'])  # Invert Y axis for relative coords
             return jsonify({
                 'status': 'success',
-                'absolute_x': CAMERA_WIDTH // 2,
-                'absolute_y': CAMERA_HEIGHT // 2,
-                'relative_x': 0,
-                'relative_y': 0
+                'absolute_x': abs_x,
+                'absolute_y': abs_y,
+                'relative_x': rel_x,
+                'relative_y': rel_y
             })
         else:
             # In crosshair mode, calculate actual crosshair position
@@ -985,6 +1009,57 @@ def get_crosshair_position():
                     'relative_x': relative_x,
                     'relative_y': relative_y
                 })
+
+@app.route('/crosshair/calibration', methods=['GET'])
+def get_crosshair_calibration():
+    with crosshair_lock:
+        center_x = CAMERA_WIDTH // 2
+        center_y = CAMERA_HEIGHT // 2
+        abs_x = center_x + int(crosshair_offset['x'])
+        abs_y = center_y + int(crosshair_offset['y'])
+        return jsonify({
+            'status': 'success',
+            'offset': {'x': int(crosshair_offset['x']), 'y': int(crosshair_offset['y'])},
+            'absolute': {'x': abs_x, 'y': abs_y}
+        })
+
+@app.route('/crosshair/calibration/set', methods=['POST'])
+def set_crosshair_calibration():
+    try:
+        data = request.get_json()
+        x = int(data.get('x'))
+        y = int(data.get('y'))
+        x = max(0, min(CAMERA_WIDTH - 1, x))
+        y = max(0, min(CAMERA_HEIGHT - 1, y))
+        cx = CAMERA_WIDTH // 2
+        cy = CAMERA_HEIGHT // 2
+        with crosshair_lock:
+            crosshair_offset['x'] = int(x - cx)
+            crosshair_offset['y'] = int(y - cy)
+            save_crosshair_calibration()
+            crosshair_pos['x'] = cx + int(crosshair_offset['x'])
+            crosshair_pos['y'] = cy + int(crosshair_offset['y'])
+            return jsonify({
+                'status': 'success',
+                'offset': {'x': int(crosshair_offset['x']), 'y': int(crosshair_offset['y'])},
+                'absolute': {'x': crosshair_pos['x'], 'y': crosshair_pos['y']}
+            })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/crosshair/calibration/reset', methods=['POST'])
+def reset_crosshair_calibration():
+    with crosshair_lock:
+        crosshair_offset['x'] = 0
+        crosshair_offset['y'] = 0
+        save_crosshair_calibration()
+        crosshair_pos['x'] = CAMERA_WIDTH // 2
+        crosshair_pos['y'] = CAMERA_HEIGHT // 2
+        return jsonify({
+            'status': 'success',
+            'offset': {'x': 0, 'y': 0},
+            'absolute': {'x': crosshair_pos['x'], 'y': crosshair_pos['y']}
+        })
 
 @app.route('/get_fps')
 def get_fps():
@@ -2131,6 +2206,10 @@ def move_camera_to_position():
         data = request.get_json()
         click_x = int(data.get('x'))
         click_y = int(data.get('y'))
+        # Adjust click position by crosshair offset so that camera recenters to crosshair location
+        with crosshair_lock:
+            adj_x = click_x - int(crosshair_offset['x'])
+            adj_y = click_y - int(crosshair_offset['y'])
         
         # In camera tracking mode, crosshair stays centered - don't update it
         # Only the camera moves to recenter the clicked position
@@ -2138,10 +2217,10 @@ def move_camera_to_position():
         # Move camera to recenter the clicked position in background thread
         def move_camera():
             moved = stepper_controller.move_to_center_object(
-                click_x, click_y, CAMERA_WIDTH, CAMERA_HEIGHT
+                adj_x, adj_y, CAMERA_WIDTH, CAMERA_HEIGHT
             )
             if moved:
-                print(f"Camera moved to recenter position ({click_x}, {click_y})")
+                print(f"Camera moved to recenter position ({click_x}, {click_y}) with offset ({crosshair_offset['x']}, {crosshair_offset['y']})")
             else:
                 print(f"Click at ({click_x}, {click_y}) within dead zone, no movement needed")
         
