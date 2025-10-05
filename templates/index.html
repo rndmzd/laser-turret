@@ -961,10 +961,10 @@
                             <div class="input-control" style="margin-bottom: 15px;">
                                 <label>Model ID</label>
                                 <input type="text" id="roboflow-model-id" 
-                                       placeholder="workspace/project/version"
+                                       placeholder="project_id/version (e.g., soccer-players-5fuqs/1)"
                                        style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">
-                                    Format: workspace/project/version
+                                    Format: project_id/version. Find IDs in Roboflow (Project -> API)
                                 </small>
                             </div>
 
@@ -2157,7 +2157,24 @@
                 if (data.status === 'success') {
                     showStatus('object-status-message', true, 
                         `Roboflow settings applied - Confidence: ${data.confidence ? data.confidence.toFixed(2) : 'N/A'}`);
-                    updateObjectStatus();
+                    // Switch to Roboflow method after applying settings
+                    fetch('/detection_method/switch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ method: 'roboflow' })
+                    })
+                    .then(r => r.json())
+                    .then(sw => {
+                        if (sw.status === 'success') {
+                            document.getElementById('detection-method').value = 'roboflow';
+                            updateObjectStatus();
+                        } else {
+                            showStatus('object-status-message', false, sw.message || 'Failed to switch to Roboflow');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error switching to Roboflow:', err);
+                    });
                 } else {
                     showStatus('object-status-message', false, data.message);
                 }

@@ -2,12 +2,16 @@ import time
 from typing import List, Dict, Any, Optional
 
 import numpy as np
+import logging
 
 try:
     from inference_sdk import InferenceHTTPClient
     ROBOFLOW_CLIENT_AVAILABLE = True
 except Exception:
     ROBOFLOW_CLIENT_AVAILABLE = False
+
+
+logger = logging.getLogger(__name__)
 
 
 class RoboflowDetector:
@@ -37,7 +41,8 @@ class RoboflowDetector:
                 params["class_filter"] = list(self.class_filter)
             result = self.client.infer(frame, model_id=self.model_id, **params)
             preds = result.get("predictions", [])
-        except Exception:
+        except Exception as e:
+            logger.error(f"Roboflow inference error: {e}")
             preds = []
         detections: List[Dict[str, Any]] = []
         if isinstance(preds, list):

@@ -339,44 +339,47 @@ def run_pattern_sequence():
 def initialize_tflite_detector():
     """Initialize TensorFlow Lite detector from config"""
     global tflite_detector, tflite_filter_classes, detection_method
-    
-    if not TFLITE_AVAILABLE:
-        print("TensorFlow Lite not available. Using Haar Cascades.")
-        detection_method = 'haar'
-        return
-    
+
     try:
         config = get_config()
-        
-        # Load detection settings from config
+
+        # Load desired detection method from config first
         detection_method = config.get_detection_method()
-        
+
+        # Only attempt to init TFLite if requested
         if detection_method == 'tflite':
+            if not TFLITE_AVAILABLE:
+                print("TensorFlow Lite not available. Falling back to Haar Cascades.")
+                detection_method = 'haar'
+                return
+
             model_name = config.get_tflite_model()
             use_coral = config.get_use_coral()
             confidence = config.get_tflite_confidence()
             tflite_filter_classes = config.get_tflite_filter_classes()
-            
+
             print(f"Initializing TFLite detector: {model_name}")
-            print(f"  Coral accelerator: {use_coral}")
+            print(f"  Coral USB Accelerator: {use_coral}")
             print(f"  Confidence threshold: {confidence}")
             if tflite_filter_classes:
                 print(f"  Filter classes: {', '.join(tflite_filter_classes)}")
-            
+
             tflite_detector = TFLiteDetector(
                 model_name=model_name,
                 use_coral=use_coral,
                 confidence_threshold=confidence
             )
-            
+
             print("TFLite detector initialized successfully")
             print(f"  Stats: {tflite_detector.get_stats()}")
-    
+        # If method is 'roboflow' or 'haar', TFLite init is not needed here
+
     except Exception as e:
         print(f"Warning: Failed to initialize TFLite detector: {e}")
-        print("Falling back to Haar Cascades")
-        detection_method = 'haar'
-        tflite_detector = None
+        if detection_method == 'tflite':
+            print("Falling back to Haar Cascades")
+            detection_method = 'haar'
+            tflite_detector = None
 
 def initialize_roboflow_detector():
     global roboflow_detector, roboflow_filter_classes, detection_method
@@ -806,7 +809,14 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
     # Add object detection status
     with object_lock:
         if object_detection_enabled:
-            obj_text = f"Detect: {detection_mode.upper()} ({len(detected_objects)})"
+            if detection_method == 'haar':
+                obj_text = f"Detect: {detection_mode.upper()} ({len(detected_objects)})"
+            elif detection_method == 'tflite':
+                obj_text = f"Detect: TFLITE ({len(detected_objects)})"
+            elif detection_method == 'roboflow':
+                obj_text = f"Detect: ROBOFLOW ({len(detected_objects)})"
+            else:
+                obj_text = f"Detect: {detection_method.upper()} ({len(detected_objects)})"
             if object_auto_track:
                 obj_text += " [TRACK]"
             texts.append(obj_text)
@@ -1497,11 +1507,6 @@ def update_tflite_settings():
 def update_roboflow_settings():
     global roboflow_detector, roboflow_filter_classes
     try:
-        if detection_method != 'roboflow':
-            return jsonify({
-                'status': 'error',
-                'message': 'Roboflow is not currently active'
-            }), 400
         if not ROBOFLOW_AVAILABLE:
             return jsonify({
                 'status': 'error',
@@ -1532,6 +1537,9 @@ def update_roboflow_settings():
                 roboflow_filter_classes = [str(c).strip() for c in filter_classes if str(c).strip()]
             else:
                 roboflow_filter_classes = []
+            # Update detector runtime filter as well
+            if roboflow_detector is not None:
+                roboflow_detector.class_filter = list(roboflow_filter_classes)
         if need_reinit:
             srv = server_url if server_url is not None else (roboflow_detector.server_url if roboflow_detector else 'http://localhost:9001')
             mid = model_id if model_id is not None else (roboflow_detector.model_id if roboflow_detector else '')
@@ -2244,6 +2252,9 @@ if __name__ == '__main__':
     initialize_camera()
     initialize_laser_control()  # Initialize laser control with PWM
     initialize_stepper_controller()  # Initialize stepper controller
-    initialize_tflite_detector()  # Initialize TFLite detector if configured
+    initialize_tflite_detector()  # Loads detection_method from config and initializes TFLite if requested
+    # If configuration requests Roboflow, initialize it now
+    if detection_method == 'roboflow':
+        initialize_roboflow_detector()
     initialize_balloon_settings()  # Initialize balloon settings from config
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
