@@ -13,7 +13,7 @@ import json
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
-from laserturret.stepper_controller import StepperController
+from laserturret.motion import CameraTracker as StepperController
 from laserturret.lasercontrol import LaserControl
 
 # Try to import TFLite detector

@@ -1,7 +1,7 @@
 import paho.mqtt.client as mqtt
 import time
 import logging
-from laserturret.steppercontrol import StepperMotor, MotorStatus, MotorError
+from laserturret.motion import StepperAxis as StepperMotor, MotorStatus, MotorError
 from laserturret.lasercontrol import LaserControl
 from laserturret.config_manager import get_config
 
