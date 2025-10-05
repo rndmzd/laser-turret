@@ -94,7 +94,7 @@ class ConfigManager:
             config_file: Path to configuration file
         """
         self.config_file = config_file
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
         self._loaded = False
         self._cache: Dict[str, Any] = {}
         

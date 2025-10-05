@@ -150,8 +150,8 @@ def initialize_laser_control():
         gpio = get_gpio_backend(mock=False)  # Set to True for testing without hardware
         
         # Get laser configuration
-        laser_pin = config.get('Laser', 'laser_pin', fallback=12)
-        laser_max_power = config.get('Laser', 'laser_max_power', fallback=100)
+        laser_pin = config.get_laser_pin()
+        laser_max_power = config.get_laser_max_power()
         
         # Initialize laser control
         laser_control = LaserControl(
