@@ -2,6 +2,7 @@ import time
 from typing import List, Dict, Any, Optional
 
 import numpy as np
+import cv2
 import logging
 
 try:
@@ -64,21 +65,34 @@ class RoboflowDetector:
         try:
             # Ensure configuration is applied (cheap op even if repeated)
             self.apply_config()
+            # Downscale to ~720p height (preserve aspect ratio) for inference to reduce bandwidth/latency
+            orig_h, orig_w = frame.shape[:2]
+            infer_frame = frame
+            infer_h, infer_w = orig_h, orig_w
+            if orig_h > 720:
+                scale = 720.0 / float(orig_h)
+                infer_w = max(1, int(round(orig_w * scale)))
+                infer_h = 720
+                infer_frame = cv2.resize(frame, (infer_w, infer_h), interpolation=cv2.INTER_AREA)
+
             # Prefer calling without kwargs; pass model_id explicitly for compatibility
-            result = self.client.infer(frame, model_id=self.model_id)
+            result = self.client.infer(infer_frame, model_id=self.model_id)
             preds = result.get("predictions", [])
         except Exception as e:
             logger.error(f"Roboflow inference error: {e}")
             preds = []
         detections: List[Dict[str, Any]] = []
         if isinstance(preds, list):
-            h, w = frame.shape[:2]
+            # Scale predictions back to original resolution
+            w, h = orig_w, orig_h
+            sx = float(w) / float(infer_w) if infer_w else 1.0
+            sy = float(h) / float(infer_h) if infer_h else 1.0
             for p in preds:
                 try:
-                    cx = float(p.get("x", 0))
-                    cy = float(p.get("y", 0))
-                    bw = float(p.get("width", 0))
-                    bh = float(p.get("height", 0))
+                    cx = float(p.get("x", 0)) * sx
+                    cy = float(p.get("y", 0)) * sy
+                    bw = float(p.get("width", 0)) * sx
+                    bh = float(p.get("height", 0)) * sy
                     conf = float(p.get("confidence", 0))
                     label = str(p.get("class", "object"))
                     x1 = int(max(0, min(w - 1, cx - bw / 2)))
