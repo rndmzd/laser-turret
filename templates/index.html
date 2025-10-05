@@ -918,8 +918,6 @@
                 <button class="btn-primary" onclick="applyBalloonSettings()">Apply Balloon Settings</button>
             </div>
         </div>
-                    </div>
-                        </div>
 
                         <div id="tflite-settings" style="display: none;">
                             <div class="slider-control">
@@ -2304,6 +2302,16 @@
                                 if (stats.class_filter && stats.class_filter.length > 0) {
                                     document.getElementById('roboflow-filter-classes').value = 
                                         stats.class_filter.join(',');
+                                }
+                                // Reflect API key presence without exposing it
+                                const apiKeyInput = document.getElementById('roboflow-api-key');
+                                if (apiKeyInput) {
+                                    if (stats.api_key_set) {
+                                        apiKeyInput.placeholder = 'Saved (hidden)';
+                                        apiKeyInput.value = '';
+                                    } else {
+                                        apiKeyInput.placeholder = 'Leave empty for public models';
+                                    }
                                 }
                             }
                         }

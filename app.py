@@ -1543,7 +1543,8 @@ def update_roboflow_settings():
         if need_reinit:
             srv = server_url if server_url is not None else (roboflow_detector.server_url if roboflow_detector else 'http://localhost:9001')
             mid = model_id if model_id is not None else (roboflow_detector.model_id if roboflow_detector else '')
-            key = api_key if api_key is not None else None
+            # If API key omitted, reuse existing key (if any)
+            key = api_key if api_key is not None else (roboflow_detector.api_key if roboflow_detector else None)
             if not mid:
                 return jsonify({'status': 'error', 'message': 'model_id is required'}), 400
             roboflow_detector = RoboflowDetector(

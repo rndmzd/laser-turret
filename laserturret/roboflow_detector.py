@@ -32,6 +32,7 @@ class RoboflowDetector:
         self.inference_times: List[float] = []
         self.frame_count = 0
         self.server_url = server_url
+        self.api_key = api_key or None
         # Try to select API v1 and model for future infer() calls without model_id
         try:
             if hasattr(self.client, "select_api_v1"):
@@ -118,4 +119,5 @@ class RoboflowDetector:
             "frame_count": self.frame_count,
             "confidence": self.confidence,
             "class_filter": list(self.class_filter),
+            "api_key_set": bool(self.api_key),
         }
