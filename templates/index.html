@@ -1296,6 +1296,15 @@
         let lastLaserEditTs = 0;
         let crosshairCalibrationMode = false;
 
+        // Editing guards to avoid UI snapping back during polling
+        const EDIT_IDLE_MS = 1500;
+        let tfliteEditing = false;
+        let tfliteLastEditTs = 0;
+        let roboflowEditing = false;
+        let roboflowLastEditTs = 0;
+        let balloonEditing = false;
+        let balloonLastEditTs = 0;
+
         // Tab switching
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => {
@@ -2215,6 +2224,8 @@
         function updateTFLiteConfidence() {
             const value = document.getElementById('tflite-confidence').value;
             document.getElementById('tflite-confidence-value').textContent = value;
+            tfliteLastEditTs = Date.now();
+            tfliteEditing = true;
         }
 
         function applyTFLiteSettings() {
@@ -2234,6 +2245,7 @@
                 if (data.status === 'success') {
                     showStatus('object-status-message', true, 
                         `TFLite settings applied - Confidence: ${data.confidence.toFixed(2)}`);
+                    tfliteEditing = false;
                     updateObjectStatus();
                 } else {
                     showStatus('object-status-message', false, data.message);
@@ -2248,6 +2260,8 @@
         function updateRoboflowConfidence() {
             const value = document.getElementById('roboflow-confidence').value;
             document.getElementById('roboflow-confidence-value').textContent = value;
+            roboflowLastEditTs = Date.now();
+            roboflowEditing = true;
         }
 
         function applyRoboflowSettings() {
@@ -2273,6 +2287,7 @@
                 if (data.status === 'success') {
                     showStatus('object-status-message', true, 
                         `Roboflow settings applied - Confidence: ${data.confidence ? data.confidence.toFixed(2) : 'N/A'}`);
+                    roboflowEditing = false;
                     // Switch to Roboflow method after applying settings
                     fetch('/detection_method/switch', {
                         method: 'POST',
@@ -2342,19 +2357,23 @@
                             // Sync balloon sliders from status
                             const bs = data.balloon_settings || {};
                             if (document.getElementById('balloon-v-threshold')) {
-                                document.getElementById('balloon-v-threshold').value = bs.v_threshold ?? 60;
-                                document.getElementById('balloon-v-value').textContent = bs.v_threshold ?? 60;
-                                document.getElementById('balloon-min-area').value = bs.min_area ?? 2000;
-                                document.getElementById('balloon-min-area-value').textContent = bs.min_area ?? 2000;
-                                document.getElementById('balloon-circularity').value = bs.circularity_min ?? 0.55;
-                                document.getElementById('balloon-circularity-value').textContent = (bs.circularity_min ?? 0.55).toFixed(2);
-                                document.getElementById('balloon-fill').value = bs.fill_ratio_min ?? 0.5;
-                                document.getElementById('balloon-fill-value').textContent = (bs.fill_ratio_min ?? 0.5).toFixed(2);
-                                document.getElementById('balloon-ar-min').value = bs.aspect_ratio_min ?? 0.6;
-                                document.getElementById('balloon-ar-min-value').textContent = (bs.aspect_ratio_min ?? 0.6).toFixed(2);
-                                document.getElementById('balloon-ar-max').value = bs.aspect_ratio_max ?? 1.6;
-                                document.getElementById('balloon-ar-max-value').textContent = (bs.aspect_ratio_max ?? 1.6).toFixed(2);
-                                showHideBalloonSettings();
+                                const now = Date.now();
+                                const allowBalloonSync = !balloonEditing || (now - balloonLastEditTs > EDIT_IDLE_MS);
+                                if (allowBalloonSync) {
+                                    document.getElementById('balloon-v-threshold').value = bs.v_threshold ?? 60;
+                                    document.getElementById('balloon-v-value').textContent = bs.v_threshold ?? 60;
+                                    document.getElementById('balloon-min-area').value = bs.min_area ?? 2000;
+                                    document.getElementById('balloon-min-area-value').textContent = bs.min_area ?? 2000;
+                                    document.getElementById('balloon-circularity').value = bs.circularity_min ?? 0.55;
+                                    document.getElementById('balloon-circularity-value').textContent = (bs.circularity_min ?? 0.55).toFixed(2);
+                                    document.getElementById('balloon-fill').value = bs.fill_ratio_min ?? 0.5;
+                                    document.getElementById('balloon-fill-value').textContent = (bs.fill_ratio_min ?? 0.5).toFixed(2);
+                                    document.getElementById('balloon-ar-min').value = bs.aspect_ratio_min ?? 0.6;
+                                    document.getElementById('balloon-ar-min-value').textContent = (bs.aspect_ratio_min ?? 0.6).toFixed(2);
+                                    document.getElementById('balloon-ar-max').value = bs.aspect_ratio_max ?? 1.6;
+                                    document.getElementById('balloon-ar-max-value').textContent = (bs.aspect_ratio_max ?? 1.6).toFixed(2);
+                                    showHideBalloonSettings();
+                                }
                             }
                         } else if (method === 'tflite') {
                             tfliteSettings.style.display = 'block';
@@ -2373,9 +2392,13 @@
                                     stats.accelerator;
                                 
                                 if (stats.confidence_threshold !== undefined) {
-                                    document.getElementById('tflite-confidence').value = stats.confidence_threshold;
-                                    document.getElementById('tflite-confidence-value').textContent = 
-                                        stats.confidence_threshold.toFixed(2);
+                                    const now = Date.now();
+                                    const allowTFLiteSync = !tfliteEditing || (now - tfliteLastEditTs > EDIT_IDLE_MS);
+                                    if (allowTFLiteSync) {
+                                        document.getElementById('tflite-confidence').value = stats.confidence_threshold;
+                                        document.getElementById('tflite-confidence-value').textContent = 
+                                            stats.confidence_threshold.toFixed(2);
+                                    }
                                 }
                             }
                         } else if (method === 'roboflow') {
@@ -2396,21 +2419,25 @@
                                 document.getElementById('roboflow-fps').textContent = 
                                     stats.estimated_fps ? stats.estimated_fps.toFixed(1) + ' FPS' : '--';
                                 
-                                // Populate form fields with current settings
-                                if (stats.server_url) {
-                                    document.getElementById('roboflow-server-url').value = stats.server_url;
-                                }
-                                if (stats.model_id) {
-                                    document.getElementById('roboflow-model-id').value = stats.model_id;
-                                }
-                                if (stats.confidence !== undefined) {
-                                    document.getElementById('roboflow-confidence').value = stats.confidence;
-                                    document.getElementById('roboflow-confidence-value').textContent = 
-                                        stats.confidence.toFixed(2);
-                                }
-                                if (stats.class_filter && stats.class_filter.length > 0) {
-                                    document.getElementById('roboflow-filter-classes').value = 
-                                        stats.class_filter.join(',');
+                                const now = Date.now();
+                                const allowRoboflowSync = !roboflowEditing || (now - roboflowLastEditTs > EDIT_IDLE_MS);
+                                if (allowRoboflowSync) {
+                                    // Populate form fields with current settings
+                                    if (stats.server_url) {
+                                        document.getElementById('roboflow-server-url').value = stats.server_url;
+                                    }
+                                    if (stats.model_id) {
+                                        document.getElementById('roboflow-model-id').value = stats.model_id;
+                                    }
+                                    if (stats.confidence !== undefined) {
+                                        document.getElementById('roboflow-confidence').value = stats.confidence;
+                                        document.getElementById('roboflow-confidence-value').textContent = 
+                                            stats.confidence.toFixed(2);
+                                    }
+                                    if (stats.class_filter && stats.class_filter.length > 0) {
+                                        document.getElementById('roboflow-filter-classes').value = 
+                                            stats.class_filter.join(',');
+                                    }
                                 }
                                 // Reflect API key presence without exposing it
                                 const apiKeyInput = document.getElementById('roboflow-api-key');
@@ -2451,26 +2478,38 @@
         function updateBalloonVValue() {
             const v = document.getElementById('balloon-v-threshold').value;
             document.getElementById('balloon-v-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
         }
         function updateBalloonMinAreaValue() {
             const v = document.getElementById('balloon-min-area').value;
             document.getElementById('balloon-min-area-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
         }
         function updateBalloonCircularityValue() {
             const v = parseFloat(document.getElementById('balloon-circularity').value).toFixed(2);
             document.getElementById('balloon-circularity-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
         }
         function updateBalloonFillValue() {
             const v = parseFloat(document.getElementById('balloon-fill').value).toFixed(2);
             document.getElementById('balloon-fill-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
         }
         function updateBalloonARMinValue() {
             const v = parseFloat(document.getElementById('balloon-ar-min').value).toFixed(2);
             document.getElementById('balloon-ar-min-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
         }
         function updateBalloonARMaxValue() {
             const v = parseFloat(document.getElementById('balloon-ar-max').value).toFixed(2);
             document.getElementById('balloon-ar-max-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
         }
 
         function applyBalloonSettings() {
@@ -2491,6 +2530,7 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('object-status-message', true, 'Balloon settings applied');
+                    balloonEditing = false;
                     updateObjectStatus();
                 } else {
                     showStatus('object-status-message', false, data.message);
@@ -3045,18 +3085,19 @@
         
         // Sync motion sliders on page load
         syncMotionSliders();
-        
+
         // Initialize camera tracking status
         updateCameraTrackingStatus();
         
         // Initialize camera step delay display
         updateCameraStepDelayValue();
         
+        // Periodic updates
         setInterval(updateStats, 1000);
-        
         // Update camera tracking status every 2 seconds
         setInterval(updateCameraTrackingStatus, 2000);
         
+        // Initial stats update
         updateStats();
     </script>
 </body>
