@@ -363,6 +363,139 @@ class StepperController:
         self.enable()
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
     
+    def move_linear(self, steps_x: int, steps_y: int, delay: Optional[float] = None, bypass_limits: bool = False) -> None:
+        """
+        Move both axes in a coordinated, straight-line path using a DDA/Bresenham approach.
+        
+        Args:
+            steps_x: Signed step delta for X axis
+            steps_y: Signed step delta for Y axis
+            delay: Optional base delay between steps (uses calibration default if None)
+            bypass_limits: If True, bypass software limits (e.g., during calibration)
+        """
+        if not self.enabled:
+            logger.warning("Cannot move - motors not enabled")
+            return
+        
+        if steps_x == 0 and steps_y == 0:
+            return
+        
+        # Constrain to software limits while preserving the movement ratio
+        if not bypass_limits:
+            req_x, req_y = steps_x, steps_y
+            lim_x = self.check_software_limits('x', req_x)
+            lim_y = self.check_software_limits('y', req_y)
+            rx = (abs(lim_x) / abs(req_x)) if req_x != 0 else 1.0
+            ry = (abs(lim_y) / abs(req_y)) if req_y != 0 else 1.0
+            r = min(rx, ry)
+            # Scale both to maintain slope, then clamp again to be safe
+            steps_x = int(round(req_x * r)) if req_x != 0 else 0
+            steps_y = int(round(req_y * r)) if req_y != 0 else 0
+            steps_x = self.check_software_limits('x', steps_x)
+            steps_y = self.check_software_limits('y', steps_y)
+            if steps_x == 0 and steps_y == 0:
+                logger.debug("Movement constrained entirely by software limits")
+                return
+        
+        # If movement is purely along a single axis, defer to axis step with accel
+        if steps_y == 0:
+            self.step('x', steps_x, delay=delay, bypass_limits=bypass_limits)
+            return
+        if steps_x == 0:
+            self.step('y', steps_y, delay=delay, bypass_limits=bypass_limits)
+            return
+        
+        # Prepare motors and directions
+        motor_x = self.axis_x
+        motor_y = self.axis_y
+        if motor_x is None or motor_y is None:
+            logger.error("Axis drivers not initialized")
+            return
+        
+        dx_sign = 1 if steps_x > 0 else -1
+        dy_sign = 1 if steps_y > 0 else -1
+        try:
+            x_dir_const = CLOCKWISE if dx_sign > 0 else COUNTER_CLOCKWISE
+            # Y direction is inverted relative to logical positive
+            y_dir_const = COUNTER_CLOCKWISE if dy_sign > 0 else CLOCKWISE
+            motor_x.set_direction(x_dir_const)
+            motor_y.set_direction(y_dir_const)
+        except LimitSwitchError:
+            return
+        
+        # Determine major/minor axes for DDA
+        ax = abs(steps_x)
+        ay = abs(steps_y)
+        major_is_x = ax >= ay
+        major = ax if major_is_x else ay
+        minor = ay if major_is_x else ax
+        
+        if delay is None:
+            delay = self.calibration.step_delay
+        
+        # Simple accel/decel around the major axis count
+        accel = min(self.calibration.acceleration_steps, max(1, major // 2)) if self.calibration.acceleration_steps > 0 else 0
+        
+        def compute_delay(i: int) -> float:
+            # i in [0, major)
+            if accel <= 0:
+                return delay
+            if i < accel:
+                ratio = (i + 0.5) / accel
+                return delay + (delay * 2 * (1 - ratio))
+            if i >= major - accel:
+                j = (major - i - 0.5)
+                ratio = j / accel
+                return delay + (delay * 2 * (1 - ratio))
+            return delay
+        
+        error_acc = 0
+        moved_x = 0
+        moved_y = 0
+        
+        # Enable both motors before starting
+        self.enable()
+        
+        for i in range(major):
+            cur = compute_delay(i)
+            try:
+                if major_is_x:
+                    moved = motor_x.step(1, cur)
+                    if moved <= 0:
+                        break
+                    moved_x += moved
+                    self.calibration.x_position += dx_sign * moved
+                else:
+                    moved = motor_y.step(1, cur)
+                    if moved <= 0:
+                        break
+                    moved_y += moved
+                    self.calibration.y_position += dy_sign * moved
+            except (MotorError, LimitSwitchError):
+                break
+            
+            error_acc += minor
+            if error_acc >= major:
+                error_acc -= major
+                try:
+                    if major_is_x:
+                        moved = motor_y.step(1, cur)
+                        if moved > 0:
+                            moved_y += moved
+                            self.calibration.y_position += dy_sign * moved
+                    else:
+                        moved = motor_x.step(1, cur)
+                        if moved > 0:
+                            moved_x += moved
+                            self.calibration.x_position += dx_sign * moved
+                except (MotorError, LimitSwitchError):
+                    break
+        
+        logger.debug(
+            f"Linear move complete. Requested=({steps_x}, {steps_y}), Moved=({dx_sign * moved_x}, {dy_sign * moved_y}), "
+            f"Final pos=({self.calibration.x_position}, {self.calibration.y_position})"
+        )
+    
     def move_to_center_object(self, object_center_x: int, object_center_y: int,
                               frame_width: int, frame_height: int) -> bool:
         """
@@ -401,11 +534,8 @@ class StepperController:
         with self.movement_lock:
             self.moving = True
             try:
-                # Move both axes
-                if steps_x != 0:
-                    self.step('x', steps_x)
-                if steps_y != 0:
-                    self.step('y', steps_y)
+                # Coordinated straight-line motion
+                self.move_linear(steps_x, steps_y)
             finally:
                 self.moving = False
         
