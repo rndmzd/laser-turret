@@ -2167,6 +2167,19 @@ def update_camera_tracking_settings():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+@app.route('/tracking/camera/recenter_on_loss', methods=['POST'])
+def set_recenter_on_loss():
+    """Enable/disable slow re-centering when target is lost."""
+    global camera_recenter_on_loss
+    try:
+        data = request.get_json() or {}
+        enabled = bool(data.get('enabled', not camera_recenter_on_loss))
+        with tracking_mode_lock:
+            camera_recenter_on_loss = enabled
+        return jsonify({'status': 'success', 'enabled': camera_recenter_on_loss})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/tracking/camera/status')
 def camera_tracking_status():
     """Get camera tracking status"""
