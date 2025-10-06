@@ -46,6 +46,7 @@ speed_scaling = 0.10
 
 # Delay between steps in seconds (lower = faster, but may skip steps)
 step_delay = 0.0005
+idle_timeout_sec = 120.0
 
 [Laser]
 # Laser control pin (BCM numbering)

@@ -298,7 +298,7 @@ class StepperMotor:
                     self.state.status = MotorStatus.LIMIT_REACHED
                 else:
                     self.state.status = MotorStatus.IDLE
-            self.disable()  # Disable motor after movement
+            # Do not disable here; keep motor enabled to hold position
         
         return actual_steps
 
