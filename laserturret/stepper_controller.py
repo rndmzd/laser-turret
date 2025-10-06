@@ -214,6 +214,10 @@ class StepperController:
         self.gpio.output(self.x_enable_pin, 1)
         self.gpio.output(self.y_enable_pin, 1)
         self.enabled = False
+        if self.calibration.is_calibrated:
+            self.calibration.is_calibrated = False
+            self.calibration.calibration_timestamp = None
+            self.save_calibration()
         logger.info("Stepper motors disabled")
     
     def check_limit_switch(self, axis: str, direction: int) -> bool:
@@ -356,6 +360,7 @@ class StepperController:
             self.calibration.x_position += direction_sign * moved_total
         else:
             self.calibration.y_position += direction_sign * moved_total
+        self.enable()
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
     
     def move_to_center_object(self, object_center_x: int, object_center_y: int,
@@ -425,6 +430,7 @@ class StepperController:
             self.step('y', -self.calibration.y_position)
         
         logger.info("Camera homed to center position")
+        self.enable()
     
     def set_home_position(self):
         """
@@ -535,6 +541,7 @@ class StepperController:
                 
                 # Save calibration to file
                 self.save_calibration()
+                self.enable()
                 
                 report('success', f'Calibration complete! Range: X=±{x_half_range}, Y=±{y_half_range}')
                 
