@@ -52,6 +52,7 @@ class ConfigManager:
             'deadzone': 5,
             'speed_scaling': 0.10,
             'step_delay': 0.0005,
+            'idle_timeout_sec': 120.0,
         },
         'Laser': {
             'laser_pin': 12,
@@ -247,6 +248,10 @@ class ConfigManager:
     def get_control_step_delay(self) -> float:
         """Get step delay in seconds"""
         return self._get('Control', 'step_delay', float)
+    
+    def get_control_idle_timeout(self) -> float:
+        """Get motor idle timeout in seconds"""
+        return self._get('Control', 'idle_timeout_sec', float)
     
     # MQTT Configuration
     def get_mqtt_broker(self) -> str:
