@@ -11,8 +11,8 @@ from threading import Thread, Event
 
 from laserturret import get_config
 
-from laserturret.steppercontrol import (
-    StepperMotor,
+from laserturret.motion import (
+    StepperAxis as StepperMotor,
     MotorStatus,
     MotorError,
     LimitSwitchError,

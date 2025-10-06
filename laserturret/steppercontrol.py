@@ -6,13 +6,11 @@ from enum import Enum
 from dataclasses import dataclass
 import queue
 from .hardware_interface import get_gpio_backend, PinMode, PullMode, Edge
+from laserturret.motion.constants import MICROSTEP_CONFIG, CLOCKWISE, COUNTER_CLOCKWISE
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-CLOCKWISE = 'CW'
-COUNTER_CLOCKWISE = 'CCW'
 
 # Microstep resolution truth table
 # MS1 MS2 MS3 Resolution
@@ -21,13 +19,6 @@ COUNTER_CLOCKWISE = 'CCW'
 #  0   1   0   Quarter step (1/4)
 #  1   1   0   Eighth step (1/8)
 #  1   1   1   Sixteenth step (1/16)
-MICROSTEP_CONFIG = {
-    1: (0, 0, 0),    # Full step
-    2: (1, 0, 0),    # Half step
-    4: (0, 1, 0),    # Quarter step
-    8: (1, 1, 0),    # Eighth step
-    16: (1, 1, 1)    # Sixteenth step
-}
 
 class MotorStatus(Enum):
     """Enum for motor status"""
@@ -84,7 +75,9 @@ class StepperMotor:
         calibration_timeout: int = 30,
         movement_timeout: int = 10,
         deadzone: int = 10,
-        interactive_test_mode: bool = False):
+        interactive_test_mode: bool = False,
+        start_thread: bool = True,
+        gpio_backend=None):
         """
         Initialize stepper motor control using A4988 driver.
 
@@ -128,9 +121,10 @@ class StepperMotor:
         self.calibration_timeout = calibration_timeout
         self.movement_timeout = movement_timeout
         self.deadzone = deadzone
+        self.enabled = False
 
         # Initialize GPIO backend
-        self.gpio = get_gpio_backend()
+        self.gpio = gpio_backend if gpio_backend is not None else get_gpio_backend()
         
         # Setup motor control pins
         self.gpio.setup(self.step_pin, PinMode.OUTPUT)
@@ -156,15 +150,16 @@ class StepperMotor:
             self.gpio.setup(ccw_limit_switch_pin, PinMode.INPUT, pull_up_down=PullMode.UP)
         
         # Initialize command processing thread
-        self.command_queue = queue.Queue(maxsize=1)  # Only keep latest command
-        self.running = True
-        self.last_command = 0
-        self.command_thread = threading.Thread(
-            target=self._process_command_queue,
-            name=f"{name}_command_thread",
-            daemon=True
-        )
-        self.command_thread.start()
+        if start_thread:
+            self.command_queue = queue.Queue(maxsize=1)
+            self.running = True
+            self.last_command = 0
+            self.command_thread = threading.Thread(
+                target=self._process_command_queue,
+                name=f"{name}_command_thread",
+                daemon=True
+            )
+            self.command_thread.start()
 
         # Perform initialization checks if not in test mode
         if not interactive_test_mode:
@@ -201,6 +196,7 @@ class StepperMotor:
         """Enable the motor driver (active LOW)"""
         try:
             self.gpio.output(self.enable_pin, 0)
+            self.enabled = True
         except Exception as e:
             logger.debug(f"[{self.name}] Failed to enable motor (GPIO may be cleaned up): {e}")
 
@@ -208,6 +204,7 @@ class StepperMotor:
         """Disable the motor driver"""
         try:
             self.gpio.output(self.enable_pin, 1)
+            self.enabled = False
         except Exception as e:
             logger.debug(f"[{self.name}] Failed to disable motor (GPIO may be cleaned up): {e}")
 
@@ -377,6 +374,8 @@ class StepperMotor:
 
     def process_command(self, command_value: float) -> None:
         """Queue new command for processing"""
+        if not hasattr(self, 'command_queue'):
+            return
         try:
             # Clear queue and add new command
             while not self.command_queue.empty():
@@ -570,6 +569,32 @@ class StepperMotor:
         """Get current motor status"""
         with self.lock:
             return self.state
+
+    def status(self) -> dict:
+        with self.lock:
+            return {
+                'type': 'axis',
+                'name': self.name,
+                'enabled': self.enabled,
+                'moving': self.state.status == MotorStatus.MOVING,
+                'position': {'steps': self.state.position},
+                'direction': self.state.direction,
+                'limits': {
+                    'triggered': self.state.triggered_limit,
+                    'cw_pin': self.cw_limit_switch_pin,
+                    'ccw_pin': self.ccw_limit_switch_pin,
+                },
+                'microstep': self.microsteps,
+                'steps_per_rev': self.steps_per_rev,
+                'calibration': {
+                    'total_travel_steps': self.total_travel_steps,
+                    'is_calibrated': self.total_travel_steps is not None,
+                },
+                'error': {
+                    'message': self.state.error_message,
+                    'status': self.state.status.value if self.state.status == MotorStatus.ERROR else None,
+                },
+            }
 
     def get_limit_switch_states(self) -> Tuple[Optional[bool], Optional[bool]]:
         """Get the current state of both limit switches"""

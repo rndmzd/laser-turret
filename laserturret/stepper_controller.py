@@ -12,6 +12,9 @@ import json
 import os
 from typing import Tuple, Optional
 from dataclasses import dataclass, asdict
+from laserturret.motion.constants import MICROSTEP_CONFIG, CLOCKWISE, COUNTER_CLOCKWISE
+from laserturret.motion.axis import StepperAxis
+from laserturret.steppercontrol import MotorError, LimitSwitchError
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,48 @@ class StepperController:
             self.has_limit_switches = False
             logger.warning("Limit switches not configured - using software limits only")
         
+        # Axis drivers
+        try:
+            x_cfg = self.config.get_motor_config('x')
+            y_cfg = self.config.get_motor_config('y')
+            self.axis_x = StepperAxis(
+                step_pin=x_cfg['step_pin'],
+                dir_pin=x_cfg['dir_pin'],
+                enable_pin=x_cfg['enable_pin'],
+                ms1_pin=x_cfg['ms1_pin'],
+                ms2_pin=x_cfg['ms2_pin'],
+                ms3_pin=x_cfg['ms3_pin'],
+                cw_limit_switch_pin=x_cfg.get('cw_limit_pin'),
+                ccw_limit_switch_pin=x_cfg.get('ccw_limit_pin'),
+                steps_per_rev=x_cfg['steps_per_rev'],
+                microsteps=x_cfg['microsteps'],
+                skip_direction_check=True,
+                perform_calibration=False,
+                name='AxisX',
+                start_thread=False,
+                gpio_backend=self.gpio,
+            )
+            self.axis_y = StepperAxis(
+                step_pin=y_cfg['step_pin'],
+                dir_pin=y_cfg['dir_pin'],
+                enable_pin=y_cfg['enable_pin'],
+                ms1_pin=y_cfg['ms1_pin'],
+                ms2_pin=y_cfg['ms2_pin'],
+                ms3_pin=y_cfg['ms3_pin'],
+                cw_limit_switch_pin=y_cfg.get('cw_limit_pin'),
+                ccw_limit_switch_pin=y_cfg.get('ccw_limit_pin'),
+                steps_per_rev=y_cfg['steps_per_rev'],
+                microsteps=y_cfg['microsteps'],
+                skip_direction_check=True,
+                perform_calibration=False,
+                name='AxisY',
+                start_thread=False,
+                gpio_backend=self.gpio,
+            )
+        except Exception as _:
+            self.axis_x = None
+            self.axis_y = None
+        
         # State
         self.enabled = False
         self.moving = False
@@ -129,6 +174,7 @@ class StepperController:
         
         # Set microstepping (1/8 step for smooth motion)
         microsteps = self.config.get_motor_microsteps()
+        self.microsteps = microsteps
         self._set_microstepping(microsteps)
         
         # Disable motors initially
@@ -145,13 +191,7 @@ class StepperController:
             microsteps: 1, 2, 4, 8, or 16
         """
         # MS1, MS2, MS3 truth table for A4988/DRV8825 drivers
-        settings = {
-            1: (0, 0, 0),
-            2: (1, 0, 0),
-            4: (0, 1, 0),
-            8: (1, 1, 0),
-            16: (1, 1, 1)
-        }
+        settings = MICROSTEP_CONFIG
         
         if microsteps in settings:
             ms1, ms2, ms3 = settings[microsteps]
@@ -174,6 +214,10 @@ class StepperController:
         self.gpio.output(self.x_enable_pin, 1)
         self.gpio.output(self.y_enable_pin, 1)
         self.enabled = False
+        if self.calibration.is_calibrated:
+            self.calibration.is_calibrated = False
+            self.calibration.calibration_timestamp = None
+            self.save_calibration()
         logger.info("Stepper motors disabled")
     
     def check_limit_switch(self, axis: str, direction: int) -> bool:
@@ -260,66 +304,64 @@ class StepperController:
                 logger.debug(f"Movement constrained by software limits on {axis} axis")
                 return
         
-        # Determine pins and direction
-        if axis == 'x':
-            step_pin = self.x_step_pin
-            dir_pin = self.x_dir_pin
-        else:
-            step_pin = self.y_step_pin
-            dir_pin = self.y_dir_pin
-        
-        direction = 1 if steps > 0 else -1
-        steps = abs(steps)
-        
-        # Set direction (invert Y-axis direction to correct for physical motor orientation)
-        if axis == 'y':
-            # Y-axis is physically reversed, so invert the direction signal
-            self.gpio.output(dir_pin, 0 if direction > 0 else 1)
-        else:
-            self.gpio.output(dir_pin, 1 if direction > 0 else 0)
-        time.sleep(0.000001)  # Direction setup time
-        
-        # Use calibration delay if not specified
+        motor = self.axis_x if axis == 'x' else self.axis_y
+        if motor is None:
+            return
+        direction_sign = 1 if steps > 0 else -1
+        total = abs(steps)
         if delay is None:
             delay = self.calibration.step_delay
-        
-        # Calculate acceleration profile
-        accel_steps = min(self.calibration.acceleration_steps, steps // 2)
-        
-        # Execute steps with acceleration/deceleration
-        for i in range(steps):
-            # Check limit switches
-            if self.check_limit_switch(axis, direction):
-                logger.warning(f"Limit switch triggered on {axis} axis")
-                break
-            
-            # Calculate current delay with acceleration
-            if i < accel_steps:
-                # Accelerate
-                ratio = (i + 1) / accel_steps
-                current_delay = delay + (delay * 2 * (1 - ratio))
-            elif i > steps - accel_steps:
-                # Decelerate
-                ratio = (steps - i) / accel_steps
-                current_delay = delay + (delay * 2 * (1 - ratio))
+        accel = min(self.calibration.acceleration_steps, total // 2)
+        moved_total = 0
+        try:
+            if axis == 'x':
+                dir_const = CLOCKWISE if direction_sign > 0 else COUNTER_CLOCKWISE
             else:
-                # Constant speed
-                current_delay = delay
-            
-            # Step pulse
-            self.gpio.output(step_pin, 1)
-            time.sleep(current_delay / 2)
-            self.gpio.output(step_pin, 0)
-            time.sleep(current_delay / 2)
-        
-        # Update position
+                dir_const = COUNTER_CLOCKWISE if direction_sign > 0 else CLOCKWISE
+            motor.set_direction(dir_const)
+        except LimitSwitchError:
+            return
+        if accel > 0:
+            k = min(accel, 10)
+            seg_delays = []
+            seg_sizes = []
+            for s in range(k):
+                start = (s * accel) // k
+                end = ((s + 1) * accel) // k
+                size = end - start
+                if size <= 0:
+                    continue
+                mid = (start + end) / 2.0
+                ratio = (mid) / accel
+                cur = delay + (delay * 2 * (1 - ratio))
+                seg_delays.append(cur)
+                seg_sizes.append(size)
+            for size, cur in zip(seg_sizes, seg_delays):
+                try:
+                    moved = motor.step(size, cur)
+                except (MotorError, LimitSwitchError):
+                    break
+                moved_total += moved
+        const_size = total - 2 * accel
+        if const_size > 0:
+            try:
+                moved = motor.step(const_size, delay)
+            except (MotorError, LimitSwitchError):
+                moved = 0
+            moved_total += moved
+        if accel > 0:
+            for size, cur in zip(reversed(seg_sizes), reversed(seg_delays)):
+                try:
+                    moved = motor.step(size, cur)
+                except (MotorError, LimitSwitchError):
+                    break
+                moved_total += moved
         if axis == 'x':
-            self.calibration.x_position += direction * steps
+            self.calibration.x_position += direction_sign * moved_total
         else:
-            self.calibration.y_position += direction * steps
-        
-        logger.debug(f"Moved {steps} steps on {axis} axis, position: "
-                    f"({self.calibration.x_position}, {self.calibration.y_position})")
+            self.calibration.y_position += direction_sign * moved_total
+        self.enable()
+        logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
     
     def move_to_center_object(self, object_center_x: int, object_center_y: int,
                               frame_width: int, frame_height: int) -> bool:
@@ -388,6 +430,7 @@ class StepperController:
             self.step('y', -self.calibration.y_position)
         
         logger.info("Camera homed to center position")
+        self.enable()
     
     def set_home_position(self):
         """
@@ -498,6 +541,7 @@ class StepperController:
                 
                 # Save calibration to file
                 self.save_calibration()
+                self.enable()
                 
                 report('success', f'Calibration complete! Range: X=±{x_half_range}, Y=±{y_half_range}')
                 
@@ -680,8 +724,48 @@ class StepperController:
                 'y_max_steps': self.calibration.y_max_steps
             }
         }
+
+    def status(self) -> dict:
+        return {
+            'type': 'tracker',
+            'enabled': self.enabled,
+            'moving': self.moving,
+            'position': {
+                'x': self.calibration.x_position,
+                'y': self.calibration.y_position,
+            },
+            'microstep': getattr(self, 'microsteps', None),
+            'calibration': {
+                'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
+                'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
+                'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'is_calibrated': self.calibration.is_calibrated,
+                'timestamp': self.calibration.calibration_timestamp,
+            },
+            'limits': {
+                'has_switches': getattr(self, 'has_limit_switches', False),
+                'pins': {
+                    'x_cw': getattr(self, 'x_cw_limit', None) if getattr(self, 'has_limit_switches', False) else None,
+                    'x_ccw': getattr(self, 'x_ccw_limit', None) if getattr(self, 'has_limit_switches', False) else None,
+                    'y_cw': getattr(self, 'y_cw_limit', None) if getattr(self, 'has_limit_switches', False) else None,
+                    'y_ccw': getattr(self, 'y_ccw_limit', None) if getattr(self, 'has_limit_switches', False) else None,
+                },
+                'max_steps': {
+                    'x': self.calibration.x_max_steps,
+                    'y': self.calibration.y_max_steps,
+                },
+            },
+            'error': None,
+        }
     
     def cleanup(self):
         """Cleanup resources"""
         self.disable()
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.cleanup()
+            if getattr(self, 'axis_y', None):
+                self.axis_y.cleanup()
+        except Exception:
+            pass
         logger.info("StepperController cleanup complete")

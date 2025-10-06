@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from laserturret.steppercontrol import StepperMotor
+from laserturret.motion import StepperAxis as StepperMotor
 from laserturret import get_config
 
 if __name__ == "__main__":
