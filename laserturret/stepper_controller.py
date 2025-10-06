@@ -112,6 +112,7 @@ class StepperController:
                 perform_calibration=False,
                 name='AxisX',
                 start_thread=True,
+                deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,
             )
             self.axis_y = StepperAxis(
@@ -129,6 +130,7 @@ class StepperController:
                 perform_calibration=False,
                 name='AxisY',
                 start_thread=True,
+                deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,
             )
         except Exception as _:
@@ -145,9 +147,9 @@ class StepperController:
         
         # Load calibration if available
         self.load_calibration()
-        self.kp = 0.02
+        self.kp = 0.8
         self.ki = 0.0
-        self.kd = 0.004
+        self.kd = 0.2
         self._ix = 0.0
         self._iy = 0.0
         self._last_pid_time = None
@@ -221,6 +223,13 @@ class StepperController:
         self.gpio.output(self.x_enable_pin, 0)  # Active low
         self.gpio.output(self.y_enable_pin, 0)
         self.enabled = True
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.set_suspended(False)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.set_suspended(False)
+        except Exception:
+            pass
         logger.info("Stepper motors enabled")
     
     def disable(self):
@@ -228,6 +237,13 @@ class StepperController:
         self.gpio.output(self.x_enable_pin, 1)
         self.gpio.output(self.y_enable_pin, 1)
         self.enabled = False
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.set_suspended(True)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.set_suspended(True)
+        except Exception:
+            pass
         if self.calibration.is_calibrated:
             self.calibration.is_calibrated = False
             self.calibration.calibration_timestamp = None
@@ -385,6 +401,8 @@ class StepperController:
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
     
     def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
+        if not self.enabled:
+            return
         self._mark_activity()
         now = time.time()
         if getattr(self, '_last_pid_time', None) is None:
@@ -396,19 +414,31 @@ class StepperController:
         cy = frame_height // 2
         ex = float(target_x - cx)
         ey = float(target_y - cy)
-        self._ix += ex * dt
-        self._iy += ey * dt
-        self._ix = max(-1000.0, min(1000.0, self._ix))
-        self._iy = max(-1000.0, min(1000.0, self._iy))
-        dex = (ex / dt) if dt > 0 else 0.0
-        dey = (ey / dt) if dt > 0 else 0.0
-        ux = (self.kp * ex) + (self.ki * self._ix) + (self.kd * dex)
-        uy = (self.kp * ey) + (self.ki * self._iy) + (self.kd * dey)
-        ux = max(-100.0, min(100.0, ux))
-        uy = max(-100.0, min(100.0, uy))
-        cmd_x = ux
-        cmd_y = -uy
-        self.enable()
+        ex_n = ex / max(1.0, (frame_width / 2.0))
+        ey_n = ey / max(1.0, (frame_height / 2.0))
+        self._ix += ex_n * dt
+        self._iy += ey_n * dt
+        self._ix = max(-10.0, min(10.0, self._ix))
+        self._iy = max(-10.0, min(10.0, self._iy))
+        dex_n = (ex_n / dt) if dt > 0 else 0.0
+        dey_n = (ey_n / dt) if dt > 0 else 0.0
+        ux = (self.kp * ex_n) + (self.ki * self._ix) + (self.kd * dex_n)
+        uy = (self.kp * ey_n) + (self.ki * self._iy) + (self.kd * dey_n)
+        cmd_x = max(-100.0, min(100.0, ux * 100.0))
+        cmd_y = max(-100.0, min(100.0, -uy * 100.0))
+        min_cmd = 0.0
+        try:
+            if getattr(self, 'axis_x', None):
+                min_cmd = max(min_cmd, float(getattr(self.axis_x, 'deadzone', 0)))
+            if getattr(self, 'axis_y', None):
+                min_cmd = max(min_cmd, float(getattr(self.axis_y, 'deadzone', 0)))
+        except Exception:
+            pass
+        min_cmd = min_cmd + 3.0 if min_cmd > 0 else 0.0
+        if abs(cmd_x) > 0 and abs(cmd_x) < min_cmd:
+            cmd_x = min_cmd if cmd_x >= 0 else -min_cmd
+        if abs(cmd_y) > 0 and abs(cmd_y) < min_cmd:
+            cmd_y = min_cmd if cmd_y >= 0 else -min_cmd
         try:
             if getattr(self, 'axis_x', None):
                 self.axis_x.process_command(cmd_x)
