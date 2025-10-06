@@ -107,6 +107,7 @@ pattern_running = False
 pattern_thread = None
 pattern_sequence = []
 pattern_delay = 1.0  # seconds between positions
+pattern_loop = False
 
 # Laser fire control
 laser_enabled = False
@@ -337,26 +338,72 @@ def check_auto_fire():
 
 def run_pattern_sequence():
     """Execute a pattern sequence in a separate thread"""
-    global pattern_running
-    
+    global pattern_running, pattern_thread
+
     while pattern_running:
         for slot in pattern_sequence:
             if not pattern_running:
                 break
-            
+
             with preset_lock:
-                if slot in preset_positions:
-                    pos = preset_positions[slot]
-                    with crosshair_lock:
-                        crosshair_pos['x'] = pos['x']
-                        crosshair_pos['y'] = pos['y']
-                    print(f"Pattern: Moving to preset {slot} - {pos['label']}")
-            
+                pos = preset_positions.get(slot)
+
+            if pos is None:
+                print(f"Pattern: Slot {slot} missing, skipping")
+                continue
+
+            with crosshair_lock:
+                crosshair_pos['x'] = pos['x']
+                crosshair_pos['y'] = pos['y']
+
+            print(f"Pattern: Moving to preset {slot} - {pos['label']}")
+
+            # Move physical camera if tracking is enabled
+            move_camera_to_absolute_position(pos['x'], pos['y'])
+
             time.sleep(pattern_delay)
-        
+
         # If not looping, stop after one cycle
         if not pattern_running:
             break
+
+        if not pattern_loop:
+            pattern_running = False
+            break
+
+    pattern_thread = None
+
+
+def move_camera_to_absolute_position(abs_x, abs_y, background=False):
+    """Move the physical camera so the provided absolute coordinate is centered"""
+    try:
+        with tracking_mode_lock:
+            tracking_active = tracking_mode == 'camera' and camera_tracking_enabled
+
+        controller = stepper_controller
+        if not tracking_active or controller is None:
+            return False
+
+        with crosshair_lock:
+            adj_x = int(abs_x) - int(crosshair_offset['x'])
+            adj_y = int(abs_y) - int(crosshair_offset['y'])
+
+        def move():
+            moved_local = controller.move_to_center_object(adj_x, adj_y, CAMERA_WIDTH, CAMERA_HEIGHT)
+            if moved_local:
+                print(f"Camera moved to preset position ({abs_x}, {abs_y})")
+            else:
+                print(f"Preset ({abs_x}, {abs_y}) within dead zone, no camera movement")
+            return moved_local
+
+        if background:
+            threading.Thread(target=move, daemon=True).start()
+            return True
+
+        return move()
+    except Exception as e:
+        print(f"Error moving camera to preset position: {e}")
+        return False
 
 def initialize_tflite_detector():
     """Initialize TensorFlow Lite detector from config"""
@@ -1686,12 +1733,15 @@ def load_preset(slot):
         with crosshair_lock:
             crosshair_pos['x'] = preset['x']
             crosshair_pos['y'] = preset['y']
-        
+
+        move_started = move_camera_to_absolute_position(preset['x'], preset['y'], background=True)
+
         return jsonify({
             'status': 'success',
             'slot': slot,
             'position': {'x': preset['x'], 'y': preset['y']},
-            'label': preset['label']
+            'label': preset['label'],
+            'camera_move_started': move_started
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -1733,7 +1783,7 @@ def list_presets():
 @app.route('/presets/pattern/start', methods=['POST'])
 def start_pattern():
     """Start executing a pattern sequence"""
-    global pattern_running, pattern_thread, pattern_sequence, pattern_delay
+    global pattern_running, pattern_thread, pattern_sequence, pattern_delay, pattern_loop
     
     try:
         data = request.get_json()
@@ -1757,11 +1807,13 @@ def start_pattern():
             pattern_running = False
             if pattern_thread:
                 pattern_thread.join(timeout=2)
-        
+            pattern_thread = None
+
         pattern_sequence = sequence
         pattern_delay = delay
-        pattern_running = loop  # Only keep running if looping
-        
+        pattern_loop = loop
+        pattern_running = True
+
         # Start pattern thread
         pattern_thread = threading.Thread(target=run_pattern_sequence, daemon=True)
         pattern_thread.start()
@@ -1778,10 +1830,11 @@ def start_pattern():
 @app.route('/presets/pattern/stop', methods=['POST'])
 def stop_pattern():
     """Stop the running pattern sequence"""
-    global pattern_running
-    
+    global pattern_running, pattern_loop
+
     pattern_running = False
-    
+    pattern_loop = False
+
     return jsonify({
         'status': 'success',
         'message': 'Pattern stopped'
@@ -1794,7 +1847,8 @@ def pattern_status():
         'status': 'success',
         'running': pattern_running,
         'sequence': pattern_sequence,
-        'delay': pattern_delay
+        'delay': pattern_delay,
+        'loop': pattern_loop
     })
 
 @app.route('/laser/toggle', methods=['POST'])
