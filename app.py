@@ -659,6 +659,7 @@ def detect_motion(frame):
 def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
     """Draw crosshair, object detection, motion detection overlay, and exposure information"""
     overlay = np.zeros_like(frame, dtype=np.uint8)
+    global object_track_smooth_center, object_last_switch_time, motion_smooth_center
     
     # Object/Face detection overlay
     with object_lock:
@@ -680,7 +681,6 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 if object_auto_track and objects:
                     target = get_priority_target(objects)
                     if target:
-                        global object_track_smooth_center, object_last_switch_time
                         x, y, w, h = target['rect']
                         cx = x + w // 2
                         cy = y + h // 2
@@ -739,7 +739,6 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                         print(f"PID update error (object tracking): {e}")
                         # If auto-track is enabled but there are no objects, stop motion
                 if object_auto_track and not objects:
-                    global object_track_smooth_center
                     object_track_smooth_center = None
                     with tracking_mode_lock:
                         if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
@@ -767,7 +766,6 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 
                 # Draw motion center
                 if motion_center:
-                    global motion_smooth_center
                     if motion_smooth_center is None:
                         motion_smooth_center = (float(motion_center[0]), float(motion_center[1]))
                     else:
