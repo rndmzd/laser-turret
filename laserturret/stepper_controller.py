@@ -478,6 +478,27 @@ class StepperController:
             self._cmd_y_last = cmd_y
             self._mark_activity()
     
+    def stop_motion(self) -> None:
+        """Immediately zero axis commands and reset PID state without disabling motors."""
+        if not self.enabled:
+            return
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.process_command(0.0)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.process_command(0.0)
+        except Exception:
+            pass
+        # Reset PID state to avoid derivative spikes on the next target acquisition
+        self._ix = 0.0
+        self._iy = 0.0
+        self._ex_n_last = 0.0
+        self._ey_n_last = 0.0
+        self._cmd_x_last = 0.0
+        self._cmd_y_last = 0.0
+        self._last_pid_time = None
+        self._mark_activity()
+    
     def move_linear(self, steps_x: int, steps_y: int, delay: Optional[float] = None, bypass_limits: bool = False) -> None:
         """
         Move both axes in a coordinated, straight-line path using a DDA/Bresenham approach.

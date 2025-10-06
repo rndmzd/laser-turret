@@ -736,6 +736,16 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                         stepper_controller.update_tracking_with_pid(tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT)
                                     except Exception as e:
                                         print(f"PID update error (object tracking): {e}")
+                        # If auto-track is enabled but there are no objects, stop motion
+                if object_auto_track and not objects:
+                    global object_track_smooth_center
+                    object_track_smooth_center = None
+                    with tracking_mode_lock:
+                        if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
+                            try:
+                                stepper_controller.stop_motion()
+                            except Exception as e:
+                                print(f"Stop motion error (object tracking lost): {e}")
             except Exception as e:
                 print(f"Object detection error: {e}")
     
@@ -786,6 +796,13 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                         print(f"PID update error (motion tracking): {e}")
                 else:
                     motion_smooth_center = None
+                    if motion_auto_track and not object_auto_track:
+                        with tracking_mode_lock:
+                            if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
+                                try:
+                                    stepper_controller.stop_motion()
+                                except Exception as e:
+                                    print(f"Stop motion error (motion tracking lost): {e}")
             except Exception as e:
                 print(f"Motion detection error: {e}")
     
