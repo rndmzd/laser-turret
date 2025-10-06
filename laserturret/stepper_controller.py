@@ -499,6 +499,44 @@ class StepperController:
         self._last_pid_time = None
         self._mark_activity()
     
+    def recenter_slowly(self, threshold_steps: int = 10, base_speed: float = 20.0, max_speed: float = 60.0) -> None:
+        """Nudge camera toward home (0,0) with gentle velocity commands.
+        Uses live axis state positions when available; falls back to calibration positions.
+        """
+        if not self.enabled:
+            return
+        try:
+            cur_x = 0
+            cur_y = 0
+            try:
+                cur_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+            except Exception:
+                cur_x = self.calibration.x_position
+            try:
+                cur_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+            except Exception:
+                cur_y = self.calibration.y_position
+            # Determine command directions toward zero
+            cmd_x = 0.0
+            cmd_y = 0.0
+            if abs(cur_x) > threshold_steps:
+                sign_x = -1.0 if cur_x > 0 else 1.0
+                # Scale speed by distance, capped
+                mag_x = min(max_speed, base_speed + (abs(cur_x) * 0.01))
+                cmd_x = sign_x * mag_x
+            if abs(cur_y) > threshold_steps:
+                sign_y = -1.0 if cur_y > 0 else 1.0
+                mag_y = min(max_speed, base_speed + (abs(cur_y) * 0.01))
+                cmd_y = sign_y * mag_y
+            if getattr(self, 'axis_x', None):
+                self.axis_x.process_command(cmd_x)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.process_command(cmd_y)
+        except Exception:
+            pass
+        finally:
+            self._mark_activity()
+    
     def move_linear(self, steps_x: int, steps_y: int, delay: Optional[float] = None, bypass_limits: bool = False) -> None:
         """
         Move both axes in a coordinated, straight-line path using a DDA/Bresenham approach.
@@ -697,9 +735,18 @@ class StepperController:
                    f"({self.calibration.x_position}, {self.calibration.y_position})")
         
         with self.movement_lock:
+            # Determine current positions from live axis state if available
+            try:
+                cur_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+            except Exception:
+                cur_x = self.calibration.x_position
+            try:
+                cur_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+            except Exception:
+                cur_y = self.calibration.y_position
             # Move back to zero position
-            self.step('x', -self.calibration.x_position)
-            self.step('y', -self.calibration.y_position)
+            self.step('x', -cur_x)
+            self.step('y', -cur_y)
         
         logger.info("Camera homed to center position")
         self.enable()

@@ -126,6 +126,7 @@ tracking_mode = 'crosshair'  # 'crosshair' or 'camera'
 camera_tracking_enabled = False
 stepper_controller = None
 tracking_mode_lock = threading.Lock()
+camera_recenter_on_loss = False
 
 tracking_smoothing_alpha = 0.3
 target_lock_distance = 150
@@ -743,7 +744,10 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                     with tracking_mode_lock:
                         if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
                             try:
-                                stepper_controller.stop_motion()
+                                if camera_recenter_on_loss:
+                                    stepper_controller.recenter_slowly()
+                                else:
+                                    stepper_controller.stop_motion()
                             except Exception as e:
                                 print(f"Stop motion error (object tracking lost): {e}")
             except Exception as e:
@@ -800,7 +804,10 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                         with tracking_mode_lock:
                             if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
                                 try:
-                                    stepper_controller.stop_motion()
+                                    if camera_recenter_on_loss:
+                                        stepper_controller.recenter_slowly()
+                                    else:
+                                        stepper_controller.stop_motion()
                                 except Exception as e:
                                     print(f"Stop motion error (motion tracking lost): {e}")
             except Exception as e:
@@ -2179,6 +2186,7 @@ def camera_tracking_status():
             'available': True,
             'mode': tracking_mode,
             'enabled': camera_tracking_enabled,
+            'recenter_on_loss': camera_recenter_on_loss,
             'controller_status': stepper_controller.get_status()
         })
 

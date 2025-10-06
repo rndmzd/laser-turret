@@ -546,6 +546,14 @@
                                 <span class="toggle-label">Enable Camera Movement</span>
                             </div>
 
+                            <div class="toggle-switch">
+                                <label class="switch">
+                                    <input type="checkbox" id="camera-recenter-on-loss" onchange="toggleRecenterOnLoss()">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-label">Re-center camera slowly on target loss</span>
+                            </div>
+
                             <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
                                 🏠 Home Camera to Center
                             </button>
@@ -2792,6 +2800,29 @@
             });
         }
 
+        function toggleRecenterOnLoss() {
+            const enabled = document.getElementById('camera-recenter-on-loss').checked;
+            fetch('/tracking/camera/recenter_on_loss', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, enabled ? 'Re-center on loss enabled' : 'Re-center on loss disabled');
+                } else {
+                    showStatus('tracking-status-message', false, data.message || 'Failed to set re-center on loss');
+                    document.getElementById('camera-recenter-on-loss').checked = !enabled;
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to set re-center on loss');
+                console.error('Error toggling re-center on loss:', error);
+                document.getElementById('camera-recenter-on-loss').checked = !enabled;
+            });
+        }
+
         function homeCameraPosition() {
             fetch('/tracking/camera/home', {
                 method: 'POST',
@@ -3029,6 +3060,10 @@
                             document.getElementById('camera-system-status').textContent = 'Available';
                             document.getElementById('camera-enabled-status').textContent = 
                                 data.enabled ? 'Yes' : 'No';
+                            // Sync re-center on loss toggle
+                            const r = !!data.recenter_on_loss;
+                            const rEl = document.getElementById('camera-recenter-on-loss');
+                            if (rEl) rEl.checked = r;
                             
                             const controller = data.controller_status;
                             if (controller) {
