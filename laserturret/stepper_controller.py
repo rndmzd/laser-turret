@@ -153,6 +153,10 @@ class StepperController:
         self._ix = 0.0
         self._iy = 0.0
         self._last_pid_time = None
+        self._ex_n_last = 0.0
+        self._ey_n_last = 0.0
+        self._cmd_x_last = 0.0
+        self._cmd_y_last = 0.0
         
         # Idle timeout watchdog
         self.idle_timeout = self.config.get_control_idle_timeout()
@@ -414,18 +418,40 @@ class StepperController:
         cy = frame_height // 2
         ex = float(target_x - cx)
         ey = float(target_y - cy)
+        # Normalize and clamp error to [-1, 1] to avoid runaway far from center
         ex_n = ex / max(1.0, (frame_width / 2.0))
         ey_n = ey / max(1.0, (frame_height / 2.0))
+        ex_n = max(-1.0, min(1.0, ex_n))
+        ey_n = max(-1.0, min(1.0, ey_n))
         self._ix += ex_n * dt
         self._iy += ey_n * dt
         self._ix = max(-10.0, min(10.0, self._ix))
         self._iy = max(-10.0, min(10.0, self._iy))
-        dex_n = (ex_n / dt) if dt > 0 else 0.0
-        dey_n = (ey_n / dt) if dt > 0 else 0.0
-        ux = (self.kp * ex_n) + (self.ki * self._ix) + (self.kd * dex_n)
-        uy = (self.kp * ey_n) + (self.ki * self._iy) + (self.kd * dey_n)
-        cmd_x = max(-100.0, min(100.0, ux * 100.0))
-        cmd_y = max(-100.0, min(100.0, -uy * 100.0))
+        # Derivative with cap to reduce spikes on large jumps
+        dex_n = ((ex_n - self._ex_n_last) / dt) if dt > 0 else 0.0
+        dey_n = ((ey_n - self._ey_n_last) / dt) if dt > 0 else 0.0
+        dmax = 5.0
+        dex_n = max(-dmax, min(dmax, dex_n))
+        dey_n = max(-dmax, min(dmax, dey_n))
+        # Reduce gains when far from center to avoid overshoot
+        k_scale_x = 0.6 + 0.4 * (1.0 - min(1.0, abs(ex_n)))
+        k_scale_y = 0.6 + 0.4 * (1.0 - min(1.0, abs(ey_n)))
+        kp_x = self.kp * k_scale_x
+        kp_y = self.kp * k_scale_y
+        kd_x = self.kd * k_scale_x
+        kd_y = self.kd * k_scale_y
+        ux = (kp_x * ex_n) + (self.ki * self._ix) + (kd_x * dex_n)
+        uy = (kp_y * ey_n) + (self.ki * self._iy) + (kd_y * dey_n)
+        # Map to command space and clamp max velocity
+        cmd_x = ux * 100.0
+        cmd_y = -uy * 100.0
+        cmd_x = max(-80.0, min(80.0, cmd_x))
+        cmd_y = max(-80.0, min(80.0, cmd_y))
+        # Output slew rate limiting
+        if dt > 0:
+            max_delta = 200.0 * dt
+            cmd_x = max(self._cmd_x_last - max_delta, min(self._cmd_x_last + max_delta, cmd_x))
+            cmd_y = max(self._cmd_y_last - max_delta, min(self._cmd_y_last + max_delta, cmd_y))
         min_cmd = 0.0
         try:
             if getattr(self, 'axis_x', None):
@@ -434,7 +460,7 @@ class StepperController:
                 min_cmd = max(min_cmd, float(getattr(self.axis_y, 'deadzone', 0)))
         except Exception:
             pass
-        min_cmd = min_cmd + 3.0 if min_cmd > 0 else 0.0
+        min_cmd = min_cmd + 1.5 if min_cmd > 0 else 0.0
         if abs(cmd_x) > 0 and abs(cmd_x) < min_cmd:
             cmd_x = min_cmd if cmd_x >= 0 else -min_cmd
         if abs(cmd_y) > 0 and abs(cmd_y) < min_cmd:
@@ -445,6 +471,11 @@ class StepperController:
             if getattr(self, 'axis_y', None):
                 self.axis_y.process_command(cmd_y)
         finally:
+            # Save last values for next iteration
+            self._ex_n_last = ex_n
+            self._ey_n_last = ey_n
+            self._cmd_x_last = cmd_x
+            self._cmd_y_last = cmd_y
             self._mark_activity()
     
     def move_linear(self, steps_x: int, steps_y: int, delay: Optional[float] = None, bypass_limits: bool = False) -> None:
