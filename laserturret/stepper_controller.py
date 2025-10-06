@@ -111,7 +111,7 @@ class StepperController:
                 skip_direction_check=True,
                 perform_calibration=False,
                 name='AxisX',
-                start_thread=False,
+                start_thread=True,
                 gpio_backend=self.gpio,
             )
             self.axis_y = StepperAxis(
@@ -128,7 +128,7 @@ class StepperController:
                 skip_direction_check=True,
                 perform_calibration=False,
                 name='AxisY',
-                start_thread=False,
+                start_thread=True,
                 gpio_backend=self.gpio,
             )
         except Exception as _:
@@ -145,6 +145,12 @@ class StepperController:
         
         # Load calibration if available
         self.load_calibration()
+        self.kp = 0.02
+        self.ki = 0.0
+        self.kd = 0.004
+        self._ix = 0.0
+        self._iy = 0.0
+        self._last_pid_time = None
         
         # Idle timeout watchdog
         self.idle_timeout = self.config.get_control_idle_timeout()
@@ -377,6 +383,39 @@ class StepperController:
         self._mark_activity()
         self.enable()
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
+    
+    def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
+        self._mark_activity()
+        now = time.time()
+        if getattr(self, '_last_pid_time', None) is None:
+            dt = 0.0
+        else:
+            dt = max(0.0, now - self._last_pid_time)
+        self._last_pid_time = now
+        cx = frame_width // 2
+        cy = frame_height // 2
+        ex = float(target_x - cx)
+        ey = float(target_y - cy)
+        self._ix += ex * dt
+        self._iy += ey * dt
+        self._ix = max(-1000.0, min(1000.0, self._ix))
+        self._iy = max(-1000.0, min(1000.0, self._iy))
+        dex = (ex / dt) if dt > 0 else 0.0
+        dey = (ey / dt) if dt > 0 else 0.0
+        ux = (self.kp * ex) + (self.ki * self._ix) + (self.kd * dex)
+        uy = (self.kp * ey) + (self.ki * self._iy) + (self.kd * dey)
+        ux = max(-100.0, min(100.0, ux))
+        uy = max(-100.0, min(100.0, uy))
+        cmd_x = ux
+        cmd_y = -uy
+        self.enable()
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.process_command(cmd_x)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.process_command(cmd_y)
+        finally:
+            self._mark_activity()
     
     def move_linear(self, steps_x: int, steps_y: int, delay: Optional[float] = None, bypass_limits: bool = False) -> None:
         """

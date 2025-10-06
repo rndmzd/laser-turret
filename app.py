@@ -732,12 +732,10 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     with crosshair_lock:
                                         tx = sx_i - int(crosshair_offset['x'])
                                         ty = sy_i - int(crosshair_offset['y'])
-                                    threading.Thread(
-                                        target=lambda: stepper_controller.move_to_center_object(
-                                            tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT
-                                        ),
-                                        daemon=True
-                                    ).start()
+                                    try:
+                                        stepper_controller.update_tracking_with_pid(tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT)
+                                    except Exception as e:
+                                        print(f"PID update error (object tracking): {e}")
             except Exception as e:
                 print(f"Object detection error: {e}")
     
@@ -782,12 +780,10 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     with crosshair_lock:
                                         tx = msx - int(crosshair_offset['x'])
                                         ty = msy - int(crosshair_offset['y'])
-                                    threading.Thread(
-                                        target=lambda: stepper_controller.move_to_center_object(
-                                            tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT
-                                        ),
-                                        daemon=True
-                                    ).start()
+                                    try:
+                                        stepper_controller.update_tracking_with_pid(tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT)
+                                    except Exception as e:
+                                        print(f"PID update error (motion tracking): {e}")
                 else:
                     motion_smooth_center = None
             except Exception as e:

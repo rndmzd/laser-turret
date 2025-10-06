@@ -298,7 +298,6 @@ class StepperMotor:
                     self.state.status = MotorStatus.LIMIT_REACHED
                 else:
                     self.state.status = MotorStatus.IDLE
-            # Do not disable here; keep motor enabled to hold position
         
         return actual_steps
 
@@ -335,7 +334,6 @@ class StepperMotor:
 
                 # Process the command
                 if abs(command) < self.deadzone:
-                    self.disable()  # Disable motor in deadzone
                     time.sleep(0.001)
                     continue
 
