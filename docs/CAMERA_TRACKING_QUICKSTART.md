@@ -8,11 +8,11 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 
 ### 1. Hardware Check
 
-- ✅ 2x Stepper motors (NEMA 17 recommended)
-- ✅ 2x Stepper drivers (A4988 or DRV8825)
-- ✅ 12V power supply
-- ✅ Pan/tilt mount for camera
-- ✅ All wired according to `laserturret.conf`
+- 2x Stepper motors (NEMA 17 recommended)
+- 2x Stepper drivers (A4988 or DRV8825)
+- 12V power supply
+- Pan/tilt mount for camera
+- All wired according to `laserturret.conf`
 
 ### 2. Enable Camera Tracking
 
@@ -30,12 +30,23 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 4. Adjust **Y-Axis Steps/Pixel** slider until vertical tracking works
 5. Click **Save Calibration**
 
+#### PID Tuning (optional)
+
+- In the same tab, use the **PID Tuning** sliders to set gains
+- Recommended start: Kp=0.8, Ki=0.0, Kd=0.2
+- Changes take effect immediately and are saved to `camera_calibration.json`
+
+#### Re-center on Loss (optional)
+
+- Toggle "Re-center camera slowly on target loss" to gently return toward home when no target is detected
+- When disabled, the camera holds its current position when the target is lost
+
 ### 4. Start Tracking
 
 1. Enable **Auto-Track Objects**
 2. Watch the camera follow your target!
 
-## Safety First ⚠️
+## Safety First
 
 - **Always test movement manually before enabling auto-tracking**
 - Use the **Home Camera** button to return to center
@@ -60,14 +71,14 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 
 ## When to Use Each Mode
 
-**Crosshair Tracking (Default)**
+### Crosshair Tracking (Default)
 
 - ✅ No hardware needed
 - ✅ Instant response
 - ✅ Good for viewing/monitoring
 - ❌ Laser must aim at crosshair position
 
-**Camera Tracking (New)**
+### Camera Tracking (New)
 
 - ✅ Physical precision
 - ✅ Laser always aims at center

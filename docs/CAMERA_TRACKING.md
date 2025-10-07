@@ -135,15 +135,14 @@ For precise calibration:
 2. Measure pixel distance object moves in frame
 3. Count motor steps executed
 4. Calculate: `steps_per_pixel = steps / pixels_moved`
-5. Use API endpoint for programmatic calibration:
+5. Programmatic calibration: set steps-per-pixel directly via settings
 
 ```bash
-curl -X POST http://localhost:5000/tracking/camera/calibrate \
+curl -X POST http://localhost:5000/tracking/camera/settings \
   -H "Content-Type: application/json" \
   -d '{
-    "axis": "x",
-    "pixels_moved": 100,
-    "steps_executed": 50
+    "x_steps_per_pixel": 0.15,
+    "y_steps_per_pixel": 0.12
   }'
 ```
 
@@ -198,6 +197,19 @@ curl -X POST http://localhost:5000/tracking/camera/calibrate \
 - Adjust based on physical constraints
 - Acts as safety limit if limit switches fail
 
+**PID Tuning**: Runtime control loop gains for responsive tracking
+
+- Controls: Kp (proportional), Ki (integral), Kd (derivative)
+- Recommended start: Kp=0.8, Ki=0.0, Kd=0.2
+- Ki should remain small to avoid drift
+- Gains are persisted in `camera_calibration.json`
+
+**Re-center on Loss**: Behavior when the target is lost while camera tracking
+
+- When enabled, the camera gently nudges back toward home (0,0)
+- When disabled, tracking commands are zeroed and camera holds position
+- Toggle via UI or API
+
 ## Safety Features
 
 ### Software Limits
@@ -235,6 +247,48 @@ Content-Type: application/json
 
 {
   "mode": "camera"  # or "crosshair"
+}
+```
+
+### PID Tuning
+
+```bash
+# Get current PID values
+GET /tracking/camera/pid
+
+# Set PID values (any subset of kp, ki, kd)
+POST /tracking/camera/pid
+Content-Type: application/json
+
+{
+  "kp": 0.8,
+  "ki": 0.0,
+  "kd": 0.2
+}
+```
+
+Response:
+
+```json
+{
+  "status": "success",
+  "pid": {"kp": 0.8, "ki": 0.0, "kd": 0.2}
+}
+```
+
+Notes:
+
+- PID values are saved to `camera_calibration.json` via `StepperController.save_calibration()`
+- Values take effect immediately at runtime
+
+### Re-center on Loss
+
+```bash
+POST /tracking/camera/recenter_on_loss
+Content-Type: application/json
+
+{
+  "enabled": true
 }
 ```
 
@@ -285,6 +339,7 @@ Response:
   "available": true,
   "mode": "camera",
   "enabled": true,
+  "recenter_on_loss": false,
   "controller_status": {
     "enabled": true,
     "moving": false,
@@ -292,7 +347,8 @@ Response:
     "calibration": {
       "x_steps_per_pixel": 0.15,
       "y_steps_per_pixel": 0.12,
-      "dead_zone_pixels": 20
+      "dead_zone_pixels": 20,
+      "step_delay": 0.001
     },
     "limits": {
       "x_max_steps": 2000,
@@ -444,7 +500,7 @@ self.gpio.setup(self.x_cw_limit, PinMode.INPUT, PullMode.UP)
 
 ### Code Structure
 
-```
+```text
 laserturret/
 ├── stepper_controller.py    # Stepper motor control
 ├── hardware_interface.py    # GPIO abstraction layer
