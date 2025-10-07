@@ -2486,10 +2486,21 @@ def handle_api_request(message):
             'error': 'Streaming responses are not supported via Socket.IO'
         }
 
+    payload = None
+
+    # Try to decode JSON without raising when the response body is empty or invalid
     try:
-        payload = response.get_json()
+        payload = response.get_json(silent=True)
     except Exception:
-        payload = response.get_data(as_text=True)
+        payload = None
+
+    if payload is None:
+        raw_data = response.get_data()
+        if raw_data:
+            try:
+                payload = json.loads(raw_data)
+            except Exception:
+                payload = raw_data.decode('utf-8', errors='replace')
 
     success = 200 <= response.status_code < 300
     result = {
