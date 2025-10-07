@@ -98,9 +98,14 @@ Successfully implemented a major camera tracking feature that enables physical c
 - ✅ `POST /tracking/mode` - Set tracking mode
 - ✅ `POST /tracking/camera/toggle` - Enable/disable camera tracking
 - ✅ `POST /tracking/camera/home` - Home camera to center
-- ✅ `POST /tracking/camera/settings` - Update settings
-- ✅ `POST /tracking/camera/calibrate` - Calibrate steps-per-pixel
-- ✅ `GET /tracking/camera/status` - Get camera tracking status
+- ✅ `POST /tracking/camera/settings` - Update settings (dead zone, step_delay, steps/pixel, limits)
+- ✅ `GET|POST /tracking/camera/pid` - Get or set PID gains (kp, ki, kd)
+- ✅ `POST /tracking/camera/recenter_on_loss` - Toggle slow re-centering on target loss
+- ✅ `POST /tracking/camera/move_to_position` - Move camera to recenter a clicked absolute position
+- ✅ `POST /tracking/camera/manual_move` - Manually move a single axis by steps
+- ✅ `POST /tracking/camera/set_home` - Set current position as home (0, 0)
+- ✅ `POST /tracking/camera/auto_calibrate` - Run automatic calibration
+- ✅ `GET /tracking/camera/status` - Get camera tracking status (includes step_delay)
 - ✅ `GET /tracking/status` - Get overall tracking status
 
 ## Technical Highlights

@@ -11,6 +11,8 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 - **Precision Control** - A4988 stepper motor drivers with limit switches and calibration
 - **PWM Laser Control** - Variable power laser with safety features
 - **Web Interface** - Flask-based UI for camera viewing and control
+- **Camera Tracking (Stepper Motors)** - Hardware camera movement with PID tuning
+- **Flexible Detection** - Haar cascades, TensorFlow Lite, or Roboflow Inference (remote)
 
 ## Hardware Requirements
 
@@ -70,6 +72,26 @@ sudo apt-get install -y python3-pip python3-opencv python3-numpy \
 cd ~/laser-turret
 pip3 install -r requirements.txt
 ```
+
+#### Optional: Roboflow Remote Inference
+
+If you want to run detection via a Roboflow Inference Server (remote or local):
+
+1. Ensure Docker is installed and running
+2. From the repository root, start the server:
+
+```bash
+cd inference_server
+docker compose up -d
+```
+
+Defaults:
+
+- Server will listen on port 9001
+- GPU image is configured in `inference_server/compose.yaml`
+- Cache path is mounted at `${USERPROFILE}/.inference/cache` on Windows
+
+Then set `detection_method = roboflow` and configure the Roboflow fields in `laserturret.conf` (see Configuration below).
 
 #### 3. Configure Hardware
 
@@ -214,6 +236,8 @@ Hold the joystick button during power-on to enter calibration mode. Follow the L
 - **Crosshair overlay** - Click to reposition
 - **Exposure stats** - Real-time camera telemetry
 - **Responsive design** - Works on mobile devices
+- **Camera tracking controls** - Enable camera movement, home to center, manual nudge
+- **PID tuning** - Adjust Kp, Ki, Kd at runtime and persist to calibration
 
 ## MQTT Message Format
 
@@ -250,6 +274,29 @@ max_steps_per_update = 50
 deadzone = 5
 speed_scaling = 0.10
 step_delay = 0.0005
+```
+
+### Detection Settings
+
+Select the detection backend and tune thresholds in `laserturret.conf`:
+
+```ini
+[Detection]
+# Options: 'haar', 'tflite', or 'roboflow'
+detection_method = haar
+
+# TFLite (local inference)
+tflite_model = ssd_mobilenet_v2
+use_coral = false
+tflite_confidence = 0.5
+tflite_filter_classes =
+
+# Roboflow (remote inference server, default port 9001)
+roboflow_server_url = http://localhost:9001
+roboflow_model_id =            # e.g. workspace/project/1
+roboflow_api_key =             # required for private/hosted models
+roboflow_confidence = 0.5
+roboflow_class_filter =        # e.g. balloon
 ```
 
 ## Safety
@@ -320,15 +367,23 @@ python3 calib_test.py          # Test calibration
 
 ```
 laser-turret/
-├── app.py                      # Flask web server
-├── remote_control_rx.py        # MQTT receiver (runs on Pi)
-├── remote_control_tx.py        # MQTT transmitter (CircuitPython)
+├── app.py                          # Flask web server
+├── remote_control_rx.py            # MQTT receiver (runs on Pi)
+├── remote_control_tx.py            # MQTT transmitter (CircuitPython)
+├── inference_server/
+│   └── compose.yaml                # Roboflow Inference Server (Docker Compose)
 ├── laserturret/
-│   ├── lasercontrol.py         # Laser PWM control
-│   └── steppercontrol.py       # Stepper motor control
+│   ├── lasercontrol.py             # Laser PWM control
+│   ├── steppercontrol.py           # Low-level stepper motor implementation
+│   ├── stepper_controller.py       # Camera tracking controller (used by app)
+│   ├── roboflow_detector.py        # Roboflow HTTP client wrapper
+│   └── motion/                     # Standardized motion API
+│       ├── axis.py                 # StepperAxis alias + constants
+│       ├── tracker.py              # CameraTracker alias of StepperController
+│       └── constants.py
 ├── templates/
-│   └── index.html              # Web UI
-└── scripts/                    # Test and utility scripts
+│   └── index.html                  # Web UI
+└── scripts/                        # Test and utility scripts
 ```
 
 ## Contributing
