@@ -56,7 +56,7 @@ class ConfigManager:
         },
         'Laser': {
             'laser_pin': 12,
-            'laser_max_power': 100,
+            'laser_max_power': 5,
         },
         'Camera': {
             'width': 1920,
@@ -71,7 +71,7 @@ class ConfigManager:
             'tflite_confidence': 0.5,
             'tflite_filter_classes': '',
             'balloon_v_threshold': 60,           # 0-255 (lower V = darker)
-            'balloon_min_area': 2000,            # pixels
+            'balloon_min_area': 4000,            # pixels
             'balloon_circularity_min': 0.55,     # 0.0-1.0
             'balloon_fill_ratio_min': 0.5,       # 0.0-1.0
             'balloon_aspect_ratio_min': 0.6,     # w/h
@@ -294,7 +294,7 @@ class ConfigManager:
     
     # Detection Configuration
     def get_detection_method(self) -> str:
-        """Get detection method ('haar' or 'tflite')"""
+        """Get detection method ('haar', 'tflite', or 'roboflow')"""
         method = self._get('Detection', 'detection_method', str)
         if method not in ['haar', 'tflite', 'roboflow']:
             logger.warning(f"Invalid detection method: {method}, defaulting to 'haar'")
