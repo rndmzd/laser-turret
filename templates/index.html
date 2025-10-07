@@ -1870,7 +1870,7 @@
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
 
                         const now = Date.now();
-                        const allowSliderSync = !laserEditing || (now - lastLaserEditTs > 1500);
+                        const allowSliderSync = !laserEditing || (now - lastLaserEditTs > EDIT_IDLE_MS);
                         if (allowSliderSync) {
                             const pd = document.getElementById('pulse-duration');
                             const bc = document.getElementById('burst-count');
@@ -3299,7 +3299,7 @@
                 
                 // Update sliders with edit protection
                 const now = Date.now();
-                const allowSliderSync = !laserEditing || (now - lastLaserEditTs > 1500);
+                const allowSliderSync = !laserEditing || (now - lastLaserEditTs > EDIT_IDLE_MS);
                 if (allowSliderSync) {
                     const pdEl = document.getElementById('pulse-duration');
                     const bcEl = document.getElementById('burst-count');
