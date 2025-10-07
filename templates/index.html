@@ -3234,22 +3234,27 @@
             console.error('WebSocket connection error:', error);
         });
         
+        // Helper function to safely update DOM elements
+        function safeUpdateElement(id, value) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value;
+            }
+        }
+        
         // Listen for consolidated status updates from server
         socket.on('status_update', (status) => {
             // Update FPS
             if (status.fps !== undefined) {
-                document.getElementById('fps').textContent = `${status.fps} FPS`;
+                safeUpdateElement('fps', `${status.fps} FPS`);
             }
             
             // Update exposure stats
             if (status.exposure) {
-                document.getElementById('exp-time').textContent = 
-                    `${(status.exposure.exposure_time/1000).toFixed(1)} ms`;
-                document.getElementById('gain').textContent = 
-                    `${status.exposure.analog_gain.toFixed(2)}x`;
+                safeUpdateElement('exp-time', `${(status.exposure.exposure_time/1000).toFixed(1)} ms`);
+                safeUpdateElement('gain', `${status.exposure.analog_gain.toFixed(2)}x`);
                 if (status.exposure.digital_gain !== undefined) {
-                    document.getElementById('digital-gain').textContent = 
-                        `${status.exposure.digital_gain.toFixed(2)}x`;
+                    safeUpdateElement('digital-gain', `${status.exposure.digital_gain.toFixed(2)}x`);
                 }
             }
             
@@ -3257,31 +3262,20 @@
             if (status.crosshair) {
                 const relX = status.crosshair.relative_x;
                 const relY = status.crosshair.relative_y;
-                document.getElementById('position').textContent = 
-                    `(${relX >= 0 ? '+' : ''}${relX}, ${relY >= 0 ? '+' : ''}${relY})`;
-                
-                // Update crosshair position in camera tracking status
-                const crosshairPosEl = document.getElementById('crosshair-position');
-                if (crosshairPosEl) {
-                    crosshairPosEl.textContent = 
-                        `${status.crosshair.absolute_x}, ${status.crosshair.absolute_y}`;
-                }
+                safeUpdateElement('position', `(${relX >= 0 ? '+' : ''}${relX}, ${relY >= 0 ? '+' : ''}${relY})`);
+                safeUpdateElement('crosshair-position', `${status.crosshair.absolute_x}, ${status.crosshair.absolute_y}`);
             }
             
             // Update crosshair calibration
             if (status.crosshair_calibration) {
-                document.getElementById('crosshair-offset').textContent = 
-                    `${status.crosshair_calibration.x}, ${status.crosshair_calibration.y}`;
+                safeUpdateElement('crosshair-offset', `${status.crosshair_calibration.x}, ${status.crosshair_calibration.y}`);
             }
             
             // Update laser status
             if (status.laser) {
-                document.getElementById('laser-system-status').textContent = 
-                    status.laser.enabled ? 'ON' : 'OFF';
-                document.getElementById('laser-ready').textContent = 
-                    status.laser.ready ? 'Yes' : 'No';
-                document.getElementById('laser-fire-count').textContent = 
-                    status.laser.fire_count;
+                safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
+                safeUpdateElement('laser-ready', status.laser.ready ? 'Yes' : 'No');
+                safeUpdateElement('laser-fire-count', status.laser.fire_count);
             }
             
             // Update object detection status
@@ -3292,15 +3286,11 @@
                 const objMode = status.object_detection.mode;
                 const objMethod = status.object_detection.method;
                 
-                document.getElementById('object-detection-status').textContent = 
-                    objEnabled ? 'Enabled' : 'Disabled';
-                document.getElementById('object-auto-track-status').textContent = 
-                    objAutoTrack ? 'Yes' : 'No';
-                document.getElementById('object-count').textContent = objCount;
-                document.getElementById('object-detection-mode').textContent = 
-                    objMode ? objMode.toUpperCase() : 'N/A';
-                document.getElementById('detection-method-display').textContent = 
-                    objMethod ? objMethod.toUpperCase() : 'N/A';
+                safeUpdateElement('object-detection-status', objEnabled ? 'Enabled' : 'Disabled');
+                safeUpdateElement('object-auto-track-status', objAutoTrack ? 'Yes' : 'No');
+                safeUpdateElement('object-count', objCount);
+                safeUpdateElement('object-detection-mode', objMode ? objMode.toUpperCase() : 'N/A');
+                safeUpdateElement('detection-method-display', objMethod ? objMethod.toUpperCase() : 'N/A');
             }
             
             // Update motion detection status
@@ -3309,40 +3299,28 @@
                 const motionAutoTrack = status.motion_detection.auto_track;
                 const hasMotion = status.motion_detection.has_motion;
                 
-                document.getElementById('motion-detection-status').textContent = 
-                    motionEnabled ? 'Enabled' : 'Disabled';
-                document.getElementById('motion-auto-track-status').textContent = 
-                    motionAutoTrack ? 'Yes' : 'No';
-                document.getElementById('motion-detected').textContent = 
-                    hasMotion ? 'Yes' : 'No';
+                safeUpdateElement('motion-detection-status', motionEnabled ? 'Enabled' : 'Disabled');
+                safeUpdateElement('motion-auto-track-status', motionAutoTrack ? 'Yes' : 'No');
+                safeUpdateElement('motion-detected', hasMotion ? 'Yes' : 'No');
             }
             
             // Update recording status
             if (status.recording) {
-                const recEl = document.getElementById('recording-status');
-                const recDurEl = document.getElementById('recording-duration');
-                const recFileEl = document.getElementById('recording-filename');
-                
-                if (recEl) {
-                    recEl.textContent = status.recording.is_recording ? 'Recording' : 'Not Recording';
-                }
-                if (recDurEl && status.recording.is_recording) {
+                safeUpdateElement('recording-status', status.recording.is_recording ? 'Recording' : 'Not Recording');
+                if (status.recording.is_recording) {
                     const duration = Math.floor(status.recording.duration);
                     const mins = Math.floor(duration / 60);
                     const secs = duration % 60;
-                    recDurEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    safeUpdateElement('recording-duration', `${mins}:${secs.toString().padStart(2, '0')}`);
                 }
-                if (recFileEl && status.recording.filename) {
-                    recFileEl.textContent = status.recording.filename;
+                if (status.recording.filename) {
+                    safeUpdateElement('recording-filename', status.recording.filename);
                 }
             }
             
             // Update pattern status
             if (status.pattern) {
-                const patternEl = document.getElementById('pattern-status');
-                if (patternEl) {
-                    patternEl.textContent = status.pattern.running ? 'Running' : 'Stopped';
-                }
+                safeUpdateElement('pattern-status', status.pattern.running ? 'Running' : 'Stopped');
             }
             
             // Update tracking mode status
@@ -3358,9 +3336,8 @@
             if (status.controller) {
                 const ctrl = status.controller;
                 
-                document.getElementById('camera-system-status').textContent = 'Available';
-                document.getElementById('camera-enabled-status').textContent = 
-                    status.tracking.camera_enabled ? 'Yes' : 'No';
+                safeUpdateElement('camera-system-status', 'Available');
+                safeUpdateElement('camera-enabled-status', status.tracking.camera_enabled ? 'Yes' : 'No');
                 
                 // Update re-center on loss toggle
                 const recenterEl = document.getElementById('camera-recenter-on-loss');
@@ -3369,37 +3346,40 @@
                 }
                 
                 if (ctrl.position) {
-                    document.getElementById('camera-position').textContent = 
-                        `${ctrl.position.x}, ${ctrl.position.y}`;
+                    safeUpdateElement('camera-position', `${ctrl.position.x}, ${ctrl.position.y}`);
                 }
                 
-                document.getElementById('camera-moving').textContent = 
-                    ctrl.moving ? 'Yes' : 'No';
+                safeUpdateElement('camera-moving', ctrl.moving ? 'Yes' : 'No');
                 
                 // Initialize calibration sliders ONLY on first load
                 if (ctrl.calibration && !calibrationSlidersInitialized) {
-                    document.getElementById('camera-x-steps-per-pixel').value = 
-                        ctrl.calibration.x_steps_per_pixel;
-                    document.getElementById('camera-x-steps-value').textContent = 
-                        ctrl.calibration.x_steps_per_pixel.toFixed(2);
+                    const xStepsEl = document.getElementById('camera-x-steps-per-pixel');
+                    const xStepsValEl = document.getElementById('camera-x-steps-value');
+                    const yStepsEl = document.getElementById('camera-y-steps-per-pixel');
+                    const yStepsValEl = document.getElementById('camera-y-steps-value');
+                    const deadZoneEl = document.getElementById('camera-dead-zone');
+                    const stepDelayEl = document.getElementById('camera-step-delay');
                     
-                    document.getElementById('camera-y-steps-per-pixel').value = 
-                        ctrl.calibration.y_steps_per_pixel;
-                    document.getElementById('camera-y-steps-value').textContent = 
-                        ctrl.calibration.y_steps_per_pixel.toFixed(2);
+                    if (xStepsEl && xStepsValEl) {
+                        xStepsEl.value = ctrl.calibration.x_steps_per_pixel;
+                        xStepsValEl.textContent = ctrl.calibration.x_steps_per_pixel.toFixed(2);
+                    }
                     
-                    document.getElementById('camera-dead-zone').value = 
-                        ctrl.calibration.dead_zone_pixels;
-                    updateCameraDeadZoneValue();
+                    if (yStepsEl && yStepsValEl) {
+                        yStepsEl.value = ctrl.calibration.y_steps_per_pixel;
+                        yStepsValEl.textContent = ctrl.calibration.y_steps_per_pixel.toFixed(2);
+                    }
                     
-                    if (typeof ctrl.calibration.step_delay === 'number') {
-                        const sliderEl = document.getElementById('camera-step-delay');
-                        if (sliderEl) {
-                            let sliderVal = 0.0055 - ctrl.calibration.step_delay;
-                            sliderVal = Math.max(0.0005, Math.min(0.005, sliderVal));
-                            sliderEl.value = sliderVal;
-                            updateCameraStepDelayValue();
-                        }
+                    if (deadZoneEl) {
+                        deadZoneEl.value = ctrl.calibration.dead_zone_pixels;
+                        updateCameraDeadZoneValue();
+                    }
+                    
+                    if (stepDelayEl && typeof ctrl.calibration.step_delay === 'number') {
+                        let sliderVal = 0.0055 - ctrl.calibration.step_delay;
+                        sliderVal = Math.max(0.0005, Math.min(0.005, sliderVal));
+                        stepDelayEl.value = sliderVal;
+                        updateCameraStepDelayValue();
                     }
                     
                     calibrationSlidersInitialized = true;
@@ -3430,10 +3410,13 @@
                     }
                 }
                 
-                document.getElementById('camera-tracking-enabled').checked = status.tracking.camera_enabled;
+                const camTrackEl = document.getElementById('camera-tracking-enabled');
+                if (camTrackEl) {
+                    camTrackEl.checked = status.tracking.camera_enabled;
+                }
             } else if (status.tracking && !status.tracking.camera_enabled) {
-                document.getElementById('camera-system-status').textContent = 'Not Available';
-                document.getElementById('camera-enabled-status').textContent = 'N/A';
+                safeUpdateElement('camera-system-status', 'Not Available');
+                safeUpdateElement('camera-enabled-status', 'N/A');
             }
         });
         
