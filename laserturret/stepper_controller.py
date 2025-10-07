@@ -1047,6 +1047,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'step_delay': self.calibration.step_delay,
                 'is_calibrated': self.calibration.is_calibrated,
                 'calibration_timestamp': self.calibration.calibration_timestamp
             },

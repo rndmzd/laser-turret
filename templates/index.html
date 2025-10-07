@@ -3155,6 +3155,16 @@
                                     document.getElementById('camera-dead-zone').value = 
                                         controller.calibration.dead_zone_pixels;
                                     updateCameraDeadZoneValue();
+
+                                    if (typeof controller.calibration.step_delay === 'number') {
+                                        const sliderEl = document.getElementById('camera-step-delay');
+                                        if (sliderEl) {
+                                            let sliderVal = 0.0055 - controller.calibration.step_delay;
+                                            sliderVal = Math.max(0.0005, Math.min(0.005, sliderVal));
+                                            sliderEl.value = sliderVal;
+                                            updateCameraStepDelayValue();
+                                        }
+                                    }
                                     
                                     // Mark as initialized so we don't overwrite user changes
                                     calibrationSlidersInitialized = true;
