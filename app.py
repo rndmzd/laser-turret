@@ -2489,12 +2489,23 @@ def get_consolidated_status():
     
     # Laser status
     with laser_lock:
+        cooldown_remaining = 0
+        if last_fire_time:
+            elapsed = time.time() - last_fire_time
+            cooldown_remaining = max(0, laser_cooldown - elapsed)
+        
         status['laser'] = {
             'enabled': laser_enabled,
             'auto_fire': laser_auto_fire,
-            'ready': (last_fire_time is None or (time.time() - last_fire_time) >= laser_cooldown),
+            'pulse_duration': laser_pulse_duration,
+            'burst_count': laser_burst_count,
+            'burst_delay': laser_burst_delay,
+            'cooldown': laser_cooldown,
+            'cooldown_remaining': cooldown_remaining,
             'fire_count': fire_count,
-            'power': laser_power
+            'ready_to_fire': cooldown_remaining == 0,
+            'power': laser_power,
+            'hardware_available': laser_control is not None
         }
     
     # Object detection status

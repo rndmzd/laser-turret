@@ -3274,8 +3274,60 @@
             // Update laser status
             if (status.laser) {
                 safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
-                safeUpdateElement('laser-ready', status.laser.ready ? 'Yes' : 'No');
+                safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
                 safeUpdateElement('laser-fire-count', status.laser.fire_count);
+                
+                // Update cooldown remaining
+                if (status.laser.cooldown_remaining > 0) {
+                    safeUpdateElement('laser-cooldown-remaining', status.laser.cooldown_remaining.toFixed(1) + 's');
+                } else {
+                    safeUpdateElement('laser-cooldown-remaining', 'Ready');
+                }
+                
+                // Update power level and hardware status
+                if (status.laser.power !== undefined) {
+                    safeUpdateElement('laser-power-level', status.laser.power + '%');
+                }
+                safeUpdateElement('laser-hardware-status', status.laser.hardware_available ? 'Connected' : 'Simulation');
+                
+                // Update checkboxes
+                const laserEnabledEl = document.getElementById('laser-enabled');
+                if (laserEnabledEl) laserEnabledEl.checked = status.laser.enabled;
+                
+                const autoFireEl = document.getElementById('auto-fire-enabled');
+                if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
+                
+                // Update sliders with edit protection
+                const now = Date.now();
+                const allowSliderSync = !laserEditing || (now - lastLaserEditTs > 1500);
+                if (allowSliderSync) {
+                    const pdEl = document.getElementById('pulse-duration');
+                    const bcEl = document.getElementById('burst-count');
+                    const bdEl = document.getElementById('burst-delay');
+                    const lcdEl = document.getElementById('laser-cooldown');
+                    const lpEl = document.getElementById('laser-power');
+                    
+                    if (pdEl) pdEl.value = status.laser.pulse_duration * 1000;
+                    if (bcEl) bcEl.value = status.laser.burst_count;
+                    if (bdEl) bdEl.value = status.laser.burst_delay * 1000;
+                    if (lcdEl) lcdEl.value = status.laser.cooldown;
+                    if (lpEl && status.laser.power !== undefined) lpEl.value = status.laser.power;
+                    
+                    // Update slider labels
+                    safeUpdateElement('pulse-duration-value', (status.laser.pulse_duration * 1000) + 'ms');
+                    safeUpdateElement('burst-count-value', status.laser.burst_count);
+                    safeUpdateElement('burst-delay-value', (status.laser.burst_delay * 1000) + 'ms');
+                    safeUpdateElement('laser-cooldown-value', parseFloat(status.laser.cooldown).toFixed(1) + 's');
+                    if (status.laser.power !== undefined) {
+                        safeUpdateElement('laser-power-value', parseInt(status.laser.power) + '%');
+                    }
+                }
+                
+                // Update fire button state
+                const fireButton = document.getElementById('fire-button');
+                if (fireButton) {
+                    fireButton.disabled = !status.laser.ready_to_fire || !status.laser.enabled;
+                }
             }
             
             // Update object detection status
