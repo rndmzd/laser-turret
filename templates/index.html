@@ -36,11 +36,18 @@
 
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
             gap: 20px;
             align-items: start;
             max-width: 1400px;
             margin: 0 auto;
+        }
+
+        @media (min-width: 1100px) {
+            .main-grid {
+                grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+                align-items: stretch;
+            }
         }
 
         .video-section {
@@ -48,6 +55,12 @@
             border-radius: 12px;
             padding: 15px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-wrapper {
+            position: relative;
         }
 
         #video-stream {
@@ -58,6 +71,154 @@
             display: block;
         }
 
+        .manual-overlay {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            background: rgba(15, 18, 38, 0.85);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+            color: #fff;
+            width: min(340px, calc(100% - 40px));
+            backdrop-filter: blur(8px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .manual-overlay.collapsed {
+            transform: translateY(calc(100% + 30px));
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .manual-overlay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .manual-overlay-title {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .manual-overlay-toggle {
+            background: rgba(255, 255, 255, 0.12);
+            border: none;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .manual-overlay-toggle:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .manual-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            justify-items: center;
+            margin-bottom: 12px;
+        }
+
+        .manual-pad .spacer {
+            visibility: hidden;
+        }
+
+        .manual-pad button {
+            width: 64px;
+            height: 44px;
+            border-radius: 10px;
+            border: none;
+            font-size: 18px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            transition: transform 0.2s ease, background 0.3s ease;
+        }
+
+        .manual-pad button:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .manual-quick-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .manual-quick-actions button {
+            flex: 1 1 120px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: none;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.3s ease;
+        }
+
+        .manual-quick-actions button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(102, 126, 234, 0.4);
+        }
+
+        .manual-overlay .slider-control {
+            margin-bottom: 0;
+        }
+
+        .manual-overlay .slider-control label {
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .manual-overlay .slider-value {
+            color: #fff;
+        }
+
+        .manual-overlay input[type="range"] {
+            accent-color: #9ba7ff;
+        }
+
+        .manual-overlay-status {
+            margin-top: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.85);
+            min-height: 18px;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .manual-overlay-status.success {
+            color: #90ee90;
+        }
+
+        .manual-overlay-status.error {
+            color: #ffb3b3;
+        }
+
+        @media (max-width: 768px) {
+            .manual-overlay {
+                position: static;
+                width: 100%;
+                margin-top: 15px;
+                background: rgba(15, 18, 38, 0.95);
+            }
+
+            .manual-pad button {
+                width: 58px;
+                height: 40px;
+            }
+        }
+
         .controls-panel {
             background: white;
             border-radius: 12px;
@@ -65,12 +226,77 @@
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
 
-        .tabs {
+        @media (min-width: 1100px) {
+            .controls-panel {
+                position: sticky;
+                top: 20px;
+            }
+        }
+
+        .controls-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(236,240,255,0.95) 100%);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(102, 126, 234, 0.15);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
+        .summary-card h3 {
+            font-size: 15px;
+            margin-bottom: 10px;
+            color: #4a4a6a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .summary-row {
             display: flex;
             justify-content: space-between;
-            gap: 3px;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .summary-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .summary-label {
+            color: #6c6c80;
+            font-weight: 600;
+        }
+
+        .summary-value {
+            color: #2f2f4a;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+        }
+
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
             margin-bottom: 20px;
             border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 4px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+
+        .tabs::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .tabs::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 4px;
         }
 
         .tab {
@@ -84,7 +310,7 @@
             transition: all 0.3s;
             border-bottom: 3px solid transparent;
             white-space: nowrap;
-            flex: 1;
+            flex: 1 1 120px;
             text-align: center;
         }
 
@@ -443,73 +669,93 @@
 
         <div class="main-grid">
             <div class="video-section">
-                <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+                <div class="video-wrapper">
+                    <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+
+                    <div class="manual-overlay" id="manual-overlay">
+                        <div class="manual-overlay-header">
+                            <span class="manual-overlay-title">🎛️ Manual Movement</span>
+                            <button class="manual-overlay-toggle" id="manual-overlay-toggle">Hide</button>
+                        </div>
+
+                        <div class="manual-pad">
+                            <span class="spacer"></span>
+                            <button onclick="manualMove('y', -100)">▲</button>
+                            <span class="spacer"></span>
+                            <button onclick="manualMove('x', -100)">◄</button>
+                            <button onclick="setHomePosition()" style="font-size: 12px;">🏠 Set Home</button>
+                            <button onclick="manualMove('x', 100)">►</button>
+                            <span class="spacer"></span>
+                            <button onclick="manualMove('y', 100)">▼</button>
+                            <span class="spacer"></span>
+                        </div>
+
+                        <div class="manual-quick-actions">
+                            <button onclick="homeCameraPosition()">🏠 Return Home</button>
+                            <button onclick="resetCrosshair()" style="background: rgba(255, 255, 255, 0.18);">🎯 Center Crosshair</button>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Step Size</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="manual-step-size" min="10" max="500" value="100" step="10" oninput="updateManualStepSize()">
+                                <span id="manual-step-size-value" class="slider-value">100</span>
+                            </div>
+                        </div>
+
+                        <div id="manual-overlay-status" class="manual-overlay-status"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="controls-panel">
-                <div class="tabs">
-                    <button class="tab active" onclick="switchTab('stats')">📊 Stats</button>
-                    <button class="tab" onclick="switchTab('tracking')">📹 Track</button>
-                    <button class="tab" onclick="switchTab('laser')">🔴 Laser</button>
-                    <button class="tab" onclick="switchTab('presets')">📍 Presets</button>
-                    <button class="tab" onclick="switchTab('object')">👤 Objects</button>
-                    <button class="tab" onclick="switchTab('motion')">🎯 Motion</button>
-                    <button class="tab" onclick="switchTab('exposure')">🔆 Exposure</button>
-                    <button class="tab" onclick="switchTab('image')">🎨 Image</button>
-                    <button class="tab" onclick="switchTab('capture')">📸 Capture</button>
+                <div class="controls-summary-grid">
+                    <div class="summary-card">
+                        <h3>🎯 Crosshair</h3>
+                        <div class="summary-row">
+                            <span class="summary-label">Position</span>
+                            <span id="position" class="summary-value">Center</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Calibration Offset</span>
+                            <span id="crosshair-offset" class="summary-value">0, 0</span>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <h3>⚡ Performance</h3>
+                        <div class="summary-row">
+                            <span class="summary-label">Frame Rate</span>
+                            <span id="fps" class="summary-value">-- FPS</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Exposure</span>
+                            <span id="exp-time" class="summary-value">--</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Analog Gain</span>
+                            <span id="gain" class="summary-value">--</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Digital Gain</span>
+                            <span id="digital-gain" class="summary-value">--</span>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Stats Tab -->
-                <div id="stats-tab" class="tab-content active">
-                    <div class="control-group">
-                        <h3>📍 Crosshair Position</h3>
-                        <div class="stat-row">
-                            <span class="stat-label">Position</span>
-                            <span id="position" class="stat-value">Center</span>
-                        </div>
-                        <button class="btn-secondary" onclick="resetCrosshair()" style="margin-top: 10px;">
-                            🎯 Reset to Center
-                        </button>
-                        <div class="toggle-switch" style="margin-top: 12px;">
-                            <label class="switch">
-                                <input type="checkbox" id="crosshair-calibration-enabled" onchange="toggleCrosshairCalibration()">
-                                <span class="slider"></span>
-                            </label>
-                            <span class="toggle-label">Enable Crosshair Calibration</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Calibration Offset (px)</span>
-                            <span id="crosshair-offset" class="stat-value">0, 0</span>
-                        </div>
-                        <button class="btn-secondary" onclick="resetCrosshairCalibration()" style="margin-top: 10px;">
-                            🔄 Reset Calibration
-                        </button>
-                        <div id="crosshair-calibration-status" class="status-message"></div>
-                    </div>
-
-                    <div class="control-group">
-                        <h3>⚡ Performance</h3>
-                        <div class="stat-row">
-                            <span class="stat-label">Frame Rate</span>
-                            <span id="fps" class="stat-value">-- FPS</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Exposure Time</span>
-                            <span id="exp-time" class="stat-value">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Analog Gain</span>
-                            <span id="gain" class="stat-value">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Digital Gain</span>
-                            <span id="digital-gain" class="stat-value">--</span>
-                        </div>
-                    </div>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(event, 'tracking')">📹 Track</button>
+                    <button class="tab" onclick="switchTab(event, 'laser')">🔴 Laser</button>
+                    <button class="tab" onclick="switchTab(event, 'motion')">🎯 Motion</button>
+                    <button class="tab" onclick="switchTab(event, 'object')">👤 Objects</button>
+                    <button class="tab" onclick="switchTab(event, 'exposure')">🔆 Exposure</button>
+                    <button class="tab" onclick="switchTab(event, 'image')">🎨 Image</button>
+                    <button class="tab" onclick="switchTab(event, 'capture')">📸 Capture</button>
+                    <button class="tab" onclick="switchTab(event, 'presets')">📍 Presets</button>
                 </div>
 
                 <!-- Camera Tracking Tab -->
-                <div id="tracking-tab" class="tab-content">
+                <div id="tracking-tab" class="tab-content active">
                     <div class="control-group">
                         <h3>📹 Tracking Mode</h3>
                         <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
@@ -563,13 +809,38 @@
                             <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
                                 <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
                             </div>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>🎯 Crosshair Alignment</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Calibrate offsets when the laser and crosshair drift apart. Use the manual controls next to the video for fine positioning.
+                        </p>
+
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="crosshair-calibration-enabled" onchange="toggleCrosshairCalibration()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Calibration Mode</span>
                         </div>
 
-                        <div class="control-group">
-                            <h3>⚙️ Camera Settings</h3>
+                        <div class="stat-row" style="margin-top: 12px; border-bottom: none; padding-bottom: 0;">
+                            <span class="stat-label">Current Offset (px)</span>
+                            <span id="crosshair-offset-detail" class="stat-value">0, 0</span>
+                        </div>
 
-                            <div class="slider-control">
-                                <label>Dead Zone (pixels)</label>
+                        <button class="btn-secondary" onclick="resetCrosshairCalibration()" style="margin-top: 12px;">
+                            🔄 Reset Calibration
+                        </button>
+                        <div id="crosshair-calibration-status" class="status-message"></div>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>⚙️ Camera Settings</h3>
+
+                        <div class="slider-control">
+                            <label>Dead Zone (pixels)</label>
                                 <div class="slider-wrapper">
                                     <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
                                     <span id="camera-dead-zone-value" class="slider-value">20px</span>
@@ -614,35 +885,6 @@
                                 </div>
                             </div>
                             <button class="btn-primary" onclick="applyPID()">Apply PID</button>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>🎯 Manual Position Control</h3>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Manually adjust camera position with arrow controls
-                            </p>
-
-                            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 15px;">
-                                <button class="btn-secondary" onclick="manualMove('y', -100)" style="width: 60px; padding: 8px;">▲</button>
-                                <div style="display: flex; gap: 5px;">
-                                    <button class="btn-secondary" onclick="manualMove('x', -100)" style="width: 60px; padding: 8px;">◄</button>
-                                    <button class="btn-secondary" onclick="setHomePosition()" style="width: 80px; padding: 8px; font-size: 11px;">🏠 Set Home</button>
-                                    <button class="btn-secondary" onclick="manualMove('x', 100)" style="width: 60px; padding: 8px;">►</button>
-                                </div>
-                                <button class="btn-secondary" onclick="manualMove('y', 100)" style="width: 60px; padding: 8px;">▼</button>
-                            </div>
-
-                            <button class="btn-primary" onclick="homeCameraPosition()" style="width: 100%; margin-bottom: 15px;">
-                                🏠 Return to Home Position
-                            </button>
-
-                            <div class="slider-control">
-                                <label>Step Size</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="manual-step-size" min="10" max="500" value="100" step="10" oninput="updateManualStepSize()">
-                                    <span id="manual-step-size-value" class="slider-value">100</span>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="control-group">
@@ -1344,8 +1586,73 @@
         let pidEditing = false;
         let pidLastEditTs = 0;
 
+        function syncCrosshairOffset(x, y) {
+            const summary = document.getElementById('crosshair-offset');
+            if (summary) {
+                summary.textContent = `${x}, ${y}`;
+            }
+            const detail = document.getElementById('crosshair-offset-detail');
+            if (detail) {
+                detail.textContent = `${x}, ${y}`;
+            }
+        }
+
+        const manualOverlay = document.getElementById('manual-overlay');
+        const manualOverlayToggle = document.getElementById('manual-overlay-toggle');
+
+        function setManualOverlayState(collapsed, auto = false) {
+            if (!manualOverlay || !manualOverlayToggle) return;
+            manualOverlay.classList.toggle('collapsed', collapsed);
+            manualOverlayToggle.textContent = collapsed ? 'Show' : 'Hide';
+            manualOverlay.dataset.autoCollapsed = auto ? 'true' : 'false';
+        }
+
+        function evaluateManualOverlayLayout() {
+            if (!manualOverlay || !manualOverlayToggle) return;
+            const isSmall = window.innerWidth < 768;
+            if (isSmall) {
+                if (!manualOverlay.classList.contains('collapsed') || manualOverlay.dataset.autoCollapsed !== 'true') {
+                    setManualOverlayState(true, true);
+                }
+            } else if (manualOverlay.dataset.autoCollapsed === 'true') {
+                setManualOverlayState(false, false);
+            }
+        }
+
+        if (manualOverlay && manualOverlayToggle) {
+            manualOverlayToggle.addEventListener('click', () => {
+                const collapsed = !manualOverlay.classList.contains('collapsed');
+                setManualOverlayState(collapsed, false);
+            });
+
+            window.addEventListener('resize', evaluateManualOverlayLayout);
+            evaluateManualOverlayLayout();
+        }
+
+        updateManualStepSize();
+
+        let manualOverlayStatusTimer = null;
+        function showManualOverlayStatus(success, message) {
+            const statusEl = document.getElementById('manual-overlay-status');
+            if (!statusEl) return;
+            statusEl.textContent = message || '';
+            statusEl.classList.remove('success', 'error');
+            if (message) {
+                statusEl.classList.add(success ? 'success' : 'error');
+                statusEl.style.opacity = '1';
+                if (manualOverlayStatusTimer) {
+                    clearTimeout(manualOverlayStatusTimer);
+                }
+                manualOverlayStatusTimer = setTimeout(() => {
+                    statusEl.style.opacity = '0';
+                }, 2500);
+            } else {
+                statusEl.style.opacity = '0';
+            }
+        }
+
         // Tab switching
-        function switchTab(tabName) {
+        function switchTab(evt, tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -1353,7 +1660,9 @@
                 tab.classList.remove('active');
             });
             document.getElementById(`${tabName}-tab`).classList.add('active');
-            event.target.classList.add('active');
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add('active');
+            }
 
             // If leaving Object tab, make sure method-specific panels are hidden
             if (tabName !== 'object') {
@@ -1386,7 +1695,7 @@
                     if (data.status === 'success') {
                         document.getElementById('position').textContent = `X: ${data.absolute.x}, Y: ${data.absolute.y}`;
                         const off = data.offset;
-                        document.getElementById('crosshair-offset').textContent = `${off.x}, ${off.y}`;
+                        syncCrosshairOffset(off.x, off.y);
                         showStatus('crosshair-calibration-status', true, 'Calibration updated');
                     } else {
                         showStatus('crosshair-calibration-status', false, data.message || 'Failed to set calibration');
@@ -1445,9 +1754,13 @@
             .then(data => {
                 if (data.status === 'success') {
                     document.getElementById('position').textContent = `X: ${data.x}, Y: ${data.y}`;
+                    showManualOverlayStatus(true, 'Crosshair centered');
                 }
             })
-            .catch(error => console.error('Error resetting crosshair:', error));
+            .catch(error => {
+                console.error('Error resetting crosshair:', error);
+                showManualOverlayStatus(false, 'Failed to center crosshair');
+            });
         }
 
         function toggleCrosshairCalibration() {
@@ -1465,7 +1778,7 @@
             .then(data => {
                 if (data.status === 'success') {
                     const off = data.offset || {x:0,y:0};
-                    document.getElementById('crosshair-offset').textContent = `${off.x}, ${off.y}`;
+                    syncCrosshairOffset(off.x, off.y);
                     document.getElementById('position').textContent = `X: ${data.absolute.x}, Y: ${data.absolute.y}`;
                     showStatus('crosshair-calibration-status', true, 'Calibration reset');
                 } else {
@@ -1483,7 +1796,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success' && data.offset) {
-                        document.getElementById('crosshair-offset').textContent = `${data.offset.x}, ${data.offset.y}`;
+                        syncCrosshairOffset(data.offset.x, data.offset.y);
                     }
                 })
                 .catch(error => console.error('Error fetching crosshair calibration:', error));
@@ -2847,13 +3160,16 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('tracking-status-message', true, 'Homing camera to center position...');
+                    showManualOverlayStatus(true, 'Homing camera...');
                     setTimeout(updateCameraTrackingStatus, 1000);
                 } else {
                     showStatus('tracking-status-message', false, data.message);
+                    showManualOverlayStatus(false, data.message || 'Failed to home camera');
                 }
             })
             .catch(error => {
                 showStatus('tracking-status-message', false, 'Failed to home camera');
+                showManualOverlayStatus(false, 'Failed to home camera');
                 console.error('Error homing camera:', error);
             });
         }
@@ -2979,7 +3295,7 @@
             // Use the step size from slider instead of hardcoded value
             const stepSize = parseInt(document.getElementById('manual-step-size').value);
             const actualSteps = steps > 0 ? stepSize : -stepSize;
-            
+
             fetch('/tracking/camera/manual_move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2992,19 +3308,22 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('tracking-status-message', true, data.message);
+                    showManualOverlayStatus(true, data.message || 'Camera moving');
                 } else {
                     showStatus('tracking-status-message', false, data.message);
+                    showManualOverlayStatus(false, data.message || 'Manual move failed');
                 }
             })
             .catch(error => {
                 showStatus('tracking-status-message', false, 'Failed to move camera');
+                showManualOverlayStatus(false, 'Failed to move camera');
                 console.error('Error moving camera:', error);
             });
         }
 
         function setHomePosition() {
             if (!confirm('Set current position as home (0, 0)?')) return;
-            
+
             fetch('/tracking/camera/set_home', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -3013,13 +3332,16 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('tracking-status-message', true, data.message);
+                    showManualOverlayStatus(true, data.message || 'Home position saved');
                     updateCameraTrackingStatus();
                 } else {
                     showStatus('tracking-status-message', false, data.message);
+                    showManualOverlayStatus(false, data.message || 'Failed to set home');
                 }
             })
             .catch(error => {
                 showStatus('tracking-status-message', false, 'Failed to set home position');
+                showManualOverlayStatus(false, 'Failed to set home position');
                 console.error('Error setting home position:', error);
             });
         }
@@ -3250,7 +3572,7 @@
             
             // Update crosshair calibration
             if (status.crosshair_calibration) {
-                safeUpdateElement('crosshair-offset', `${status.crosshair_calibration.x}, ${status.crosshair_calibration.y}`);
+                syncCrosshairOffset(status.crosshair_calibration.x, status.crosshair_calibration.y);
             }
             
             // Update laser status
