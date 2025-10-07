@@ -145,11 +145,12 @@ class StepperController:
         # Initialize GPIO
         self._setup_gpio()
         
-        # Load calibration if available
-        self.load_calibration()
+        # PID defaults (can be overridden by calibration file)
         self.kp = 0.8
         self.ki = 0.0
         self.kd = 0.2
+        # Load calibration if available (may override PID)
+        self.load_calibration()
         self._ix = 0.0
         self._iy = 0.0
         self._last_pid_time = None
@@ -443,13 +444,13 @@ class StepperController:
         ux = (kp_x * ex_n) + (self.ki * self._ix) + (kd_x * dex_n)
         uy = (kp_y * ey_n) + (self.ki * self._iy) + (kd_y * dey_n)
         # Map to command space and clamp max velocity
-        cmd_x = ux * 100.0
-        cmd_y = -uy * 100.0
-        cmd_x = max(-80.0, min(80.0, cmd_x))
-        cmd_y = max(-80.0, min(80.0, cmd_y))
+        cmd_x = ux * 120.0
+        cmd_y = -uy * 120.0
+        cmd_x = max(-100.0, min(100.0, cmd_x))
+        cmd_y = max(-100.0, min(100.0, cmd_y))
         # Output slew rate limiting
         if dt > 0:
-            max_delta = 200.0 * dt
+            max_delta = 300.0 * dt
             cmd_x = max(self._cmd_x_last - max_delta, min(self._cmd_x_last + max_delta, cmd_x))
             cmd_y = max(self._cmd_y_last - max_delta, min(self._cmd_y_last + max_delta, cmd_y))
         min_cmd = 0.0
@@ -974,6 +975,8 @@ class StepperController:
         try:
             # Convert calibration to dict
             cal_data = asdict(self.calibration)
+            # Include PID settings
+            cal_data['pid'] = {'kp': self.kp, 'ki': self.ki, 'kd': self.kd}
             
             # Save to JSON file
             with open(self.calibration_file, 'w') as f:
@@ -1004,6 +1007,15 @@ class StepperController:
                 self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
                 self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
                 self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
+                # Load PID if present
+                try:
+                    pid = cal_data.get('pid', None)
+                    if pid:
+                        self.kp = float(pid.get('kp', self.kp))
+                        self.ki = float(pid.get('ki', self.ki))
+                        self.kd = float(pid.get('kd', self.kd))
+                except Exception:
+                    pass
                 
                 logger.info(f"Calibration loaded from {self.calibration_file}")
                 if self.calibration.is_calibrated:
@@ -1043,6 +1055,22 @@ class StepperController:
                 'y_max_steps': self.calibration.y_max_steps
             }
         }
+
+    def get_pid(self) -> dict:
+        return {
+            'kp': float(self.kp),
+            'ki': float(self.ki),
+            'kd': float(self.kd),
+        }
+
+    def set_pid(self, kp: Optional[float] = None, ki: Optional[float] = None, kd: Optional[float] = None) -> dict:
+        if kp is not None:
+            self.kp = float(kp)
+        if ki is not None:
+            self.ki = float(ki)
+        if kd is not None:
+            self.kd = float(kd)
+        return self.get_pid()
 
     def status(self) -> dict:
         return {

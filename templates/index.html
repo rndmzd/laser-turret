@@ -586,6 +586,35 @@
                         </div>
 
                         <div class="control-group">
+                            <h3>🧪 PID Tuning</h3>
+                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                                Adjust PID gains for camera tracking responsiveness. Lower Ki is recommended to avoid drift.
+                            </p>
+                            <div class="slider-control">
+                                <label>Kp</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="pid-kp" min="0" max="3" value="0.8" step="0.05" oninput="updatePIDLabel('kp')">
+                                    <span id="pid-kp-value" class="slider-value">0.80</span>
+                                </div>
+                            </div>
+                            <div class="slider-control">
+                                <label>Ki</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="pid-ki" min="0" max="0.5" value="0.0" step="0.005" oninput="updatePIDLabel('ki')">
+                                    <span id="pid-ki-value" class="slider-value">0.00</span>
+                                </div>
+                            </div>
+                            <div class="slider-control">
+                                <label>Kd</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="pid-kd" min="0" max="1.5" value="0.2" step="0.05" oninput="updatePIDLabel('kd')">
+                                    <span id="pid-kd-value" class="slider-value">0.20</span>
+                                </div>
+                            </div>
+                            <button class="btn-primary" onclick="applyPID()">Apply PID</button>
+                        </div>
+
+                        <div class="control-group">
                             <h3>🎯 Manual Position Control</h3>
                             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
                                 Manually adjust camera position with arrow controls
@@ -1312,6 +1341,8 @@
         let roboflowLastEditTs = 0;
         let balloonEditing = false;
         let balloonLastEditTs = 0;
+        let pidEditing = false;
+        let pidLastEditTs = 0;
 
         // Tab switching
         function switchTab(tabName) {
@@ -2896,6 +2927,39 @@
             });
         }
 
+        function updatePIDLabel(kind) {
+            const el = document.getElementById(`pid-${kind}`);
+            const val = parseFloat(el.value);
+            const label = document.getElementById(`pid-${kind}-value`);
+            if (label) label.textContent = val.toFixed(2);
+            pidEditing = true;
+            pidLastEditTs = Date.now();
+        }
+
+        function applyPID() {
+            const kp = parseFloat(document.getElementById('pid-kp').value);
+            const ki = parseFloat(document.getElementById('pid-ki').value);
+            const kd = parseFloat(document.getElementById('pid-kd').value);
+            fetch('/tracking/camera/pid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kp: kp, ki: ki, kd: kd })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'PID settings applied');
+                    pidEditing = false;
+                } else {
+                    showStatus('tracking-status-message', false, data.message || 'Failed to apply PID');
+                }
+            })
+            .catch(err => {
+                console.error('Error applying PID:', err);
+                showStatus('tracking-status-message', false, 'Failed to apply PID');
+            });
+        }
+
         function applyCameraCalibration() {
             const xSteps = parseFloat(document.getElementById('camera-x-steps-per-pixel').value);
             const ySteps = parseFloat(document.getElementById('camera-y-steps-per-pixel').value);
@@ -3103,6 +3167,29 @@
                                         controller.calibration.calibration_timestamp
                                     );
                                 }
+                                
+                                // Sync PID sliders with controller values
+                                fetch('/tracking/camera/pid')
+                                    .then(r => r.json())
+                                    .then(pd => {
+                                        if (pd.status === 'success' && pd.pid) {
+                                            const now = Date.now();
+                                            const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
+                                            if (allowPIDSync) {
+                                                const p = pd.pid;
+                                                const kpEl = document.getElementById('pid-kp');
+                                                const kiEl = document.getElementById('pid-ki');
+                                                const kdEl = document.getElementById('pid-kd');
+                                                const kpVal = document.getElementById('pid-kp-value');
+                                                const kiVal = document.getElementById('pid-ki-value');
+                                                const kdVal = document.getElementById('pid-kd-value');
+                                                if (kpEl && kpVal) { kpEl.value = p.kp; kpVal.textContent = parseFloat(p.kp).toFixed(2); }
+                                                if (kiEl && kiVal) { kiEl.value = p.ki; kiVal.textContent = parseFloat(p.ki).toFixed(2); }
+                                                if (kdEl && kdVal) { kdEl.value = p.kd; kdVal.textContent = parseFloat(p.kd).toFixed(2); }
+                                            }
+                                        }
+                                    })
+                                    .catch(() => {});
                             }
                             
                             document.getElementById('camera-tracking-enabled').checked = data.enabled;

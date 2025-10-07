@@ -2167,6 +2167,30 @@ def update_camera_tracking_settings():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+@app.route('/tracking/camera/pid', methods=['GET', 'POST'])
+def tracking_camera_pid():
+    """Get or set PID values for camera tracking (kp, ki, kd)"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        if request.method == 'GET':
+            vals = stepper_controller.get_pid()
+            return jsonify({'status': 'success', 'pid': vals})
+        data = request.get_json() or {}
+        kp = data.get('kp')
+        ki = data.get('ki')
+        kd = data.get('kd')
+        def cast(v):
+            return float(v) if v is not None else None
+        vals = stepper_controller.set_pid(cast(kp), cast(ki), cast(kd))
+        try:
+            stepper_controller.save_calibration()
+        except Exception:
+            pass
+        return jsonify({'status': 'success', 'pid': vals})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/tracking/camera/recenter_on_loss', methods=['POST'])
 def set_recenter_on_loss():
     """Enable/disable slow re-centering when target is lost."""
