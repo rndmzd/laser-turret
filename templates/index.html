@@ -1777,6 +1777,7 @@
             document.getElementById('pulse-duration-value').textContent = value + 'ms';
             lastLaserEditTs = Date.now();
             laserEditing = true;
+            console.log('🔧 Laser editing - pulse duration changed:', value);
         }
 
         function updateBurstCountValue() {
@@ -3300,7 +3301,10 @@
                 // Update sliders with edit protection
                 const now = Date.now();
                 const allowSliderSync = !laserEditing || (now - lastLaserEditTs > EDIT_IDLE_MS);
+                const timeSinceEdit = now - lastLaserEditTs;
+                
                 if (allowSliderSync) {
+                    console.log(`⚡ WebSocket syncing laser sliders (editing=${laserEditing}, idle=${timeSinceEdit}ms)`);
                     const pdEl = document.getElementById('pulse-duration');
                     const bcEl = document.getElementById('burst-count');
                     const bdEl = document.getElementById('burst-delay');
@@ -3321,6 +3325,8 @@
                     if (status.laser.power !== undefined) {
                         safeUpdateElement('laser-power-value', parseInt(status.laser.power) + '%');
                     }
+                } else {
+                    console.log(`🛡️ WebSocket blocked laser sync (editing=${laserEditing}, idle=${timeSinceEdit}ms)`);
                 }
                 
                 // Update fire button state
