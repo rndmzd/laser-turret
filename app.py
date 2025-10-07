@@ -1,4 +1,5 @@
 from flask import Flask, Response, render_template, jsonify, request
+from flask_socketio import SocketIO, emit
 from picamera2 import Picamera2
 from picamera2.controls import Controls
 from libcamera import ColorSpace, Transform
@@ -32,6 +33,8 @@ except Exception:
     print("Warning: Roboflow inference client not available. Install with: pip install inference-sdk")
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'laser-turret-secret-key-change-in-production'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Global variables
 output_frame = None
@@ -2438,6 +2441,154 @@ def auto_calibrate_camera():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+def get_consolidated_status():
+    """Get all system status in a single consolidated update"""
+    status = {}
+    
+    # FPS
+    with fps_lock:
+        status['fps'] = fps_value
+    
+    # Exposure stats
+    with exposure_lock:
+        status['exposure'] = {
+            'exposure_time': exposure_stats['exposure_time'],
+            'analog_gain': exposure_stats['analog_gain']
+        }
+    
+    # Crosshair position
+    with tracking_mode_lock:
+        if tracking_mode == 'camera' and camera_tracking_enabled:
+            with crosshair_lock:
+                abs_x = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+                abs_y = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
+                rel_x = int(crosshair_offset['x'])
+                rel_y = -int(crosshair_offset['y'])
+        else:
+            with crosshair_lock:
+                center_x = CAMERA_WIDTH // 2
+                center_y = CAMERA_HEIGHT // 2
+                abs_x = crosshair_pos['x']
+                abs_y = crosshair_pos['y']
+                rel_x = crosshair_pos['x'] - center_x
+                rel_y = center_y - crosshair_pos['y']
+    
+    status['crosshair'] = {
+        'absolute_x': abs_x,
+        'absolute_y': abs_y,
+        'relative_x': rel_x,
+        'relative_y': rel_y
+    }
+    
+    # Crosshair calibration
+    with crosshair_lock:
+        status['crosshair_calibration'] = {
+            'x': int(crosshair_offset['x']),
+            'y': int(crosshair_offset['y'])
+        }
+    
+    # Laser status
+    with laser_lock:
+        cooldown_remaining = 0
+        if last_fire_time:
+            elapsed = time.time() - last_fire_time
+            cooldown_remaining = max(0, laser_cooldown - elapsed)
+        
+        status['laser'] = {
+            'enabled': laser_enabled,
+            'auto_fire': laser_auto_fire,
+            'pulse_duration': laser_pulse_duration,
+            'burst_count': laser_burst_count,
+            'burst_delay': laser_burst_delay,
+            'cooldown': laser_cooldown,
+            'cooldown_remaining': cooldown_remaining,
+            'fire_count': fire_count,
+            'ready_to_fire': cooldown_remaining == 0,
+            'power': laser_power,
+            'hardware_available': laser_control is not None
+        }
+    
+    # Object detection status
+    with object_lock:
+        status['object_detection'] = {
+            'enabled': object_detection_enabled,
+            'auto_track': object_auto_track,
+            'mode': detection_mode,
+            'method': detection_method,
+            'count': len(detected_objects),
+            'priority': target_priority
+        }
+    
+    # Motion detection status
+    with motion_lock:
+        status['motion_detection'] = {
+            'enabled': motion_detection_enabled,
+            'auto_track': motion_auto_track,
+            'sensitivity': motion_sensitivity,
+            'min_area': motion_min_area,
+            'has_motion': last_motion_center is not None
+        }
+    
+    # Recording status
+    with recording_lock:
+        status['recording'] = {
+            'is_recording': is_recording,
+            'filename': recording_filename,
+            'duration': (time.time() - recording_start_time) if is_recording and recording_start_time else 0
+        }
+    
+    # Pattern status
+    status['pattern'] = {
+        'running': pattern_running,
+        'loop': pattern_loop
+    }
+    
+    # Camera tracking status
+    with tracking_mode_lock:
+        status['tracking'] = {
+            'mode': tracking_mode,
+            'camera_enabled': camera_tracking_enabled,
+            'recenter_on_loss': camera_recenter_on_loss
+        }
+    
+    # Stepper controller status (if available)
+    if stepper_controller:
+        try:
+            controller_status = stepper_controller.get_status()
+            # Add PID values to controller status
+            try:
+                controller_status['pid'] = stepper_controller.get_pid()
+            except Exception:
+                pass
+            status['controller'] = controller_status
+        except Exception as e:
+            print(f"Error getting controller status: {e}")
+            status['controller'] = None
+    else:
+        status['controller'] = None
+    
+    # Add digital gain from camera
+    try:
+        if picam2:
+            metadata = picam2.capture_metadata()
+            status['exposure']['digital_gain'] = metadata.get('DigitalGain', 1.0)
+    except Exception:
+        status['exposure']['digital_gain'] = 1.0
+    
+    return status
+
+def status_emitter_thread():
+    """Background thread that emits consolidated status updates via WebSocket"""
+    print("Starting WebSocket status emitter thread...")
+    while True:
+        try:
+            status = get_consolidated_status()
+            socketio.emit('status_update', status, namespace='/')
+            socketio.sleep(0.5)  # Emit updates twice per second
+        except Exception as e:
+            print(f"Error in status emitter: {e}")
+            time.sleep(1)
+
 if __name__ == '__main__':
     initialize_camera()
     initialize_laser_control()  # Initialize laser control with PWM
@@ -2447,4 +2598,11 @@ if __name__ == '__main__':
     if detection_method == 'roboflow':
         initialize_roboflow_detector()
     initialize_balloon_settings()  # Initialize balloon settings from config
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    
+    # Start the status emitter background thread
+    socketio.start_background_task(status_emitter_thread)
+    
+    # Run with SocketIO
+    print("Starting Laser Turret Control Panel with WebSocket support...")
+    print("Access the control panel at http://<your-ip>:5000")
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)

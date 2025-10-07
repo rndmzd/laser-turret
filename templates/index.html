@@ -431,6 +431,8 @@
             background: #c82333;
         }
     </style>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -1329,11 +1331,9 @@
     <script>
         const CAMERA_WIDTH = 1920;
         const CAMERA_HEIGHT = 1080;
-        let laserEditing = false;
-        let lastLaserEditTs = 0;
         let crosshairCalibrationMode = false;
 
-        // Editing guards to avoid UI snapping back during polling
+        // Editing guards to avoid UI snapping back during WebSocket updates
         const EDIT_IDLE_MS = 1500;
         let tfliteEditing = false;
         let tfliteLastEditTs = 0;
@@ -1773,36 +1773,26 @@
         function updatePulseDurationValue() {
             const value = document.getElementById('pulse-duration').value;
             document.getElementById('pulse-duration-value').textContent = value + 'ms';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateBurstCountValue() {
             const value = document.getElementById('burst-count').value;
             document.getElementById('burst-count-value').textContent = value;
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateBurstDelayValue() {
             const value = document.getElementById('burst-delay').value;
             document.getElementById('burst-delay-value').textContent = value + 'ms';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateLaserCooldownValue() {
             const value = parseFloat(document.getElementById('laser-cooldown').value).toFixed(1);
             document.getElementById('laser-cooldown-value').textContent = value + 's';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateLaserPowerValue() {
             const value = parseInt(document.getElementById('laser-power').value);
             document.getElementById('laser-power-value').textContent = value + '%';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function applyLaserSettings() {
@@ -1827,7 +1817,6 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('laser-status-message', true, `Laser settings applied (Power: ${data.power}%)`);
-                    laserEditing = false;
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
@@ -1867,36 +1856,8 @@
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
 
-                        const now = Date.now();
-                        const allowSliderSync = !laserEditing || (now - lastLaserEditTs > 1500);
-                        if (allowSliderSync) {
-                            const pd = document.getElementById('pulse-duration');
-                            const bc = document.getElementById('burst-count');
-                            const bd = document.getElementById('burst-delay');
-                            const lcd = document.getElementById('laser-cooldown');
-                            const lp = document.getElementById('laser-power');
-
-                            pd.value = data.pulse_duration * 1000;
-                            bc.value = data.burst_count;
-                            bd.value = data.burst_delay * 1000;
-                            lcd.value = data.cooldown;
-                            if (data.power !== undefined) {
-                                lp.value = data.power;
-                            }
-
-                            // Update labels without toggling editing
-                            const pdv = document.getElementById('pulse-duration-value');
-                            const bcv = document.getElementById('burst-count-value');
-                            const bdv = document.getElementById('burst-delay-value');
-                            const lcdv = document.getElementById('laser-cooldown-value');
-                            const lpv = document.getElementById('laser-power-value');
-                            if (pdv) pdv.textContent = pd.value + 'ms';
-                            if (bcv) bcv.textContent = bc.value;
-                            if (bdv) bdv.textContent = bd.value + 'ms';
-                            if (lcdv) lcdv.textContent = parseFloat(lcd.value).toFixed(1) + 's';
-                            if (lpv) lpv.textContent = parseInt(lp.value) + '%';
-                        }
-                        
+                        // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
+                        // They are only synced on page load via syncLaserSliders()
                         
                         // Update fire button state
                         document.getElementById('fire-button').disabled = !data.ready_to_fire || !data.enabled;
@@ -2699,6 +2660,29 @@
                 })
                 .catch(error => console.error('Error fetching motion status:', error));
         }
+        
+        function syncLaserSliders() {
+            // Sync laser sliders with server state (called on page load only)
+            fetch('/laser/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('pulse-duration').value = data.pulse_duration * 1000;
+                        document.getElementById('burst-count').value = data.burst_count;
+                        document.getElementById('burst-delay').value = data.burst_delay * 1000;
+                        document.getElementById('laser-cooldown').value = data.cooldown;
+                        if (data.power !== undefined) {
+                            document.getElementById('laser-power').value = data.power;
+                        }
+                        updatePulseDurationValue();
+                        updateBurstCountValue();
+                        updateBurstDelayValue();
+                        updateLaserCooldownValue();
+                        updateLaserPowerValue();
+                    }
+                })
+                .catch(error => console.error('Error syncing laser sliders:', error));
+        }
 
         // Update crosshair position display
         function updateCrosshairPosition() {
@@ -3212,25 +3196,257 @@
                 .catch(error => console.error('Error fetching camera tracking status:', error));
         }
 
+        // ============================================================
+        // WebSocket Communication Setup
+        // ============================================================
+        
+        // Connect to Socket.IO server
+        const socket = io();
+        
+        // Handle connection events
+        socket.on('connect', () => {
+            console.log('✅ WebSocket connected');
+        });
+        
+        socket.on('disconnect', () => {
+            console.warn('❌ WebSocket disconnected');
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.error('WebSocket connection error:', error);
+        });
+        
+        // Helper function to safely update DOM elements
+        function safeUpdateElement(id, value) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value;
+            }
+        }
+        
+        // Listen for consolidated status updates from server
+        socket.on('status_update', (status) => {
+            // Update FPS
+            if (status.fps !== undefined) {
+                safeUpdateElement('fps', `${status.fps} FPS`);
+            }
+            
+            // Update exposure stats
+            if (status.exposure) {
+                safeUpdateElement('exp-time', `${(status.exposure.exposure_time/1000).toFixed(1)} ms`);
+                safeUpdateElement('gain', `${status.exposure.analog_gain.toFixed(2)}x`);
+                if (status.exposure.digital_gain !== undefined) {
+                    safeUpdateElement('digital-gain', `${status.exposure.digital_gain.toFixed(2)}x`);
+                }
+            }
+            
+            // Update crosshair position
+            if (status.crosshair) {
+                const relX = status.crosshair.relative_x;
+                const relY = status.crosshair.relative_y;
+                safeUpdateElement('position', `(${relX >= 0 ? '+' : ''}${relX}, ${relY >= 0 ? '+' : ''}${relY})`);
+                safeUpdateElement('crosshair-position', `${status.crosshair.absolute_x}, ${status.crosshair.absolute_y}`);
+            }
+            
+            // Update crosshair calibration
+            if (status.crosshair_calibration) {
+                safeUpdateElement('crosshair-offset', `${status.crosshair_calibration.x}, ${status.crosshair_calibration.y}`);
+            }
+            
+            // Update laser status
+            if (status.laser) {
+                safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
+                safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
+                safeUpdateElement('laser-fire-count', status.laser.fire_count);
+                
+                // Update cooldown remaining
+                if (status.laser.cooldown_remaining > 0) {
+                    safeUpdateElement('laser-cooldown-remaining', status.laser.cooldown_remaining.toFixed(1) + 's');
+                } else {
+                    safeUpdateElement('laser-cooldown-remaining', 'Ready');
+                }
+                
+                // Update power level and hardware status
+                if (status.laser.power !== undefined) {
+                    safeUpdateElement('laser-power-level', status.laser.power + '%');
+                }
+                safeUpdateElement('laser-hardware-status', status.laser.hardware_available ? 'Connected' : 'Simulation');
+                
+                // Update checkboxes
+                const laserEnabledEl = document.getElementById('laser-enabled');
+                if (laserEnabledEl) laserEnabledEl.checked = status.laser.enabled;
+                
+                const autoFireEl = document.getElementById('auto-fire-enabled');
+                if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
+                
+                // NOTE: Laser sliders are NOT synced from WebSocket (like motion detection)
+                // They are only updated on page load and when user clicks Apply
+                // This prevents sliders from reverting while user is adjusting them
+                
+                // Update fire button state
+                const fireButton = document.getElementById('fire-button');
+                if (fireButton) {
+                    fireButton.disabled = !status.laser.ready_to_fire || !status.laser.enabled;
+                }
+            }
+            
+            // Update object detection status
+            if (status.object_detection) {
+                const objEnabled = status.object_detection.enabled;
+                const objAutoTrack = status.object_detection.auto_track;
+                const objCount = status.object_detection.count;
+                const objMode = status.object_detection.mode;
+                const objMethod = status.object_detection.method;
+                
+                safeUpdateElement('object-detection-status', objEnabled ? 'Enabled' : 'Disabled');
+                safeUpdateElement('object-auto-track-status', objAutoTrack ? 'Yes' : 'No');
+                safeUpdateElement('object-count', objCount);
+                safeUpdateElement('object-detection-mode', objMode ? objMode.toUpperCase() : 'N/A');
+                safeUpdateElement('detection-method-display', objMethod ? objMethod.toUpperCase() : 'N/A');
+            }
+            
+            // Update motion detection status
+            if (status.motion_detection) {
+                const motionEnabled = status.motion_detection.enabled;
+                const motionAutoTrack = status.motion_detection.auto_track;
+                const hasMotion = status.motion_detection.has_motion;
+                
+                safeUpdateElement('motion-detection-status', motionEnabled ? 'Enabled' : 'Disabled');
+                safeUpdateElement('motion-auto-track-status', motionAutoTrack ? 'Yes' : 'No');
+                safeUpdateElement('motion-detected', hasMotion ? 'Yes' : 'No');
+            }
+            
+            // Update recording status
+            if (status.recording) {
+                safeUpdateElement('recording-status', status.recording.is_recording ? 'Recording' : 'Not Recording');
+                if (status.recording.is_recording) {
+                    const duration = Math.floor(status.recording.duration);
+                    const mins = Math.floor(duration / 60);
+                    const secs = duration % 60;
+                    safeUpdateElement('recording-duration', `${mins}:${secs.toString().padStart(2, '0')}`);
+                }
+                if (status.recording.filename) {
+                    safeUpdateElement('recording-filename', status.recording.filename);
+                }
+            }
+            
+            // Update pattern status
+            if (status.pattern) {
+                safeUpdateElement('pattern-status', status.pattern.running ? 'Running' : 'Stopped');
+            }
+            
+            // Update tracking mode status
+            if (status.tracking) {
+                const trackMode = document.getElementById('tracking-mode');
+                if (trackMode && trackMode.value !== status.tracking.mode) {
+                    trackMode.value = status.tracking.mode;
+                    updateTrackingModeUI(status.tracking.mode);
+                }
+            }
+            
+            // Update camera controller status (detailed)
+            if (status.controller) {
+                const ctrl = status.controller;
+                
+                safeUpdateElement('camera-system-status', 'Available');
+                safeUpdateElement('camera-enabled-status', status.tracking.camera_enabled ? 'Yes' : 'No');
+                
+                // Update re-center on loss toggle
+                const recenterEl = document.getElementById('camera-recenter-on-loss');
+                if (recenterEl) {
+                    recenterEl.checked = !!status.tracking.recenter_on_loss;
+                }
+                
+                if (ctrl.position) {
+                    safeUpdateElement('camera-position', `${ctrl.position.x}, ${ctrl.position.y}`);
+                }
+                
+                safeUpdateElement('camera-moving', ctrl.moving ? 'Yes' : 'No');
+                
+                // Initialize calibration sliders ONLY on first load
+                if (ctrl.calibration && !calibrationSlidersInitialized) {
+                    const xStepsEl = document.getElementById('camera-x-steps-per-pixel');
+                    const xStepsValEl = document.getElementById('camera-x-steps-value');
+                    const yStepsEl = document.getElementById('camera-y-steps-per-pixel');
+                    const yStepsValEl = document.getElementById('camera-y-steps-value');
+                    const deadZoneEl = document.getElementById('camera-dead-zone');
+                    const stepDelayEl = document.getElementById('camera-step-delay');
+                    
+                    if (xStepsEl && xStepsValEl) {
+                        xStepsEl.value = ctrl.calibration.x_steps_per_pixel;
+                        xStepsValEl.textContent = ctrl.calibration.x_steps_per_pixel.toFixed(2);
+                    }
+                    
+                    if (yStepsEl && yStepsValEl) {
+                        yStepsEl.value = ctrl.calibration.y_steps_per_pixel;
+                        yStepsValEl.textContent = ctrl.calibration.y_steps_per_pixel.toFixed(2);
+                    }
+                    
+                    if (deadZoneEl) {
+                        deadZoneEl.value = ctrl.calibration.dead_zone_pixels;
+                        updateCameraDeadZoneValue();
+                    }
+                    
+                    if (stepDelayEl && typeof ctrl.calibration.step_delay === 'number') {
+                        let sliderVal = 0.0055 - ctrl.calibration.step_delay;
+                        sliderVal = Math.max(0.0005, Math.min(0.005, sliderVal));
+                        stepDelayEl.value = sliderVal;
+                        updateCameraStepDelayValue();
+                    }
+                    
+                    calibrationSlidersInitialized = true;
+                }
+                
+                // Update calibration status UI
+                if (ctrl.calibration) {
+                    updateCalibrationUI(
+                        ctrl.calibration.is_calibrated,
+                        ctrl.calibration.calibration_timestamp
+                    );
+                }
+                
+                // Sync PID sliders with controller values (with edit protection)
+                if (ctrl.pid) {
+                    const now = Date.now();
+                    const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
+                    if (allowPIDSync) {
+                        const kpEl = document.getElementById('pid-kp');
+                        const kiEl = document.getElementById('pid-ki');
+                        const kdEl = document.getElementById('pid-kd');
+                        const kpVal = document.getElementById('pid-kp-value');
+                        const kiVal = document.getElementById('pid-ki-value');
+                        const kdVal = document.getElementById('pid-kd-value');
+                        if (kpEl && kpVal) { kpEl.value = ctrl.pid.kp; kpVal.textContent = parseFloat(ctrl.pid.kp).toFixed(2); }
+                        if (kiEl && kiVal) { kiEl.value = ctrl.pid.ki; kiVal.textContent = parseFloat(ctrl.pid.ki).toFixed(2); }
+                        if (kdEl && kdVal) { kdEl.value = ctrl.pid.kd; kdVal.textContent = parseFloat(ctrl.pid.kd).toFixed(2); }
+                    }
+                }
+                
+                const camTrackEl = document.getElementById('camera-tracking-enabled');
+                if (camTrackEl) {
+                    camTrackEl.checked = status.tracking.camera_enabled;
+                }
+            } else if (status.tracking && !status.tracking.camera_enabled) {
+                safeUpdateElement('camera-system-status', 'Not Available');
+                safeUpdateElement('camera-enabled-status', 'N/A');
+            }
+        });
+        
+        // ============================================================
+        // Page Initialization
+        // ============================================================
+        
         // Load presets on page load
         loadPresetList();
         
-        // Sync motion sliders on page load
+        // Sync sliders on page load (not from WebSocket)
         syncMotionSliders();
+        syncLaserSliders();
 
-        // Initialize camera tracking status
-        updateCameraTrackingStatus();
-        
         // Initialize camera step delay display
         updateCameraStepDelayValue();
         
-        // Periodic updates
-        setInterval(updateStats, 1000);
-        // Update camera tracking status every 2 seconds
-        setInterval(updateCameraTrackingStatus, 2000);
-        
-        // Initial stats update
-        updateStats();
+        console.log('🚀 Laser Turret Control Panel initialized with WebSocket support');
     </script>
 </body>
 </html>
