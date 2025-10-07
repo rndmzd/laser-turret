@@ -35,17 +35,12 @@
         }
 
         .control-layout {
-            display: grid;
+            display: flex;
+            flex-direction: column;
             gap: 20px;
-            align-items: start;
+            align-items: stretch;
             max-width: 1400px;
             margin: 0 auto;
-        }
-
-        @media (min-width: 1024px) {
-            .control-layout {
-                grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
-            }
         }
 
         .video-section {
@@ -87,14 +82,6 @@
             z-index: 5;
         }
 
-        .floating-controls h3 {
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: 0.03em;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.75);
-        }
-
         .direction-pad {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -126,6 +113,27 @@
         .pad-button:hover {
             background: rgba(255,255,255,0.22);
             transform: translateY(-1px);
+        }
+
+        .fire-button {
+            background: linear-gradient(135deg, #f56565 0%, #c53030 100%);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            line-height: 1.1;
+            text-align: center;
+        }
+
+        .fire-button span {
+            display: block;
+        }
+
+        .fire-button:hover {
+            background: linear-gradient(135deg, #e53e3e 0%, #9b2c2c 100%);
         }
 
         .floating-slider {
@@ -673,13 +681,15 @@
                     <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
 
                     <div class="floating-controls" id="manual-control-panel">
-                        <h3>Manual Aim</h3>
                         <div class="direction-pad">
                             <span class="spacer"></span>
                             <button class="pad-button" onclick="manualMove('y', -1)" aria-label="Nudge up" title="Nudge up">▲</button>
                             <span class="spacer"></span>
                             <button class="pad-button" onclick="manualMove('x', -1)" aria-label="Nudge left" title="Nudge left">◄</button>
-                            <button class="pad-button" onclick="homeCameraPosition()" aria-label="Return to home position" title="Return to home position">🏠</button>
+                            <button class="pad-button fire-button" data-fire-control onclick="fireLaser(this)" aria-label="Fire laser" title="Fire laser">
+                                <span>Fire</span>
+                                <span>Laser</span>
+                            </button>
                             <button class="pad-button" onclick="manualMove('x', 1)" aria-label="Nudge right" title="Nudge right">►</button>
                             <span class="spacer"></span>
                             <button class="pad-button" onclick="manualMove('y', 1)" aria-label="Nudge down" title="Nudge down">▼</button>
@@ -982,7 +992,7 @@
                             <span class="toggle-label">Auto-Fire on Detection</span>
                         </div>
 
-                        <button id="fire-button" class="btn-success" onclick="fireLaser()" style="font-size: 16px; padding: 15px;">
+                        <button id="fire-button" class="btn-success" data-fire-control onclick="fireLaser(this)" style="font-size: 16px; padding: 15px;">
                             🔴 FIRE LASER
                         </button>
                     </div>
@@ -2005,10 +2015,15 @@
             });
         }
 
-        function fireLaser() {
-            const button = document.getElementById('fire-button');
-            button.disabled = true;
-            
+        function fireLaser(triggerButton) {
+            const fireButtons = Array.from(document.querySelectorAll('[data-fire-control]'));
+
+            if (triggerButton instanceof HTMLElement && !fireButtons.includes(triggerButton)) {
+                fireButtons.push(triggerButton);
+            }
+
+            fireButtons.forEach(btn => btn.disabled = true);
+
             fetch('/laser/fire', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -2020,13 +2035,13 @@
                     updateLaserStatus();
                 } else {
                     showStatus('laser-status-message', false, data.message);
+                    fireButtons.forEach(btn => btn.disabled = false);
                 }
-                setTimeout(() => { button.disabled = false; }, 100);
             })
             .catch(error => {
                 showStatus('laser-status-message', false, 'Failed to fire laser');
                 console.error('Error firing laser:', error);
-                button.disabled = false;
+                fireButtons.forEach(btn => btn.disabled = false);
             });
         }
 
@@ -2119,8 +2134,10 @@
                         // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
                         // They are only synced on page load via syncLaserSliders()
                         
-                        // Update fire button state
-                        document.getElementById('fire-button').disabled = !data.ready_to_fire || !data.enabled;
+                        const fireReady = data.ready_to_fire && data.enabled;
+                        document.querySelectorAll('[data-fire-control]').forEach(btn => {
+                            btn.disabled = !fireReady;
+                        });
                     }
                 })
                 .catch(error => console.error('Error fetching laser status:', error));
@@ -3544,10 +3561,10 @@
                 // This prevents sliders from reverting while user is adjusting them
                 
                 // Update fire button state
-                const fireButton = document.getElementById('fire-button');
-                if (fireButton) {
-                    fireButton.disabled = !status.laser.ready_to_fire || !status.laser.enabled;
-                }
+                const fireReady = status.laser.ready_to_fire && status.laser.enabled;
+                document.querySelectorAll('[data-fire-control]').forEach(btn => {
+                    btn.disabled = !fireReady;
+                });
             }
             
             // Update object detection status
