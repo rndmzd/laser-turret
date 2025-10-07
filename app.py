@@ -34,6 +34,8 @@ except Exception:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'laser-turret-secret-key-change-in-production'
+if app.config.get('SECRET_KEY') == 'laser-turret-secret-key-change-in-production':
+    print("WARNING: Using default Flask SECRET_KEY; set a unique SECRET_KEY in production.")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Global variables
@@ -1533,9 +1535,18 @@ def object_detection_status():
             }
         })
 
+@app.route('/detection_method/config')
+def detection_method_config():
+    try:
+        config = get_config()
+        method = config.get_detection_method()
+        return jsonify({'status': 'success', 'method': method})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/detection_method/switch', methods=['POST'])
 def switch_detection_method():
-    """Switch between Haar Cascades and TensorFlow Lite"""
+    """Switch between Haar Cascades, TensorFlow Lite, and Roboflow"""
     global detection_method, tflite_detector
     
     try:
