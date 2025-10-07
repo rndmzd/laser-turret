@@ -127,6 +127,7 @@ tracking_mode = 'crosshair'  # 'crosshair' or 'camera'
 camera_tracking_enabled = False
 stepper_controller = None
 tracking_mode_lock = threading.Lock()
+camera_recenter_on_loss = False
 
 tracking_smoothing_alpha = 0.3
 target_lock_distance = 150
@@ -705,6 +706,7 @@ def detect_motion(frame):
 def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
     """Draw crosshair, object detection, motion detection overlay, and exposure information"""
     overlay = np.zeros_like(frame, dtype=np.uint8)
+    global object_track_smooth_center, object_last_switch_time, motion_smooth_center
     
     # Object/Face detection overlay
     with object_lock:
@@ -726,7 +728,6 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 if object_auto_track and objects:
                     target = get_priority_target(objects)
                     if target:
-                        global object_track_smooth_center, object_last_switch_time
                         x, y, w, h = target['rect']
                         cx = x + w // 2
                         cy = y + h // 2
@@ -779,12 +780,22 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     with crosshair_lock:
                                         tx = sx_i - int(crosshair_offset['x'])
                                         ty = sy_i - int(crosshair_offset['y'])
-                                    threading.Thread(
-                                        target=lambda: stepper_controller.move_to_center_object(
-                                            tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT
-                                        ),
-                                        daemon=True
-                                    ).start()
+                                    try:
+                                        stepper_controller.update_tracking_with_pid(tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT)
+                                    except Exception as e:
+                                        print(f"PID update error (object tracking): {e}")
+                        # If auto-track is enabled but there are no objects, stop motion
+                if object_auto_track and not objects:
+                    object_track_smooth_center = None
+                    with tracking_mode_lock:
+                        if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
+                            try:
+                                if camera_recenter_on_loss:
+                                    stepper_controller.recenter_slowly()
+                                else:
+                                    stepper_controller.stop_motion()
+                            except Exception as e:
+                                print(f"Stop motion error (object tracking lost): {e}")
             except Exception as e:
                 print(f"Object detection error: {e}")
     
@@ -802,7 +813,6 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 
                 # Draw motion center
                 if motion_center:
-                    global motion_smooth_center
                     if motion_smooth_center is None:
                         motion_smooth_center = (float(motion_center[0]), float(motion_center[1]))
                     else:
@@ -829,14 +839,22 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     with crosshair_lock:
                                         tx = msx - int(crosshair_offset['x'])
                                         ty = msy - int(crosshair_offset['y'])
-                                    threading.Thread(
-                                        target=lambda: stepper_controller.move_to_center_object(
-                                            tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT
-                                        ),
-                                        daemon=True
-                                    ).start()
+                                    try:
+                                        stepper_controller.update_tracking_with_pid(tx, ty, CAMERA_WIDTH, CAMERA_HEIGHT)
+                                    except Exception as e:
+                                        print(f"PID update error (motion tracking): {e}")
                 else:
                     motion_smooth_center = None
+                    if motion_auto_track and not object_auto_track:
+                        with tracking_mode_lock:
+                            if tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller:
+                                try:
+                                    if camera_recenter_on_loss:
+                                        stepper_controller.recenter_slowly()
+                                    else:
+                                        stepper_controller.stop_motion()
+                                except Exception as e:
+                                    print(f"Stop motion error (motion tracking lost): {e}")
             except Exception as e:
                 print(f"Motion detection error: {e}")
     
@@ -2203,6 +2221,43 @@ def update_camera_tracking_settings():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+@app.route('/tracking/camera/pid', methods=['GET', 'POST'])
+def tracking_camera_pid():
+    """Get or set PID values for camera tracking (kp, ki, kd)"""
+    try:
+        if stepper_controller is None:
+            return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+        if request.method == 'GET':
+            vals = stepper_controller.get_pid()
+            return jsonify({'status': 'success', 'pid': vals})
+        data = request.get_json() or {}
+        kp = data.get('kp')
+        ki = data.get('ki')
+        kd = data.get('kd')
+        def cast(v):
+            return float(v) if v is not None else None
+        vals = stepper_controller.set_pid(cast(kp), cast(ki), cast(kd))
+        try:
+            stepper_controller.save_calibration()
+        except Exception:
+            pass
+        return jsonify({'status': 'success', 'pid': vals})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/tracking/camera/recenter_on_loss', methods=['POST'])
+def set_recenter_on_loss():
+    """Enable/disable slow re-centering when target is lost."""
+    global camera_recenter_on_loss
+    try:
+        data = request.get_json() or {}
+        enabled = bool(data.get('enabled', not camera_recenter_on_loss))
+        with tracking_mode_lock:
+            camera_recenter_on_loss = enabled
+        return jsonify({'status': 'success', 'enabled': camera_recenter_on_loss})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/tracking/camera/status')
 def camera_tracking_status():
     """Get camera tracking status"""
@@ -2220,6 +2275,7 @@ def camera_tracking_status():
             'available': True,
             'mode': tracking_mode,
             'enabled': camera_tracking_enabled,
+            'recenter_on_loss': camera_recenter_on_loss,
             'controller_status': stepper_controller.get_status()
         })
 

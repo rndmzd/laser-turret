@@ -111,7 +111,8 @@ class StepperController:
                 skip_direction_check=True,
                 perform_calibration=False,
                 name='AxisX',
-                start_thread=False,
+                start_thread=True,
+                deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,
             )
             self.axis_y = StepperAxis(
@@ -128,7 +129,8 @@ class StepperController:
                 skip_direction_check=True,
                 perform_calibration=False,
                 name='AxisY',
-                start_thread=False,
+                start_thread=True,
+                deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,
             )
         except Exception as _:
@@ -143,8 +145,19 @@ class StepperController:
         # Initialize GPIO
         self._setup_gpio()
         
-        # Load calibration if available
+        # PID defaults (can be overridden by calibration file)
+        self.kp = 0.8
+        self.ki = 0.0
+        self.kd = 0.2
+        # Load calibration if available (may override PID)
         self.load_calibration()
+        self._ix = 0.0
+        self._iy = 0.0
+        self._last_pid_time = None
+        self._ex_n_last = 0.0
+        self._ey_n_last = 0.0
+        self._cmd_x_last = 0.0
+        self._cmd_y_last = 0.0
         
         # Idle timeout watchdog
         self.idle_timeout = self.config.get_control_idle_timeout()
@@ -215,6 +228,13 @@ class StepperController:
         self.gpio.output(self.x_enable_pin, 0)  # Active low
         self.gpio.output(self.y_enable_pin, 0)
         self.enabled = True
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.set_suspended(False)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.set_suspended(False)
+        except Exception:
+            pass
         logger.info("Stepper motors enabled")
     
     def disable(self):
@@ -222,6 +242,13 @@ class StepperController:
         self.gpio.output(self.x_enable_pin, 1)
         self.gpio.output(self.y_enable_pin, 1)
         self.enabled = False
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.set_suspended(True)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.set_suspended(True)
+        except Exception:
+            pass
         if self.calibration.is_calibrated:
             self.calibration.is_calibrated = False
             self.calibration.calibration_timestamp = None
@@ -377,6 +404,139 @@ class StepperController:
         self._mark_activity()
         self.enable()
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
+    
+    def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
+        if not self.enabled:
+            return
+        self._mark_activity()
+        now = time.time()
+        if getattr(self, '_last_pid_time', None) is None:
+            dt = 0.0
+        else:
+            dt = max(0.0, now - self._last_pid_time)
+        self._last_pid_time = now
+        cx = frame_width // 2
+        cy = frame_height // 2
+        ex = float(target_x - cx)
+        ey = float(target_y - cy)
+        # Normalize and clamp error to [-1, 1] to avoid runaway far from center
+        ex_n = ex / max(1.0, (frame_width / 2.0))
+        ey_n = ey / max(1.0, (frame_height / 2.0))
+        ex_n = max(-1.0, min(1.0, ex_n))
+        ey_n = max(-1.0, min(1.0, ey_n))
+        self._ix += ex_n * dt
+        self._iy += ey_n * dt
+        self._ix = max(-10.0, min(10.0, self._ix))
+        self._iy = max(-10.0, min(10.0, self._iy))
+        # Derivative with cap to reduce spikes on large jumps
+        dex_n = ((ex_n - self._ex_n_last) / dt) if dt > 0 else 0.0
+        dey_n = ((ey_n - self._ey_n_last) / dt) if dt > 0 else 0.0
+        dmax = 5.0
+        dex_n = max(-dmax, min(dmax, dex_n))
+        dey_n = max(-dmax, min(dmax, dey_n))
+        # Reduce gains when far from center to avoid overshoot
+        k_scale_x = 0.6 + 0.4 * (1.0 - min(1.0, abs(ex_n)))
+        k_scale_y = 0.6 + 0.4 * (1.0 - min(1.0, abs(ey_n)))
+        kp_x = self.kp * k_scale_x
+        kp_y = self.kp * k_scale_y
+        kd_x = self.kd * k_scale_x
+        kd_y = self.kd * k_scale_y
+        ux = (kp_x * ex_n) + (self.ki * self._ix) + (kd_x * dex_n)
+        uy = (kp_y * ey_n) + (self.ki * self._iy) + (kd_y * dey_n)
+        # Map to command space and clamp max velocity
+        cmd_x = ux * 120.0
+        cmd_y = -uy * 120.0
+        cmd_x = max(-100.0, min(100.0, cmd_x))
+        cmd_y = max(-100.0, min(100.0, cmd_y))
+        # Output slew rate limiting
+        if dt > 0:
+            max_delta = 300.0 * dt
+            cmd_x = max(self._cmd_x_last - max_delta, min(self._cmd_x_last + max_delta, cmd_x))
+            cmd_y = max(self._cmd_y_last - max_delta, min(self._cmd_y_last + max_delta, cmd_y))
+        min_cmd = 0.0
+        try:
+            if getattr(self, 'axis_x', None):
+                min_cmd = max(min_cmd, float(getattr(self.axis_x, 'deadzone', 0)))
+            if getattr(self, 'axis_y', None):
+                min_cmd = max(min_cmd, float(getattr(self.axis_y, 'deadzone', 0)))
+        except Exception:
+            pass
+        min_cmd = min_cmd + 1.5 if min_cmd > 0 else 0.0
+        if abs(cmd_x) > 0 and abs(cmd_x) < min_cmd:
+            cmd_x = min_cmd if cmd_x >= 0 else -min_cmd
+        if abs(cmd_y) > 0 and abs(cmd_y) < min_cmd:
+            cmd_y = min_cmd if cmd_y >= 0 else -min_cmd
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.process_command(cmd_x)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.process_command(cmd_y)
+        finally:
+            # Save last values for next iteration
+            self._ex_n_last = ex_n
+            self._ey_n_last = ey_n
+            self._cmd_x_last = cmd_x
+            self._cmd_y_last = cmd_y
+            self._mark_activity()
+    
+    def stop_motion(self) -> None:
+        """Immediately zero axis commands and reset PID state without disabling motors."""
+        if not self.enabled:
+            return
+        try:
+            if getattr(self, 'axis_x', None):
+                self.axis_x.process_command(0.0)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.process_command(0.0)
+        except Exception:
+            pass
+        # Reset PID state to avoid derivative spikes on the next target acquisition
+        self._ix = 0.0
+        self._iy = 0.0
+        self._ex_n_last = 0.0
+        self._ey_n_last = 0.0
+        self._cmd_x_last = 0.0
+        self._cmd_y_last = 0.0
+        self._last_pid_time = None
+        self._mark_activity()
+    
+    def recenter_slowly(self, threshold_steps: int = 10, base_speed: float = 20.0, max_speed: float = 60.0) -> None:
+        """Nudge camera toward home (0,0) with gentle velocity commands.
+        Uses live axis state positions when available; falls back to calibration positions.
+        """
+        if not self.enabled:
+            return
+        try:
+            cur_x = 0
+            cur_y = 0
+            try:
+                cur_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+            except Exception:
+                cur_x = self.calibration.x_position
+            try:
+                cur_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+            except Exception:
+                cur_y = self.calibration.y_position
+            # Determine command directions toward zero
+            cmd_x = 0.0
+            cmd_y = 0.0
+            if abs(cur_x) > threshold_steps:
+                sign_x = -1.0 if cur_x > 0 else 1.0
+                # Scale speed by distance, capped
+                mag_x = min(max_speed, base_speed + (abs(cur_x) * 0.01))
+                cmd_x = sign_x * mag_x
+            if abs(cur_y) > threshold_steps:
+                sign_y = -1.0 if cur_y > 0 else 1.0
+                mag_y = min(max_speed, base_speed + (abs(cur_y) * 0.01))
+                cmd_y = sign_y * mag_y
+            if getattr(self, 'axis_x', None):
+                self.axis_x.process_command(cmd_x)
+            if getattr(self, 'axis_y', None):
+                self.axis_y.process_command(cmd_y)
+        except Exception:
+            pass
+        finally:
+            self._mark_activity()
     
     def move_linear(self, steps_x: int, steps_y: int, delay: Optional[float] = None, bypass_limits: bool = False) -> None:
         """
@@ -576,9 +736,18 @@ class StepperController:
                    f"({self.calibration.x_position}, {self.calibration.y_position})")
         
         with self.movement_lock:
+            # Determine current positions from live axis state if available
+            try:
+                cur_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+            except Exception:
+                cur_x = self.calibration.x_position
+            try:
+                cur_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+            except Exception:
+                cur_y = self.calibration.y_position
             # Move back to zero position
-            self.step('x', -self.calibration.x_position)
-            self.step('y', -self.calibration.y_position)
+            self.step('x', -cur_x)
+            self.step('y', -cur_y)
         
         logger.info("Camera homed to center position")
         self.enable()
@@ -806,6 +975,8 @@ class StepperController:
         try:
             # Convert calibration to dict
             cal_data = asdict(self.calibration)
+            # Include PID settings
+            cal_data['pid'] = {'kp': self.kp, 'ki': self.ki, 'kd': self.kd}
             
             # Save to JSON file
             with open(self.calibration_file, 'w') as f:
@@ -836,6 +1007,15 @@ class StepperController:
                 self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
                 self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
                 self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
+                # Load PID if present
+                try:
+                    pid = cal_data.get('pid', None)
+                    if pid:
+                        self.kp = float(pid.get('kp', self.kp))
+                        self.ki = float(pid.get('ki', self.ki))
+                        self.kd = float(pid.get('kd', self.kd))
+                except Exception:
+                    pass
                 
                 logger.info(f"Calibration loaded from {self.calibration_file}")
                 if self.calibration.is_calibrated:
@@ -867,6 +1047,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'step_delay': self.calibration.step_delay,
                 'is_calibrated': self.calibration.is_calibrated,
                 'calibration_timestamp': self.calibration.calibration_timestamp
             },
@@ -875,6 +1056,22 @@ class StepperController:
                 'y_max_steps': self.calibration.y_max_steps
             }
         }
+
+    def get_pid(self) -> dict:
+        return {
+            'kp': float(self.kp),
+            'ki': float(self.ki),
+            'kd': float(self.kd),
+        }
+
+    def set_pid(self, kp: Optional[float] = None, ki: Optional[float] = None, kd: Optional[float] = None) -> dict:
+        if kp is not None:
+            self.kp = float(kp)
+        if ki is not None:
+            self.ki = float(ki)
+        if kd is not None:
+            self.kd = float(kd)
+        return self.get_pid()
 
     def status(self) -> dict:
         return {

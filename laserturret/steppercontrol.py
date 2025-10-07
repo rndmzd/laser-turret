@@ -122,6 +122,7 @@ class StepperMotor:
         self.movement_timeout = movement_timeout
         self.deadzone = deadzone
         self.enabled = False
+        self.suspended = False
 
         # Initialize GPIO backend
         self.gpio = gpio_backend if gpio_backend is not None else get_gpio_backend()
@@ -208,6 +209,17 @@ class StepperMotor:
         except Exception as e:
             logger.debug(f"[{self.name}] Failed to disable motor (GPIO may be cleaned up): {e}")
 
+    def set_suspended(self, suspended: bool) -> None:
+        self.suspended = suspended
+        if suspended:
+            try:
+                self.disable()
+            except Exception:
+                pass
+            try:
+                self.last_command = 0
+            except Exception:
+                pass
     def set_direction(self, direction: str) -> None:
         """Set motor direction"""
         if direction not in [CLOCKWISE, COUNTER_CLOCKWISE]:
@@ -244,16 +256,23 @@ class StepperMotor:
         actual_steps = 0
         
         try:
+            if self.suspended:
+                return 0
             # Check initial limit state by polling
             if self._check_limit_switch(self.state.direction):
                 raise LimitSwitchError(
                     f"Cannot move {self.state.direction}, limit switch is pressed"
                 )
             
-            self.enable()  # Enable motor
+            if not self.suspended:
+                self.enable()
+            else:
+                return 0
             self.state.status = MotorStatus.MOVING
             
             for _ in range(steps):
+                if self.suspended:
+                    break
                 # Check for timeout
                 if time.time() - start_time > self.movement_timeout:
                     raise MotorError("Movement operation timed out")
@@ -298,25 +317,24 @@ class StepperMotor:
                     self.state.status = MotorStatus.LIMIT_REACHED
                 else:
                     self.state.status = MotorStatus.IDLE
-            # Do not disable here; keep motor enabled to hold position
         
         return actual_steps
 
     def _calculate_step_delay(self, command_value: float) -> Optional[float]:
         """Calculate step delay based on command value magnitude"""
         # Tuned delay bounds (in seconds)
-        MIN_DELAY = 0.00005  # Maximum speed
-        MAX_DELAY = 0.1      # Minimum speed
+        MIN_DELAY = 0.0002
+        MAX_DELAY = 0.02
         
         # Check deadzone
         abs_value = abs(command_value)
         if abs_value < self.deadzone:
             return None
             
-        # Cubic mapping for smoother acceleration
+        # Quadratic mapping for responsiveness
         command_range = 100 - self.deadzone
         normalized_command = (abs_value - self.deadzone) / command_range
-        speed_multiplier = pow(normalized_command, 3)  # Cubic curve
+        speed_multiplier = pow(normalized_command, 2)
         
         delay = MAX_DELAY - (speed_multiplier * (MAX_DELAY - MIN_DELAY))
         return max(MIN_DELAY, min(MAX_DELAY, delay))
@@ -325,6 +343,9 @@ class StepperMotor:
         """Process movement commands in separate thread"""
         while self.running:
             try:
+                if self.suspended:
+                    time.sleep(0.01)
+                    continue
                 # Get latest command value
                 try:
                     while True:
@@ -335,7 +356,6 @@ class StepperMotor:
 
                 # Process the command
                 if abs(command) < self.deadzone:
-                    self.disable()  # Disable motor in deadzone
                     time.sleep(0.001)
                     continue
 
