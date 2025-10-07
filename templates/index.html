@@ -64,22 +64,143 @@
             display: block;
         }
 
-        .floating-controls {
+        .overlay-toolbar {
             position: absolute;
+            top: 16px;
             right: 16px;
-            bottom: 16px;
-            background: rgba(18, 18, 26, 0.82);
-            color: white;
-            padding: 16px;
-            border-radius: 14px;
             display: flex;
-            flex-direction: column;
-            gap: 14px;
-            width: 240px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            gap: 10px;
+            z-index: 20;
+        }
+
+        .toolbar-button {
+            appearance: none;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(10, 10, 16, 0.75);
+            color: #f9fafb;
+            padding: 10px 18px;
+            border-radius: 18px;
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s, transform 0.2s;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+        }
+
+        .toolbar-button:hover {
+            background: rgba(36, 36, 48, 0.85);
+            transform: translateY(-1px);
+        }
+
+        .toolbar-button.active {
+            background: rgba(83, 109, 254, 0.95);
+            border-color: rgba(183, 197, 255, 0.9);
+            color: white;
+        }
+
+        .toolbar-button[data-overlay-target="movement"].active {
+            background: linear-gradient(135deg, #7c4dff 0%, #536dfe 100%);
+            border-color: rgba(197, 206, 255, 0.9);
+        }
+
+        .toolbar-button[data-overlay-target="objects"].active {
+            background: linear-gradient(135deg, #36d1dc 0%, #5b86e5 100%);
+            border-color: rgba(173, 221, 255, 0.9);
+        }
+
+        .toolbar-button[data-overlay-target="laser"].active {
+            background: linear-gradient(135deg, #ff6bcb 0%, #ff4081 100%);
+            border-color: rgba(255, 173, 210, 0.9);
+        }
+
+        #motors-toggle.active {
+            background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
+            border-color: rgba(255, 230, 170, 0.9);
+            color: #211000;
+        }
+
+        #motors-toggle.active .state-pill {
+            background: rgba(0, 0, 0, 0.25);
+        }
+
+        .toolbar-button .state-pill {
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: rgba(0,0,0,0.45);
+            font-size: 12px;
+            letter-spacing: 0.05em;
+        }
+
+        .overlay-panel {
+            position: absolute;
+            background: rgba(18, 18, 26, 0.88);
+            color: #f9fafb;
+            padding: 18px;
+            border-radius: 16px;
             border: 1px solid rgba(255,255,255,0.12);
-            backdrop-filter: blur(8px);
-            z-index: 5;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55);
+            backdrop-filter: blur(12px);
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 15;
+        }
+
+        .overlay-panel.active {
+            display: flex;
+        }
+
+        .floating-controls {
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 240px;
+        }
+
+        .movement-overlay {
+            position: absolute;
+        }
+
+        .laser-overlay {
+            right: 18px;
+            bottom: 18px;
+            width: 260px;
+        }
+
+        .objects-overlay {
+            right: 18px;
+            top: 84px;
+            width: 260px;
+        }
+
+        .overlay-header-row {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .overlay-close {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #f9fafb;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .overlay-close:hover {
+            background: rgba(255,255,255,0.18);
+            border-color: rgba(255,255,255,0.25);
         }
 
         .direction-pad {
@@ -160,25 +281,120 @@
             text-align: right;
         }
 
-        .floating-actions {
+        .icon-action-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .icon-action {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.18);
+            color: #f9fafb;
+            border-radius: 12px;
+            width: 48px;
+            height: 48px;
             display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s, transform 0.2s;
+        }
+
+        .icon-action:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+        }
+
+        .icon-action.active {
+            background: rgba(83, 109, 254, 0.9);
+            border-color: rgba(163, 189, 255, 0.9);
+        }
+
+        .overlay-toggle-grid {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .overlay-toggle-chip {
+            flex: 1 1 auto;
+            min-width: 100px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.18);
+            color: #f9fafb;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .overlay-toggle-chip.active {
+            background: rgba(83, 109, 254, 0.9);
+            border-color: rgba(163, 189, 255, 0.9);
+        }
+
+        .overlay-status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .overlay-status-grid span {
+            display: block;
+        }
+
+        .overlay-status-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            letter-spacing: 0.02em;
+        }
+
+        .overlay-status-value {
+            font-weight: 700;
+            color: #f9fafb;
+            margin-top: 2px;
+        }
+
+        .overlay-slider {
+            display: flex;
+            flex-direction: column;
             gap: 8px;
         }
 
-        .floating-actions button {
-            flex: 1;
-            background: rgba(255,255,255,0.12);
-            color: white;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.18);
-            margin-bottom: 0;
-            padding: 10px 12px;
+        .overlay-slider label {
             font-size: 12px;
-            width: auto;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.65);
         }
 
-        .floating-actions button:hover {
-            background: rgba(255,255,255,0.22);
+        .overlay-slider input[type="range"] {
+            width: 100%;
+            accent-color: #7f9cf5;
+        }
+
+        .overlay-slider-value {
+            font-size: 12px;
+            font-weight: 700;
+            color: #f9fafb;
+            text-align: right;
+        }
+
+        .overlay-empty {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            background: rgba(255,255,255,0.06);
+            padding: 10px;
+            border-radius: 10px;
         }
 
         .controls-panel {
@@ -302,10 +518,24 @@
         }
 
         @media (max-width: 900px) {
-            .floating-controls {
+            .overlay-toolbar {
+                position: static;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+
+            .overlay-panel {
                 position: static;
                 width: 100%;
-                margin-top: 16px;
+                transform: none;
+                margin-top: 12px;
+            }
+
+            .floating-controls {
+                width: 100%;
+                margin-top: 0;
             }
 
             .video-wrapper {
@@ -680,7 +910,17 @@
                 <div class="video-wrapper">
                     <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
 
-                    <div class="floating-controls" id="manual-control-panel">
+                    <div class="overlay-toolbar">
+                        <button id="motors-toggle" class="toolbar-button" onclick="toggleMotorsFromToolbar(this)">
+                            Motors
+                            <span class="state-pill" id="motors-state">--</span>
+                        </button>
+                        <button class="toolbar-button active" data-overlay-target="movement" onclick="toggleOverlayPanel('movement-overlay', this)">Movement</button>
+                        <button class="toolbar-button" data-overlay-target="objects" onclick="toggleOverlayPanel('objects-overlay', this)">Objects</button>
+                        <button class="toolbar-button" data-overlay-target="laser" onclick="toggleOverlayPanel('laser-overlay', this)">Laser</button>
+                    </div>
+
+                    <div class="overlay-panel floating-controls movement-overlay active" id="movement-overlay" data-overlay-key="movement">
                         <div class="direction-pad">
                             <span class="spacer"></span>
                             <button class="pad-button" onclick="manualMove('y', -1)" aria-label="Nudge up" title="Nudge up">▲</button>
@@ -695,16 +935,70 @@
                             <button class="pad-button" onclick="manualMove('y', 1)" aria-label="Nudge down" title="Nudge down">▼</button>
                             <span class="spacer"></span>
                         </div>
-                        <div class="floating-slider">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <label for="manual-step-size">Step Size</label>
-                                <span id="manual-step-size-value" class="floating-slider-value">100 px</span>
-                            </div>
+                        <div class="floating-slider overlay-slider">
+                            <label for="manual-step-size" style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Step Size</span>
+                                <span id="manual-step-size-value" class="floating-slider-value overlay-slider-value">100 px</span>
+                            </label>
                             <input type="range" id="manual-step-size" min="10" max="500" value="100" step="10" oninput="updateManualStepSize()">
                         </div>
-                        <div class="floating-actions">
-                            <button onclick="setHomePosition()" aria-label="Set current position as home" title="Set current position as home">Set Home</button>
-                            <button onclick="homeCameraPosition()" aria-label="Move to saved home position" title="Move to saved home position">Go Home</button>
+                        <div class="icon-action-row">
+                            <button class="icon-action" onclick="setHomePosition()" aria-label="Set current position as home" title="Set current position as home">📍</button>
+                            <button class="icon-action" onclick="homeCameraPosition()" aria-label="Move to saved home position" title="Return to Home">🏠</button>
+                            <button class="icon-action" onclick="runAutoCalibration()" aria-label="Run auto calibration" title="Auto Calibration">🤖</button>
+                            <button class="icon-action" id="recenter-toggle-btn" onclick="toggleOverlayRecenter(this)" aria-label="Toggle re-center on target loss" title="Re-center on Target Loss">🎯</button>
+                        </div>
+                    </div>
+
+                    <div class="overlay-panel laser-overlay" id="laser-overlay" data-overlay-key="laser">
+                        <div class="overlay-header-row">
+                            <button class="overlay-close" data-overlay-close="laser" aria-label="Close laser overlay">×</button>
+                        </div>
+                        <button class="pad-button fire-button" data-fire-control onclick="fireLaser(this)" aria-label="Fire laser" title="Fire laser" style="width: 100%; height: 60px;">
+                            <span>Fire</span>
+                            <span>Laser</span>
+                        </button>
+                        <div class="overlay-toggle-grid">
+                            <button id="overlay-laser-enable" class="overlay-toggle-chip" onclick="toggleLaserFromOverlay()">Laser System</button>
+                            <button id="overlay-auto-fire" class="overlay-toggle-chip" onclick="toggleAutoFireFromOverlay()">Auto Fire</button>
+                        </div>
+                        <div class="overlay-status-grid">
+                            <div>
+                                <span class="overlay-status-label">System</span>
+                                <span id="overlay-laser-status" class="overlay-status-value">OFF</span>
+                            </div>
+                            <div>
+                                <span class="overlay-status-label">Ready</span>
+                                <span id="overlay-laser-ready" class="overlay-status-value">No</span>
+                            </div>
+                            <div>
+                                <span class="overlay-status-label">Power</span>
+                                <span id="overlay-laser-power" class="overlay-status-value">100%</span>
+                            </div>
+                            <div>
+                                <span class="overlay-status-label">Cooldown</span>
+                                <span id="overlay-laser-cooldown" class="overlay-status-value">Ready</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="overlay-panel objects-overlay" id="objects-overlay" data-overlay-key="objects">
+                        <div class="overlay-header-row">
+                            <button class="overlay-close" data-overlay-close="objects" aria-label="Close objects overlay">×</button>
+                        </div>
+                        <div class="overlay-toggle-grid">
+                            <button id="overlay-objects-detect" class="overlay-toggle-chip" onclick="toggleObjectDetectionFromOverlay()">Detection</button>
+                            <button id="overlay-objects-track" class="overlay-toggle-chip" onclick="toggleObjectAutoTrackFromOverlay()">Auto-Track</button>
+                        </div>
+                        <div class="overlay-slider">
+                            <label for="overlay-object-confidence" style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Confidence Threshold</span>
+                                <span id="overlay-object-confidence-value" class="overlay-slider-value">0.50</span>
+                            </label>
+                            <input type="range" id="overlay-object-confidence" min="0.1" max="0.9" step="0.05" value="0.5" oninput="handleOverlayConfidenceInput(this.value)">
+                        </div>
+                        <div id="overlay-object-hint" class="overlay-empty" style="display: none;">
+                            Confidence control unavailable for the current detection method.
                         </div>
                     </div>
                 </div>
@@ -2107,9 +2401,9 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        document.getElementById('laser-system-status').textContent = 
+                        document.getElementById('laser-system-status').textContent =
                             data.enabled ? 'ON' : 'OFF';
-                        document.getElementById('laser-ready').textContent = 
+                        document.getElementById('laser-ready').textContent =
                             data.ready_to_fire ? 'Yes' : 'No';
                         document.getElementById('laser-fire-count').textContent = 
                             data.fire_count;
@@ -2133,11 +2427,13 @@
 
                         // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
                         // They are only synced on page load via syncLaserSliders()
-                        
+
                         const fireReady = data.ready_to_fire && data.enabled;
                         document.querySelectorAll('[data-fire-control]').forEach(btn => {
                             btn.disabled = !fireReady;
                         });
+
+                        syncLaserOverlay(data);
                     }
                 })
                 .catch(error => console.error('Error fetching laser status:', error));
@@ -2390,8 +2686,9 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('object-status-message', true, 
+                    showStatus('object-status-message', true,
                         enabled ? 'Object auto-tracking enabled' : 'Object auto-tracking disabled');
+                    updateObjectStatus();
                 } else {
                     showStatus('object-status-message', false, data.message);
                 }
@@ -2468,6 +2765,8 @@
                 document.getElementById('detection-method-display').textContent = 'Roboflow Inference';
             }
             
+            syncOverlayConfidenceFromMain();
+
             // Switch method on server
             fetch('/detection_method/switch', {
                 method: 'POST',
@@ -2733,6 +3032,12 @@
                         document.getElementById('object-enabled').checked = data.enabled;
                         document.getElementById('object-auto-track-enabled').checked = data.auto_track;
                         document.getElementById('target-priority').value = data.priority;
+
+                        const detectBtn = document.getElementById('overlay-objects-detect');
+                        if (detectBtn) detectBtn.classList.toggle('active', !!data.enabled);
+                        const trackBtn = document.getElementById('overlay-objects-track');
+                        if (trackBtn) trackBtn.classList.toggle('active', !!data.auto_track);
+                        syncOverlayConfidenceFromMain();
                     }
                 })
                 .catch(error => console.error('Error fetching object status:', error));
@@ -3247,6 +3552,216 @@
             });
         }
 
+        let overlayConfidenceTimeout = null;
+
+        function toggleOverlayPanel(panelId, button) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            const isActive = panel.classList.contains('active');
+            panel.classList.toggle('active', !isActive);
+            if (button) {
+                button.classList.toggle('active', !isActive);
+            } else {
+                const key = panel.dataset.overlayKey;
+                if (key) {
+                    const toggleBtn = document.querySelector(`.toolbar-button[data-overlay-target="${key}"]`);
+                    if (toggleBtn) {
+                        toggleBtn.classList.toggle('active', panel.classList.contains('active'));
+                    }
+                }
+            }
+        }
+
+        function closeOverlayPanel(panelId) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            panel.classList.remove('active');
+            const key = panel.dataset.overlayKey;
+            if (key) {
+                const toggleBtn = document.querySelector(`.toolbar-button[data-overlay-target="${key}"]`);
+                if (toggleBtn) {
+                    toggleBtn.classList.remove('active');
+                }
+            }
+        }
+
+        function toggleMotorsFromToolbar() {
+            const toggle = document.getElementById('camera-tracking-enabled');
+            if (!toggle) return;
+            toggle.checked = !toggle.checked;
+            toggleCameraTracking();
+        }
+
+        function syncMotorsToolbar(enabled) {
+            const stateEl = document.getElementById('motors-state');
+            if (stateEl) {
+                stateEl.textContent = enabled ? 'ON' : 'OFF';
+            }
+            const btn = document.getElementById('motors-toggle');
+            if (btn) {
+                btn.classList.toggle('active', !!enabled);
+            }
+        }
+
+        function toggleOverlayRecenter(button) {
+            const checkbox = document.getElementById('camera-recenter-on-loss');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            button.classList.toggle('active', checkbox.checked);
+            toggleRecenterOnLoss();
+            setTimeout(() => {
+                updateCameraTrackingStatus();
+            }, 500);
+        }
+
+        function syncRecenterOverlayButton() {
+            const checkbox = document.getElementById('camera-recenter-on-loss');
+            const button = document.getElementById('recenter-toggle-btn');
+            if (checkbox && button) {
+                button.classList.toggle('active', checkbox.checked);
+            }
+        }
+
+        function toggleLaserFromOverlay() {
+            const checkbox = document.getElementById('laser-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleLaser();
+        }
+
+        function toggleAutoFireFromOverlay() {
+            const checkbox = document.getElementById('auto-fire-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleAutoFire();
+        }
+
+        function toggleObjectDetectionFromOverlay() {
+            const checkbox = document.getElementById('object-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleObjectDetection();
+        }
+
+        function toggleObjectAutoTrackFromOverlay() {
+            const checkbox = document.getElementById('object-auto-track-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleObjectAutoTrack();
+        }
+
+        function syncLaserOverlay(status) {
+            const systemEl = document.getElementById('overlay-laser-status');
+            const readyEl = document.getElementById('overlay-laser-ready');
+            const powerEl = document.getElementById('overlay-laser-power');
+            const cooldownEl = document.getElementById('overlay-laser-cooldown');
+            const enableBtn = document.getElementById('overlay-laser-enable');
+            const autoBtn = document.getElementById('overlay-auto-fire');
+
+            if (systemEl) systemEl.textContent = status.enabled ? 'ON' : 'OFF';
+            const fireReady = status.ready_to_fire && status.enabled;
+            if (readyEl) readyEl.textContent = fireReady ? 'Yes' : 'No';
+            if (powerEl && status.power !== undefined) powerEl.textContent = `${status.power}%`;
+            if (cooldownEl) {
+                if (status.cooldown_remaining > 0) {
+                    cooldownEl.textContent = `${status.cooldown_remaining.toFixed(1)}s`;
+                } else {
+                    cooldownEl.textContent = 'Ready';
+                }
+            }
+            if (enableBtn) enableBtn.classList.toggle('active', !!status.enabled);
+            if (autoBtn) autoBtn.classList.toggle('active', !!status.auto_fire);
+        }
+
+        function syncOverlayConfidenceFromMain() {
+            const overlaySlider = document.getElementById('overlay-object-confidence');
+            const overlayValue = document.getElementById('overlay-object-confidence-value');
+            const hint = document.getElementById('overlay-object-hint');
+            const methodEl = document.getElementById('detection-method');
+            if (!overlaySlider || !overlayValue || !methodEl || !hint) return;
+
+            const method = methodEl.value;
+            if (method === 'haar') {
+                overlaySlider.disabled = true;
+                hint.style.display = 'block';
+                overlayValue.textContent = '--';
+                return;
+            }
+
+            hint.style.display = 'none';
+            overlaySlider.disabled = false;
+
+            let value = parseFloat(overlaySlider.value);
+            if (method === 'tflite') {
+                const slider = document.getElementById('tflite-confidence');
+                if (slider) {
+                    value = parseFloat(slider.value);
+                }
+            } else if (method === 'roboflow') {
+                const slider = document.getElementById('roboflow-confidence');
+                if (slider) {
+                    value = parseFloat(slider.value);
+                }
+            }
+
+            if (!Number.isNaN(value)) {
+                overlaySlider.value = value;
+                overlayValue.textContent = value.toFixed(2);
+            }
+        }
+
+        function handleOverlayConfidenceInput(value) {
+            const overlayValue = document.getElementById('overlay-object-confidence-value');
+            const methodEl = document.getElementById('detection-method');
+            if (overlayValue) {
+                const num = parseFloat(value);
+                if (!Number.isNaN(num)) {
+                    overlayValue.textContent = num.toFixed(2);
+                }
+            }
+            if (!methodEl) return;
+
+            const method = methodEl.value;
+            if (method === 'haar') {
+                return;
+            }
+
+            if (method === 'tflite') {
+                const slider = document.getElementById('tflite-confidence');
+                if (slider) {
+                    slider.value = value;
+                    updateTFLiteConfidence();
+                }
+            } else if (method === 'roboflow') {
+                const slider = document.getElementById('roboflow-confidence');
+                if (slider) {
+                    slider.value = value;
+                    updateRoboflowConfidence();
+                }
+            }
+
+            if (overlayConfidenceTimeout) {
+                clearTimeout(overlayConfidenceTimeout);
+            }
+            overlayConfidenceTimeout = setTimeout(() => {
+                if (method === 'tflite') {
+                    applyTFLiteSettings();
+                } else if (method === 'roboflow') {
+                    applyRoboflowSettings();
+                }
+            }, 500);
+        }
+
+        document.addEventListener('click', (event) => {
+            const closeBtn = event.target.closest('[data-overlay-close]');
+            if (closeBtn) {
+                const key = closeBtn.getAttribute('data-overlay-close');
+                if (key) {
+                    closeOverlayPanel(`${key}-overlay`);
+                }
+            }
+        });
+
         function updateManualStepSize() {
             const value = document.getElementById('manual-step-size').value;
             document.getElementById('manual-step-size-value').textContent = `${value} px`;
@@ -3383,12 +3898,14 @@
                         
                         if (data.available) {
                             document.getElementById('camera-system-status').textContent = 'Available';
-                            document.getElementById('camera-enabled-status').textContent = 
+                            document.getElementById('camera-enabled-status').textContent =
                                 data.enabled ? 'Yes' : 'No';
+                            syncMotorsToolbar(!!data.enabled);
                             // Sync re-center on loss toggle
                             const r = !!data.recenter_on_loss;
                             const rEl = document.getElementById('camera-recenter-on-loss');
                             if (rEl) rEl.checked = r;
+                            syncRecenterOverlayButton();
                             
                             const controller = data.controller_status;
                             if (controller) {
@@ -3467,6 +3984,8 @@
                         } else {
                             document.getElementById('camera-system-status').textContent = 'Not Available';
                             document.getElementById('camera-enabled-status').textContent = 'N/A';
+                            syncMotorsToolbar(false);
+                            syncRecenterOverlayButton();
                         }
                     }
                 })
@@ -3532,6 +4051,7 @@
             
             // Update laser status
             if (status.laser) {
+                syncLaserOverlay(status.laser);
                 safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
                 safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
                 safeUpdateElement('laser-fire-count', status.laser.fire_count);
@@ -3574,12 +4094,18 @@
                 const objCount = status.object_detection.count;
                 const objMode = status.object_detection.mode;
                 const objMethod = status.object_detection.method;
-                
+
                 safeUpdateElement('object-detection-status', objEnabled ? 'Enabled' : 'Disabled');
                 safeUpdateElement('object-auto-track-status', objAutoTrack ? 'Yes' : 'No');
                 safeUpdateElement('object-count', objCount);
                 safeUpdateElement('object-detection-mode', objMode ? objMode.toUpperCase() : 'N/A');
                 safeUpdateElement('detection-method-display', objMethod ? objMethod.toUpperCase() : 'N/A');
+
+                const detectBtn = document.getElementById('overlay-objects-detect');
+                if (detectBtn) detectBtn.classList.toggle('active', !!objEnabled);
+                const trackBtn = document.getElementById('overlay-objects-track');
+                if (trackBtn) trackBtn.classList.toggle('active', !!objAutoTrack);
+                syncOverlayConfidenceFromMain();
             }
             
             // Update motion detection status
@@ -3703,9 +4229,13 @@
                 if (camTrackEl) {
                     camTrackEl.checked = status.tracking.camera_enabled;
                 }
+                syncMotorsToolbar(!!status.tracking.camera_enabled);
+                syncRecenterOverlayButton();
             } else if (status.tracking && !status.tracking.camera_enabled) {
                 safeUpdateElement('camera-system-status', 'Not Available');
                 safeUpdateElement('camera-enabled-status', 'N/A');
+                syncMotorsToolbar(false);
+                syncRecenterOverlayButton();
             }
         });
         
@@ -3723,6 +4253,11 @@
         // Initialize camera step delay display
         updateCameraStepDelayValue();
         updateManualStepSize();
+        syncOverlayConfidenceFromMain();
+        syncRecenterOverlayButton();
+        updateLaserStatus();
+        updateObjectStatus();
+        updateCameraTrackingStatus();
 
         console.log('🚀 Laser Turret Control Panel initialized with WebSocket support');
     </script>
