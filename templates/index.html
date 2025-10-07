@@ -34,13 +34,18 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .main-grid {
+        .control-layout {
             display: grid;
-            grid-template-columns: 1fr;
             gap: 20px;
             align-items: start;
             max-width: 1400px;
             margin: 0 auto;
+        }
+
+        @media (min-width: 1024px) {
+            .control-layout {
+                grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+            }
         }
 
         .video-section {
@@ -48,6 +53,12 @@
             border-radius: 12px;
             padding: 15px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .video-wrapper {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
         }
 
         #video-stream {
@@ -58,47 +69,262 @@
             display: block;
         }
 
+        .floating-controls {
+            position: absolute;
+            right: 16px;
+            bottom: 16px;
+            background: rgba(18, 18, 26, 0.82);
+            color: white;
+            padding: 16px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            width: 240px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(8px);
+            z-index: 5;
+        }
+
+        .floating-controls h3 {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.75);
+        }
+
+        .direction-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 6px;
+            justify-items: center;
+            align-items: center;
+        }
+
+        .direction-pad .spacer {
+            width: 54px;
+            height: 54px;
+        }
+
+        .pad-button {
+            width: 54px;
+            height: 54px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.12);
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 0;
+        }
+
+        .pad-button:hover {
+            background: rgba(255,255,255,0.22);
+            transform: translateY(-1px);
+        }
+
+        .floating-slider {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .floating-slider label {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.75);
+        }
+
+        .floating-slider input[type="range"] {
+            width: 100%;
+            accent-color: #a3bffa;
+        }
+
+        .floating-slider-value {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: white;
+            text-align: right;
+        }
+
+        .floating-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .floating-actions button {
+            flex: 1;
+            background: rgba(255,255,255,0.12);
+            color: white;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.18);
+            margin-bottom: 0;
+            padding: 10px 12px;
+            font-size: 12px;
+            width: auto;
+        }
+
+        .floating-actions button:hover {
+            background: rgba(255,255,255,0.22);
+        }
+
         .controls-panel {
             background: white;
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
         }
 
-        .tabs {
+        @media (min-width: 1024px) {
+            .controls-panel {
+                position: sticky;
+                top: 20px;
+                max-height: calc(100vh - 60px);
+                overflow: hidden;
+            }
+        }
+
+        .controls-header {
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 12px;
+        }
+
+        .controls-header h2 {
+            font-size: 20px;
+            color: #1f2933;
+            margin-bottom: 6px;
+        }
+
+        .controls-header p {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .panel-body {
             display: flex;
-            justify-content: space-between;
-            gap: 3px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
+            gap: 16px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .tab-navigation {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 180px;
+            flex-shrink: 0;
+        }
+
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #9ca3af;
+            font-weight: 700;
         }
 
         .tab {
-            padding: 10px 8px;
+            padding: 10px 12px;
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
-            color: #666;
+            color: #4b5563;
+            text-align: left;
             transition: all 0.3s;
-            border-bottom: 3px solid transparent;
-            white-space: nowrap;
-            flex: 1;
-            text-align: center;
         }
 
         .tab:hover {
-            color: #667eea;
+            color: #111827;
+            background: #f3f4ff;
         }
 
         .tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+            color: #4338ca;
+            border-color: #c7d2fe;
+            background: #eef2ff;
+            box-shadow: inset 0 0 0 1px rgba(79,70,229,0.15);
+        }
+
+        .tab-content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 4px;
         }
 
         .tab-content {
             display: none;
+        }
+
+        @media (max-width: 1023px) {
+            .controls-panel {
+                position: static;
+                max-height: none;
+            }
+
+            .panel-body {
+                flex-direction: column;
+            }
+
+            .tab-navigation {
+                width: 100%;
+            }
+
+            .tab-content-area {
+                overflow-y: visible;
+                padding-right: 0;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .floating-controls {
+                position: static;
+                width: 100%;
+                margin-top: 16px;
+            }
+
+            .video-wrapper {
+                border-radius: 12px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .tab-navigation {
+                gap: 12px;
+            }
+
+            .nav-section {
+                background: #f9fafb;
+                padding: 12px;
+                border-radius: 10px;
+            }
+
+            .nav-section .tab {
+                width: 100%;
+                text-align: center;
+            }
+
+            .nav-label {
+                font-size: 10px;
+                color: #6b7280;
+            }
         }
 
         .tab-content.active {
@@ -441,26 +667,73 @@
             <p>Advanced Camera Control & Monitoring System</p>
         </div>
 
-        <div class="main-grid">
-            <div class="video-section">
-                <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
-            </div>
+        <div class="control-layout">
+            <section class="video-section">
+                <div class="video-wrapper">
+                    <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
 
-            <div class="controls-panel">
-                <div class="tabs">
-                    <button class="tab active" onclick="switchTab('stats')">📊 Stats</button>
-                    <button class="tab" onclick="switchTab('tracking')">📹 Track</button>
-                    <button class="tab" onclick="switchTab('laser')">🔴 Laser</button>
-                    <button class="tab" onclick="switchTab('presets')">📍 Presets</button>
-                    <button class="tab" onclick="switchTab('object')">👤 Objects</button>
-                    <button class="tab" onclick="switchTab('motion')">🎯 Motion</button>
-                    <button class="tab" onclick="switchTab('exposure')">🔆 Exposure</button>
-                    <button class="tab" onclick="switchTab('image')">🎨 Image</button>
-                    <button class="tab" onclick="switchTab('capture')">📸 Capture</button>
+                    <div class="floating-controls" id="manual-control-panel">
+                        <h3>Manual Aim</h3>
+                        <div class="direction-pad">
+                            <span class="spacer"></span>
+                            <button class="pad-button" onclick="manualMove('y', -1)" aria-label="Nudge up" title="Nudge up">▲</button>
+                            <span class="spacer"></span>
+                            <button class="pad-button" onclick="manualMove('x', -1)" aria-label="Nudge left" title="Nudge left">◄</button>
+                            <button class="pad-button" onclick="homeCameraPosition()" aria-label="Return to home position" title="Return to home position">🏠</button>
+                            <button class="pad-button" onclick="manualMove('x', 1)" aria-label="Nudge right" title="Nudge right">►</button>
+                            <span class="spacer"></span>
+                            <button class="pad-button" onclick="manualMove('y', 1)" aria-label="Nudge down" title="Nudge down">▼</button>
+                            <span class="spacer"></span>
+                        </div>
+                        <div class="floating-slider">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="manual-step-size">Step Size</label>
+                                <span id="manual-step-size-value" class="floating-slider-value">100 px</span>
+                            </div>
+                            <input type="range" id="manual-step-size" min="10" max="500" value="100" step="10" oninput="updateManualStepSize()">
+                        </div>
+                        <div class="floating-actions">
+                            <button onclick="setHomePosition()" aria-label="Set current position as home" title="Set current position as home">Set Home</button>
+                            <button onclick="homeCameraPosition()" aria-label="Move to saved home position" title="Move to saved home position">Go Home</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="controls-panel">
+                <div class="controls-header">
+                    <h2>Control Center</h2>
+                    <p>Switch between system status, targeting, automation, and imaging tools.</p>
                 </div>
 
-                <!-- Stats Tab -->
-                <div id="stats-tab" class="tab-content active">
+                <div class="panel-body">
+                    <nav class="tab-navigation">
+                        <div class="nav-section">
+                            <span class="nav-label">Overview</span>
+                            <button class="tab active" data-tab="stats" onclick="switchTab('stats', this)">📊 Status</button>
+                        </div>
+                        <div class="nav-section">
+                            <span class="nav-label">Targeting</span>
+                            <button class="tab" data-tab="tracking" onclick="switchTab('tracking', this)">🎯 Tracking</button>
+                            <button class="tab" data-tab="laser" onclick="switchTab('laser', this)">🔴 Laser</button>
+                        </div>
+                        <div class="nav-section">
+                            <span class="nav-label">Automation</span>
+                            <button class="tab" data-tab="presets" onclick="switchTab('presets', this)">📍 Presets</button>
+                            <button class="tab" data-tab="object" onclick="switchTab('object', this)">👤 Objects</button>
+                            <button class="tab" data-tab="motion" onclick="switchTab('motion', this)">🎯 Motion</button>
+                        </div>
+                        <div class="nav-section">
+                            <span class="nav-label">Imaging</span>
+                            <button class="tab" data-tab="exposure" onclick="switchTab('exposure', this)">🔆 Exposure</button>
+                            <button class="tab" data-tab="image" onclick="switchTab('image', this)">🎨 Image</button>
+                            <button class="tab" data-tab="capture" onclick="switchTab('capture', this)">📸 Capture</button>
+                        </div>
+                    </nav>
+
+                    <div class="tab-content-area">
+                        <!-- Stats Tab -->
+                        <div id="stats-tab" class="tab-content active">
                     <div class="control-group">
                         <h3>📍 Crosshair Position</h3>
                         <div class="stat-row">
@@ -616,33 +889,11 @@
                             <button class="btn-primary" onclick="applyPID()">Apply PID</button>
                         </div>
 
-                        <div class="control-group">
+                        <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
                             <h3>🎯 Manual Position Control</h3>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Manually adjust camera position with arrow controls
+                            <p style="font-size: 13px; color: #4338ca;">
+                                Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
                             </p>
-
-                            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 15px;">
-                                <button class="btn-secondary" onclick="manualMove('y', -100)" style="width: 60px; padding: 8px;">▲</button>
-                                <div style="display: flex; gap: 5px;">
-                                    <button class="btn-secondary" onclick="manualMove('x', -100)" style="width: 60px; padding: 8px;">◄</button>
-                                    <button class="btn-secondary" onclick="setHomePosition()" style="width: 80px; padding: 8px; font-size: 11px;">🏠 Set Home</button>
-                                    <button class="btn-secondary" onclick="manualMove('x', 100)" style="width: 60px; padding: 8px;">►</button>
-                                </div>
-                                <button class="btn-secondary" onclick="manualMove('y', 100)" style="width: 60px; padding: 8px;">▼</button>
-                            </div>
-
-                            <button class="btn-primary" onclick="homeCameraPosition()" style="width: 100%; margin-bottom: 15px;">
-                                🏠 Return to Home Position
-                            </button>
-
-                            <div class="slider-control">
-                                <label>Step Size</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="manual-step-size" min="10" max="500" value="100" step="10" oninput="updateManualStepSize()">
-                                    <span id="manual-step-size-value" class="slider-value">100</span>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="control-group">
@@ -1325,8 +1576,9 @@
                     <div id="recording-status" class="status-message"></div>
                 </div>
             </div>
-        </div>
+        </aside>
     </div>
+</div>
 
     <script>
         const CAMERA_WIDTH = 1920;
@@ -1345,15 +1597,23 @@
         let pidLastEditTs = 0;
 
         // Tab switching
-        function switchTab(tabName) {
+        function switchTab(tabName, buttonEl) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-            document.getElementById(`${tabName}-tab`).classList.add('active');
-            event.target.classList.add('active');
+
+            const targetContent = document.getElementById(`${tabName}-tab`);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+
+            const targetButton = buttonEl || document.querySelector(`.tab[data-tab="${tabName}"]`);
+            if (targetButton) {
+                targetButton.classList.add('active');
+            }
 
             // If leaving Object tab, make sure method-specific panels are hidden
             if (tabName !== 'object') {
@@ -2972,7 +3232,7 @@
 
         function updateManualStepSize() {
             const value = document.getElementById('manual-step-size').value;
-            document.getElementById('manual-step-size-value').textContent = value;
+            document.getElementById('manual-step-size-value').textContent = `${value} px`;
         }
 
         function manualMove(axis, steps) {
@@ -3445,7 +3705,8 @@
 
         // Initialize camera step delay display
         updateCameraStepDelayValue();
-        
+        updateManualStepSize();
+
         console.log('🚀 Laser Turret Control Panel initialized with WebSocket support');
     </script>
 </body>
