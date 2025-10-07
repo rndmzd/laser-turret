@@ -1326,7 +1326,81 @@
         </div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
+        const socket = io({ transports: ['websocket'] });
+
+        function socketFetch(endpoint, options = {}) {
+            const method = (options.method || 'GET').toUpperCase();
+            const timeout = options.timeout || 5000;
+            let data = null;
+
+            if (options.body !== undefined && options.body !== null) {
+                if (typeof options.body === 'string') {
+                    try {
+                        data = JSON.parse(options.body);
+                    } catch (err) {
+                        data = options.body;
+                    }
+                } else {
+                    data = options.body;
+                }
+            } else if (options.data !== undefined) {
+                data = options.data;
+            }
+
+            const payload = { endpoint, method };
+
+            if (options.query !== undefined) {
+                payload.query = options.query;
+            }
+
+            if (data !== null && data !== undefined) {
+                payload.data = data;
+            }
+
+            return new Promise((resolve, reject) => {
+                socket.timeout(timeout).emit('api_request', payload, (err, response) => {
+                    if (err) {
+                        reject(err instanceof Error ? err : new Error(err));
+                        return;
+                    }
+
+                    if (!response) {
+                        reject(new Error('No response from server'));
+                        return;
+                    }
+
+                    const success = typeof response.success === 'boolean'
+                        ? response.success
+                        : (response.status_code >= 200 && response.status_code < 300);
+
+                    const fetchLike = {
+                        ok: success,
+                        status: response.status_code,
+                        statusText: response.error || '',
+                        json: () => Promise.resolve(
+                            response.data === undefined ? null : response.data
+                        ),
+                        text: () => Promise.resolve(
+                            typeof response.data === 'string'
+                                ? response.data
+                                : response.data !== undefined
+                                    ? JSON.stringify(response.data)
+                                    : ''
+                        ),
+                        data: response.data
+                    };
+
+                    resolve(fetchLike);
+                });
+            });
+        }
+
+        socket.on('connect_error', (error) => {
+            console.error('Socket connection error:', error);
+        });
+
         const CAMERA_WIDTH = 1920;
         const CAMERA_HEIGHT = 1080;
         let laserEditing = false;
@@ -1376,7 +1450,7 @@
             const cameraY = Math.round(clickY * scaleY);
             
             if (crosshairCalibrationMode) {
-                fetch('/crosshair/calibration/set', {
+                socketFetch('/crosshair/calibration/set', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ x: cameraX, y: cameraY })
@@ -1406,7 +1480,7 @@
             if (trackingMode === 'camera' && cameraTrackingEnabled) {
                 // Camera movement mode: move camera to recenter clicked position
                 // Crosshair stays centered, don't update position display
-                fetch('/tracking/camera/move_to_position', {
+                socketFetch('/tracking/camera/move_to_position', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ x: cameraX, y: cameraY })
@@ -1427,7 +1501,7 @@
             } else {
                 // Crosshair mode: update crosshair position
                 document.getElementById('position').textContent = `X: ${cameraX}, Y: ${cameraY}`;
-                fetch('/update_crosshair', {
+                socketFetch('/update_crosshair', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ x: cameraX, y: cameraY })
@@ -1437,7 +1511,7 @@
 
         // Reset crosshair to center
         function resetCrosshair() {
-            fetch('/reset_crosshair', {
+            socketFetch('/reset_crosshair', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1457,7 +1531,7 @@
         }
 
         function resetCrosshairCalibration() {
-            fetch('/crosshair/calibration/reset', {
+            socketFetch('/crosshair/calibration/reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1479,7 +1553,7 @@
         }
 
         function updateCrosshairCalibration() {
-            fetch('/crosshair/calibration')
+            socketFetch('/crosshair/calibration')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success' && data.offset) {
@@ -1493,7 +1567,7 @@
         function toggleAutoExposure() {
             const autoEnabled = document.getElementById('auto-exposure').checked;
             document.getElementById('manual-exposure-controls').style.display = autoEnabled ? 'none' : 'block';
-            fetch('/set_exposure', {
+            socketFetch('/set_exposure', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ auto: autoEnabled })
@@ -1522,7 +1596,7 @@
             const exposureTime = parseInt(document.getElementById('exposure-time').value);
             const analogGain = parseFloat(document.getElementById('analog-gain').value);
             const digitalGain = parseFloat(document.getElementById('digital-gain').value);
-            fetch('/set_exposure', {
+            socketFetch('/set_exposure', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1541,7 +1615,7 @@
         function toggleAutoWB() {
             const autoEnabled = document.getElementById('auto-wb').checked;
             document.getElementById('wb-mode-control').style.display = autoEnabled ? 'none' : 'block';
-            fetch('/set_white_balance', {
+            socketFetch('/set_white_balance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ auto: autoEnabled })
@@ -1553,7 +1627,7 @@
 
         function applyWhiteBalance() {
             const mode = parseInt(document.getElementById('wb-mode').value);
-            fetch('/set_white_balance', {
+            socketFetch('/set_white_balance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ auto: false, mode: mode })
@@ -1583,7 +1657,7 @@
             const brightness = parseFloat(document.getElementById('brightness').value);
             const contrast = parseFloat(document.getElementById('contrast').value);
             const saturation = parseFloat(document.getElementById('saturation').value);
-            fetch('/set_image_params', {
+            socketFetch('/set_image_params', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1609,7 +1683,7 @@
 
         // Image capture
         function captureImage() {
-            fetch('/capture_image', {
+            socketFetch('/capture_image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1631,7 +1705,7 @@
 
         // Video recording controls
         function startRecording() {
-            fetch('/start_recording', {
+            socketFetch('/start_recording', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1654,7 +1728,7 @@
         }
 
         function stopRecording() {
-            fetch('/stop_recording', {
+            socketFetch('/stop_recording', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1678,7 +1752,7 @@
         }
 
         function updateRecordingStatus() {
-            fetch('/recording_status')
+            socketFetch('/recording_status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success' && data.is_recording) {
@@ -1702,7 +1776,7 @@
         // Laser control functions
         function toggleLaser() {
             const enabled = document.getElementById('laser-enabled').checked;
-            fetch('/laser/toggle', {
+            socketFetch('/laser/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -1725,7 +1799,7 @@
 
         function toggleAutoFire() {
             const enabled = document.getElementById('auto-fire-enabled').checked;
-            fetch('/laser/auto_fire', {
+            socketFetch('/laser/auto_fire', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -1749,7 +1823,7 @@
             const button = document.getElementById('fire-button');
             button.disabled = true;
             
-            fetch('/laser/fire', {
+            socketFetch('/laser/fire', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1812,7 +1886,7 @@
             const cooldown = parseFloat(document.getElementById('laser-cooldown').value);
             const power = parseInt(document.getElementById('laser-power').value);
             
-            fetch('/laser/settings', {
+            socketFetch('/laser/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1839,7 +1913,7 @@
         }
 
         function updateLaserStatus() {
-            fetch('/laser/status')
+            socketFetch('/laser/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -1908,7 +1982,7 @@
         function resetFireCount() {
             if (!confirm('Reset fire counter to 0?')) return;
             
-            fetch('/laser/reset_count', {
+            socketFetch('/laser/reset_count', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1932,7 +2006,7 @@
             const slot = parseInt(document.getElementById('save-slot').value);
             const label = document.getElementById('preset-label').value || `Preset ${slot}`;
             
-            fetch('/presets/save', {
+            socketFetch('/presets/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slot: slot, label: label })
@@ -1954,7 +2028,7 @@
         }
 
         function loadPreset(slot) {
-            fetch(`/presets/load/${slot}`, {
+            socketFetch(`/presets/load/${slot}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1976,7 +2050,7 @@
         function deletePreset(slot) {
             if (!confirm(`Delete preset ${slot}?`)) return;
             
-            fetch(`/presets/delete/${slot}`, {
+            socketFetch(`/presets/delete/${slot}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1996,7 +2070,7 @@
         }
 
         function loadPresetList() {
-            fetch('/presets/list')
+            socketFetch('/presets/list')
                 .then(response => response.json())
                 .then(data => {
                     const listEl = document.getElementById('preset-list');
@@ -2045,7 +2119,7 @@
                 return;
             }
             
-            fetch('/presets/pattern/start', {
+            socketFetch('/presets/pattern/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sequence: sequence, delay: delay, loop: loop })
@@ -2067,7 +2141,7 @@
         }
 
         function stopPattern() {
-            fetch('/presets/pattern/stop', {
+            socketFetch('/presets/pattern/stop', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -2088,7 +2162,7 @@
         }
 
         function updatePatternStatus() {
-            fetch('/presets/pattern/status')
+            socketFetch('/presets/pattern/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success' && data.running) {
@@ -2121,7 +2195,7 @@
         // Object detection controls
         function toggleObjectDetection() {
             const enabled = document.getElementById('object-enabled').checked;
-            fetch('/object_detection/toggle', {
+            socketFetch('/object_detection/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -2144,7 +2218,7 @@
 
         function toggleObjectAutoTrack() {
             const enabled = document.getElementById('object-auto-track-enabled').checked;
-            fetch('/object_detection/auto_track', {
+            socketFetch('/object_detection/auto_track', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -2170,7 +2244,7 @@
             // Update balloon settings visibility immediately
             showHideBalloonSettings();
             
-            fetch('/object_detection/settings', {
+            socketFetch('/object_detection/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2231,7 +2305,7 @@
             }
             
             // Switch method on server
-            fetch('/detection_method/switch', {
+            socketFetch('/detection_method/switch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ method: method })
@@ -2271,7 +2345,7 @@
             const confidence = parseFloat(document.getElementById('tflite-confidence').value);
             const filterClasses = document.getElementById('tflite-filter-classes').value;
             
-            fetch('/tflite/settings', {
+            socketFetch('/tflite/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2310,7 +2384,7 @@
             const confidence = parseFloat(document.getElementById('roboflow-confidence').value);
             const filterClasses = document.getElementById('roboflow-filter-classes').value;
             
-            fetch('/roboflow/settings', {
+            socketFetch('/roboflow/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2328,7 +2402,7 @@
                         `Roboflow settings applied - Confidence: ${data.confidence ? data.confidence.toFixed(2) : 'N/A'}`);
                     roboflowEditing = false;
                     // Switch to Roboflow method after applying settings
-                    fetch('/detection_method/switch', {
+                    socketFetch('/detection_method/switch', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ method: 'roboflow' })
@@ -2356,7 +2430,7 @@
         }
 
         function updateObjectStatus() {
-            fetch('/object_detection/status')
+            socketFetch('/object_detection/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -2560,7 +2634,7 @@
                 aspect_ratio_min: parseFloat(document.getElementById('balloon-ar-min').value),
                 aspect_ratio_max: parseFloat(document.getElementById('balloon-ar-max').value)
             };
-            fetch('/balloon/settings', {
+            socketFetch('/balloon/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -2584,7 +2658,7 @@
         // Motion detection controls
         function toggleMotionDetection() {
             const enabled = document.getElementById('motion-enabled').checked;
-            fetch('/motion_detection/toggle', {
+            socketFetch('/motion_detection/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -2607,7 +2681,7 @@
 
         function toggleAutoTrack() {
             const enabled = document.getElementById('auto-track-enabled').checked;
-            fetch('/motion_detection/auto_track', {
+            socketFetch('/motion_detection/auto_track', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -2641,7 +2715,7 @@
             const sensitivity = parseInt(document.getElementById('motion-sensitivity').value);
             const minArea = parseInt(document.getElementById('motion-min-area').value);
             
-            fetch('/motion_detection/settings', {
+            socketFetch('/motion_detection/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2665,7 +2739,7 @@
         }
 
         function updateMotionStatus() {
-            fetch('/motion_detection/status')
+            socketFetch('/motion_detection/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -2687,7 +2761,7 @@
         
         function syncMotionSliders() {
             // Sync motion sliders with server state (called on page load only)
-            fetch('/motion_detection/status')
+            socketFetch('/motion_detection/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -2702,7 +2776,7 @@
 
         // Update crosshair position display
         function updateCrosshairPosition() {
-            fetch('/get_crosshair_position')
+            socketFetch('/get_crosshair_position')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -2715,7 +2789,7 @@
 
         // Update stats periodically
         function updateStats() {
-            fetch('/exposure_stats')
+            socketFetch('/exposure_stats')
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('exp-time').textContent = 
@@ -2724,13 +2798,13 @@
                         `${data.analog_gain.toFixed(2)}x`;
                 });
 
-            fetch('/get_fps')
+            socketFetch('/get_fps')
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('fps').textContent = `${data.fps} FPS`;
                 });
 
-            fetch('/get_camera_settings')
+            socketFetch('/get_camera_settings')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -2763,7 +2837,7 @@
         function setTrackingMode() {
             const mode = document.getElementById('tracking-mode').value;
             
-            fetch('/tracking/mode', {
+            socketFetch('/tracking/mode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: mode })
@@ -2808,7 +2882,7 @@
         function toggleCameraTracking() {
             const enabled = document.getElementById('camera-tracking-enabled').checked;
             
-            fetch('/tracking/camera/toggle', {
+            socketFetch('/tracking/camera/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -2833,7 +2907,7 @@
 
         function toggleRecenterOnLoss() {
             const enabled = document.getElementById('camera-recenter-on-loss').checked;
-            fetch('/tracking/camera/recenter_on_loss', {
+            socketFetch('/tracking/camera/recenter_on_loss', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -2855,7 +2929,7 @@
         }
 
         function homeCameraPosition() {
-            fetch('/tracking/camera/home', {
+            socketFetch('/tracking/camera/home', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -2905,7 +2979,7 @@
             // Invert slider: higher slider value = lower delay (faster)
             const stepDelay = 0.0055 - sliderValue;
             
-            fetch('/tracking/camera/settings', {
+            socketFetch('/tracking/camera/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2940,7 +3014,7 @@
             const kp = parseFloat(document.getElementById('pid-kp').value);
             const ki = parseFloat(document.getElementById('pid-ki').value);
             const kd = parseFloat(document.getElementById('pid-kd').value);
-            fetch('/tracking/camera/pid', {
+            socketFetch('/tracking/camera/pid', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ kp: kp, ki: ki, kd: kd })
@@ -2964,7 +3038,7 @@
             const xSteps = parseFloat(document.getElementById('camera-x-steps-per-pixel').value);
             const ySteps = parseFloat(document.getElementById('camera-y-steps-per-pixel').value);
             
-            fetch('/tracking/camera/settings', {
+            socketFetch('/tracking/camera/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2996,7 +3070,7 @@
             const stepSize = parseInt(document.getElementById('manual-step-size').value);
             const actualSteps = steps > 0 ? stepSize : -stepSize;
             
-            fetch('/tracking/camera/manual_move', {
+            socketFetch('/tracking/camera/manual_move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -3021,7 +3095,7 @@
         function setHomePosition() {
             if (!confirm('Set current position as home (0, 0)?')) return;
             
-            fetch('/tracking/camera/set_home', {
+            socketFetch('/tracking/camera/set_home', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -3043,7 +3117,7 @@
         function runAutoCalibration() {
             if (!confirm('Run automatic calibration? This will move the camera through its full range of motion and may take several minutes. Ensure the area is clear.')) return;
             
-            fetch('/tracking/camera/auto_calibrate', {
+            socketFetch('/tracking/camera/auto_calibrate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -3110,7 +3184,7 @@
         }
 
         function updateCameraTrackingStatus() {
-            fetch('/tracking/camera/status')
+            socketFetch('/tracking/camera/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -3179,7 +3253,7 @@
                                 }
                                 
                                 // Sync PID sliders with controller values
-                                fetch('/tracking/camera/pid')
+                                socketFetch('/tracking/camera/pid')
                                     .then(r => r.json())
                                     .then(pd => {
                                         if (pd.status === 'success' && pd.pid) {

@@ -1,4 +1,5 @@
 from flask import Flask, Response, render_template, jsonify, request
+from flask_socketio import SocketIO
 from picamera2 import Picamera2
 from picamera2.controls import Controls
 from libcamera import ColorSpace, Transform
@@ -32,6 +33,7 @@ except Exception:
     print("Warning: Roboflow inference client not available. Install with: pip install inference-sdk")
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Global variables
 output_frame = None
@@ -2438,6 +2440,73 @@ def auto_calibrate_camera():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+
+@socketio.on('api_request')
+def handle_api_request(message):
+    """Generic Socket.IO handler that proxies existing HTTP routes."""
+    endpoint = message.get('endpoint') if isinstance(message, dict) else None
+    if not endpoint:
+        return {
+            'status_code': 400,
+            'success': False,
+            'error': 'Missing endpoint'
+        }
+
+    method = (message.get('method') or 'GET').upper()
+    query = message.get('query') if isinstance(message, dict) else None
+    data = message.get('data') if isinstance(message, dict) else None
+
+    client_kwargs = {}
+    if query:
+        client_kwargs['query_string'] = query
+
+    json_payload = None
+    data_payload = None
+    if isinstance(data, (dict, list)):
+        json_payload = data
+    elif data is not None:
+        if isinstance(data, (str, bytes)):
+            data_payload = data
+        else:
+            data_payload = json.dumps(data)
+
+    with app.test_client() as client:
+        response = client.open(
+            path=endpoint,
+            method=method,
+            json=json_payload,
+            data=data_payload,
+            **client_kwargs
+        )
+
+    if response.is_streamed:
+        return {
+            'status_code': 400,
+            'success': False,
+            'error': 'Streaming responses are not supported via Socket.IO'
+        }
+
+    try:
+        payload = response.get_json()
+    except Exception:
+        payload = response.get_data(as_text=True)
+
+    success = 200 <= response.status_code < 300
+    result = {
+        'status_code': response.status_code,
+        'success': success,
+        'data': payload
+    }
+
+    if not success:
+        if isinstance(payload, dict) and 'message' in payload:
+            result['error'] = payload['message']
+        elif isinstance(payload, str):
+            result['error'] = payload
+
+    return result
+
+
 if __name__ == '__main__':
     initialize_camera()
     initialize_laser_control()  # Initialize laser control with PWM
@@ -2447,4 +2516,4 @@ if __name__ == '__main__':
     if detection_method == 'roboflow':
         initialize_roboflow_detector()
     initialize_balloon_settings()  # Initialize balloon settings from config
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
