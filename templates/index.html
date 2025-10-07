@@ -1326,11 +1326,25 @@
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <script
+        src="https://cdn.socket.io/4.7.5/socket.io.min.js"
+        integrity="sha384-6ivdLyCfyY9Zo4PMBVXgS5aXoaZySUdkddUTkOcJCIZy9FHn5Vf3L7hIwrKyL/9P"
+        crossorigin="anonymous"
+    ></script>
     <script>
-        const socket = io({ transports: ['websocket'] });
+        const socket = typeof io !== 'undefined'
+            ? io({ transports: ['websocket', 'polling'] })
+            : null;
+
+        if (!socket) {
+            console.error('Socket.IO client failed to load. Control panel actions are disabled.');
+        }
 
         function socketFetch(endpoint, options = {}) {
+            if (!socket) {
+                return Promise.reject(new Error('Socket connection is not available'));
+            }
+
             const method = (options.method || 'GET').toUpperCase();
             const timeout = options.timeout || 5000;
             let data = null;
@@ -1360,46 +1374,96 @@
             }
 
             return new Promise((resolve, reject) => {
-                socket.timeout(timeout).emit('api_request', payload, (err, response) => {
-                    if (err) {
-                        reject(err instanceof Error ? err : new Error(err));
+                const sendRequest = () => {
+                    socket.timeout(timeout).emit('api_request', payload, (err, response) => {
+                        if (err) {
+                            reject(err instanceof Error ? err : new Error(err));
+                            return;
+                        }
+
+                        if (!response) {
+                            reject(new Error('No response from server'));
+                            return;
+                        }
+
+                        const success = typeof response.success === 'boolean'
+                            ? response.success
+                            : (response.status_code >= 200 && response.status_code < 300);
+
+                        const fetchLike = {
+                            ok: success,
+                            status: response.status_code,
+                            statusText: response.error || '',
+                            json: () => Promise.resolve(
+                                response.data === undefined ? null : response.data
+                            ),
+                            text: () => Promise.resolve(
+                                typeof response.data === 'string'
+                                    ? response.data
+                                    : response.data !== undefined
+                                        ? JSON.stringify(response.data)
+                                        : ''
+                            ),
+                            data: response.data
+                        };
+
+                        resolve(fetchLike);
+                    });
+                };
+
+                if (socket.connected) {
+                    sendRequest();
+                    return;
+                }
+
+                let settled = false;
+
+                function cleanup() {
+                    socket.off('connect', handleConnect);
+                    socket.off('connect_error', handleError);
+                    socket.off('error', handleError);
+                }
+
+                function handleConnect() {
+                    if (settled) {
                         return;
                     }
+                    settled = true;
+                    clearTimeout(connectTimer);
+                    cleanup();
+                    sendRequest();
+                }
 
-                    if (!response) {
-                        reject(new Error('No response from server'));
+                function handleError(err) {
+                    if (settled) {
                         return;
                     }
+                    settled = true;
+                    clearTimeout(connectTimer);
+                    cleanup();
+                    reject(err instanceof Error ? err : new Error(err));
+                }
 
-                    const success = typeof response.success === 'boolean'
-                        ? response.success
-                        : (response.status_code >= 200 && response.status_code < 300);
+                const connectTimer = setTimeout(() => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    cleanup();
+                    reject(new Error('Socket connection timed out'));
+                }, timeout);
 
-                    const fetchLike = {
-                        ok: success,
-                        status: response.status_code,
-                        statusText: response.error || '',
-                        json: () => Promise.resolve(
-                            response.data === undefined ? null : response.data
-                        ),
-                        text: () => Promise.resolve(
-                            typeof response.data === 'string'
-                                ? response.data
-                                : response.data !== undefined
-                                    ? JSON.stringify(response.data)
-                                    : ''
-                        ),
-                        data: response.data
-                    };
-
-                    resolve(fetchLike);
-                });
+                socket.once('connect', handleConnect);
+                socket.once('connect_error', handleError);
+                socket.once('error', handleError);
             });
         }
 
-        socket.on('connect_error', (error) => {
-            console.error('Socket connection error:', error);
-        });
+        if (socket) {
+            socket.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+            });
+        }
 
         const CAMERA_WIDTH = 1920;
         const CAMERA_HEIGHT = 1080;
