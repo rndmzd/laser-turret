@@ -1,18 +1,28 @@
-from flask import Flask, Response, render_template, jsonify, request
-from flask_socketio import SocketIO
-
 async_mode = 'threading'
+
 try:
     import eventlet
-
-    eventlet.monkey_patch()
-    async_mode = 'eventlet'
 except ImportError:
     eventlet = None
     print(
         "Warning: eventlet not installed; Socket.IO will run in threading mode "
         "without native WebSocket support."
     )
+else:
+    try:
+        eventlet.monkey_patch()
+    except Exception as exc:
+        eventlet = None
+        print(
+            "Warning: eventlet monkey patch failed; Socket.IO will run in threading "
+            "mode without native WebSocket support. Error:",
+            exc,
+        )
+    else:
+        async_mode = 'eventlet'
+
+from flask import Flask, Response, render_template, jsonify, request
+from flask_socketio import SocketIO
 
 from picamera2 import Picamera2
 from picamera2.controls import Controls
