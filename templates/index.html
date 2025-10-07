@@ -1375,7 +1375,7 @@
                             <label style="display: block; color: #555; font-weight: 600; margin-bottom: 8px; font-size: 13px;">
                                 Sequence (comma-separated slots, e.g., 1,2,3,4)
                             </label>
-                            <input type="text" id="pattern-sequence" placeholder="1,2,3,4" 
+                            <input type="text" id="pattern-sequence" placeholder="ex.: 1,2,3,4" 
                                    style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
                         </div>
 
@@ -4190,21 +4190,44 @@
         // Page Initialization
         // ============================================================
         
-        // Load presets on page load
-        loadPresetList();
-        
-        // Sync sliders on page load (not from WebSocket)
-        syncMotionSliders();
-        syncLaserSliders();
+        async function initializeDetectionMethodFromConfig() {
+            try {
+                const resp = await fetch('/detection_method/config');
+                const data = await resp.json();
+                if (data && data.status === 'success' && data.method) {
+                    // Ask backend to switch to configured method to ensure detectors are initialized
+                    await fetch('/detection_method/switch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ method: data.method })
+                    }).then(r => r.json()).catch(() => ({}));
+                }
+            } catch (e) {
+                console.warn('Failed to initialize detection method from config:', e);
+            }
+        }
 
-        // Initialize camera step delay display
-        updateCameraStepDelayValue();
-        updateManualStepSize();
-        syncOverlayConfidenceFromMain();
-        syncRecenterOverlayButton();
-        updateLaserStatus();
-        updateObjectStatus();
-        updateCameraTrackingStatus();
+        (async () => {
+            // Load presets on page load
+            loadPresetList();
+
+            // Sync sliders on page load (not from WebSocket)
+            syncMotionSliders();
+            syncLaserSliders();
+
+            // Initialize camera step delay display
+            updateCameraStepDelayValue();
+            updateManualStepSize();
+            syncOverlayConfidenceFromMain();
+            syncRecenterOverlayButton();
+
+            // Ensure backend detection method matches config before status pulls
+            await initializeDetectionMethodFromConfig();
+
+            updateLaserStatus();
+            updateObjectStatus();
+            updateCameraTrackingStatus();
+        })();
 
         console.log('🚀 Laser Turret Control Panel initialized with WebSocket support');
     </script>
