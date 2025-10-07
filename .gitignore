@@ -181,8 +181,8 @@ camera_calibration.json
 .windsurf
 
 # Training data (allow requirements file)
-training/*
-!training/requirements-train.txt
+training/
+#!training/requirements-train.txt
 env*/
 
 laserturret.conf
