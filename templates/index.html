@@ -36,14 +36,27 @@
 
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(600px, 2fr) 1fr;
             gap: 20px;
             align-items: start;
-            max-width: 1400px;
+            max-width: 1800px;
             margin: 0 auto;
         }
 
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
         .video-section {
+            position: relative;
             background: #1a1a1a;
             border-radius: 12px;
             padding: 15px;
@@ -56,6 +69,214 @@
             border-radius: 8px;
             cursor: crosshair;
             display: block;
+        }
+
+        .quick-controls-overlay {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .quick-controls-overlay button {
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .quick-fire-btn {
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+            color: white;
+        }
+
+        .quick-fire-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 65, 108, 0.4);
+        }
+
+        .quick-fire-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .quick-home-btn {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .quick-home-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .movement-pad-overlay {
+            position: absolute;
+            left: 25px;
+            bottom: 25px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+
+        .movement-pad-overlay h4 {
+            color: white;
+            font-size: 12px;
+            margin-bottom: 10px;
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .movement-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-template-rows: repeat(3, 50px);
+            gap: 6px;
+        }
+
+        .movement-btn {
+            background: rgba(103, 126, 234, 0.3);
+            border: 2px solid rgba(103, 126, 234, 0.6);
+            border-radius: 8px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .movement-btn:hover {
+            background: rgba(103, 126, 234, 0.6);
+            transform: scale(1.05);
+        }
+
+        .movement-btn:active {
+            transform: scale(0.95);
+        }
+
+        .movement-btn.center {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            font-size: 14px;
+            cursor: default;
+        }
+
+        .quick-actions-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .quick-actions-panel h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quick-toggle-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .quick-toggle-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .quick-toggle-item:hover {
+            background: #e9ecef;
+        }
+
+        .quick-toggle-label {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status-card-label {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-card-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #e0e0e0, transparent);
+            margin: 20px 0;
         }
 
         .controls-panel {
@@ -442,10 +663,117 @@
         </div>
 
         <div class="main-grid">
-            <div class="video-section">
-                <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+            <!-- Left Column: Video + Quick Controls -->
+            <div class="video-container">
+                <div class="video-section">
+                    <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+                    
+                    <!-- Movement Pad Overlay -->
+                    <div class="movement-pad-overlay" id="movement-overlay" style="display: none;">
+                        <h4>📐 MANUAL CONTROL</h4>
+                        <div class="movement-grid">
+                            <div style="grid-column: 1; grid-row: 1;"></div>
+                            <button class="movement-btn" onclick="manualMove('y', -1)">▲</button>
+                            <div style="grid-column: 3; grid-row: 1;"></div>
+                            
+                            <button class="movement-btn" onclick="manualMove('x', -1)">◄</button>
+                            <button class="movement-btn center" onclick="setHomePosition()" title="Set as Home">🏠</button>
+                            <button class="movement-btn" onclick="manualMove('x', 1)">►</button>
+                            
+                            <div style="grid-column: 1; grid-row: 3;"></div>
+                            <button class="movement-btn" onclick="manualMove('y', 1)">▼</button>
+                            <div style="grid-column: 3; grid-row: 3;"></div>
+                        </div>
+                        <div style="margin-top: 10px; text-align: center;">
+                            <input type="range" id="overlay-step-size" min="10" max="500" value="100" step="10" oninput="updateOverlayStepSize()" style="width: 100%;">
+                            <div style="color: white; font-size: 11px; margin-top: 5px;">
+                                Step: <span id="overlay-step-size-value" style="font-weight: 600;">100</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Controls Overlay -->
+                    <div class="quick-controls-overlay">
+                        <button class="quick-fire-btn" id="quick-fire-button" onclick="fireLaser(this)" disabled>
+                            🔴 FIRE LASER
+                        </button>
+                        <button class="quick-home-btn" onclick="homeCameraPosition()">
+                            🏠 Home
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Panel -->
+                <div class="quick-actions-panel">
+                    <h3>⚡ Quick Actions</h3>
+                    
+                    <div class="quick-toggle-group">
+                        <div class="quick-toggle-item">
+                            <span class="quick-toggle-label">🎯 Laser System</span>
+                            <label class="switch">
+                                <input type="checkbox" id="quick-laser-enabled" onchange="toggleLaser()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="quick-toggle-item">
+                            <span class="quick-toggle-label">🔄 Auto-Fire</span>
+                            <label class="switch">
+                                <input type="checkbox" id="quick-auto-fire" onchange="toggleAutoFire()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="quick-toggle-item">
+                            <span class="quick-toggle-label">📹 Camera Tracking</span>
+                            <label class="switch">
+                                <input type="checkbox" id="quick-camera-tracking" onchange="toggleCameraTracking()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="quick-toggle-item">
+                            <span class="quick-toggle-label">👤 Object Detection</span>
+                            <label class="switch">
+                                <input type="checkbox" id="quick-object-detection" onchange="toggleObjectDetection()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="section-divider"></div>
+                    
+                    <h3>📊 System Status</h3>
+                    <div class="status-grid">
+                        <div class="status-card">
+                            <div class="status-card-label">Laser</div>
+                            <div class="status-card-value" id="quick-laser-status">OFF</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-card-label">Ready</div>
+                            <div class="status-card-value" id="quick-laser-ready">No</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-card-label">Fire Count</div>
+                            <div class="status-card-value" id="quick-fire-count">0</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-card-label">FPS</div>
+                            <div class="status-card-value" id="quick-fps">--</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-card-label">Objects</div>
+                            <div class="status-card-value" id="quick-object-count">0</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-card-label">Tracking</div>
+                            <div class="status-card-value" id="quick-tracking-mode">OFF</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
+            <!-- Right Column: Detailed Settings -->
             <div class="controls-panel">
                 <div class="tabs">
                     <button class="tab active" onclick="switchTab('stats')">📊 Stats</button>
@@ -2973,11 +3301,31 @@
         function updateManualStepSize() {
             const value = document.getElementById('manual-step-size').value;
             document.getElementById('manual-step-size-value').textContent = value;
+            
+            // Sync with overlay slider
+            const overlaySlider = document.getElementById('overlay-step-size');
+            if (overlaySlider) overlaySlider.value = value;
+            const overlayValue = document.getElementById('overlay-step-size-value');
+            if (overlayValue) overlayValue.textContent = value;
+        }
+        
+        function updateOverlayStepSize() {
+            const value = document.getElementById('overlay-step-size').value;
+            document.getElementById('overlay-step-size-value').textContent = value;
+            
+            // Sync with main slider
+            const mainSlider = document.getElementById('manual-step-size');
+            if (mainSlider) mainSlider.value = value;
+            const mainValue = document.getElementById('manual-step-size-value');
+            if (mainValue) mainValue.textContent = value;
         }
 
         function manualMove(axis, steps) {
-            // Use the step size from slider instead of hardcoded value
-            const stepSize = parseInt(document.getElementById('manual-step-size').value);
+            // Use the step size from slider (check both sliders)
+            let stepSize = parseInt(document.getElementById('manual-step-size')?.value || 100);
+            const overlaySize = document.getElementById('overlay-step-size')?.value;
+            if (overlaySize) stepSize = parseInt(overlaySize);
+            
             const actualSteps = steps > 0 ? stepSize : -stepSize;
             
             fetch('/tracking/camera/manual_move', {
@@ -3229,6 +3577,7 @@
             // Update FPS
             if (status.fps !== undefined) {
                 safeUpdateElement('fps', `${status.fps} FPS`);
+                safeUpdateElement('quick-fps', status.fps);
             }
             
             // Update exposure stats
@@ -3259,6 +3608,11 @@
                 safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
                 safeUpdateElement('laser-fire-count', status.laser.fire_count);
                 
+                // Update quick status panel
+                safeUpdateElement('quick-laser-status', status.laser.enabled ? 'ON' : 'OFF');
+                safeUpdateElement('quick-laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
+                safeUpdateElement('quick-fire-count', status.laser.fire_count);
+                
                 // Update cooldown remaining
                 if (status.laser.cooldown_remaining > 0) {
                     safeUpdateElement('laser-cooldown-remaining', status.laser.cooldown_remaining.toFixed(1) + 's');
@@ -3272,9 +3626,12 @@
                 }
                 safeUpdateElement('laser-hardware-status', status.laser.hardware_available ? 'Connected' : 'Simulation');
                 
-                // Update checkboxes
+                // Update checkboxes (both detailed and quick)
                 const laserEnabledEl = document.getElementById('laser-enabled');
                 if (laserEnabledEl) laserEnabledEl.checked = status.laser.enabled;
+                
+                const quickLaserEl = document.getElementById('quick-laser-enabled');
+                if (quickLaserEl) quickLaserEl.checked = status.laser.enabled;
                 
                 const autoFireEl = document.getElementById('auto-fire-enabled');
                 if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
@@ -3283,11 +3640,20 @@
                 // They are only updated on page load and when user clicks Apply
                 // This prevents sliders from reverting while user is adjusting them
                 
-                // Update fire button state
+                // Update fire button state (both detailed and quick)
                 const fireButton = document.getElementById('fire-button');
                 if (fireButton) {
                     fireButton.disabled = !status.laser.ready_to_fire || !status.laser.enabled;
                 }
+                
+                const quickFireButton = document.getElementById('quick-fire-button');
+                if (quickFireButton) {
+                    quickFireButton.disabled = !status.laser.ready_to_fire || !status.laser.enabled;
+                }
+                
+                // Update auto-fire checkbox
+                const quickAutoFireEl = document.getElementById('quick-auto-fire');
+                if (quickAutoFireEl) quickAutoFireEl.checked = status.laser.auto_fire;
             }
             
             // Update object detection status
@@ -3303,6 +3669,11 @@
                 safeUpdateElement('object-count', objCount);
                 safeUpdateElement('object-detection-mode', objMode ? objMode.toUpperCase() : 'N/A');
                 safeUpdateElement('detection-method-display', objMethod ? objMethod.toUpperCase() : 'N/A');
+                
+                // Update quick panel
+                safeUpdateElement('quick-object-count', objCount);
+                const quickObjectEl = document.getElementById('quick-object-detection');
+                if (quickObjectEl) quickObjectEl.checked = objEnabled;
             }
             
             // Update motion detection status
@@ -3350,6 +3721,23 @@
                 
                 safeUpdateElement('camera-system-status', 'Available');
                 safeUpdateElement('camera-enabled-status', status.tracking.camera_enabled ? 'Yes' : 'No');
+                
+                // Update quick panel tracking status
+                const cameraEnabled = status.tracking && status.tracking.camera_enabled;
+                const trackingMode = status.tracking && status.tracking.mode;
+                safeUpdateElement('quick-tracking-mode', cameraEnabled ? 'ON' : 'OFF');
+                
+                // Show/hide movement overlay based on camera tracking mode
+                const movementOverlay = document.getElementById('movement-overlay');
+                if (movementOverlay && trackingMode === 'camera' && cameraEnabled) {
+                    movementOverlay.style.display = 'block';
+                } else if (movementOverlay) {
+                    movementOverlay.style.display = 'none';
+                }
+                
+                // Sync quick toggle
+                const quickCameraEl = document.getElementById('quick-camera-tracking');
+                if (quickCameraEl) quickCameraEl.checked = cameraEnabled;
                 
                 // Update re-center on loss toggle
                 const recenterEl = document.getElementById('camera-recenter-on-loss');
