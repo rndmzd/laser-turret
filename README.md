@@ -1,6 +1,6 @@
 # Laser Turret
 
-![degen_lasagna_cat](https://github.com/user-attachments/assets/4eabc75e-5558-4488-a523-21823b2d4faa)
+![degen_lasagna_cat](media/degen_lasagna_cat.gif)
 
 A Raspberry Pi-powered laser turret with remote control, camera streaming, and precision stepper motor control.
 
