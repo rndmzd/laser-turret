@@ -1331,11 +1331,9 @@
     <script>
         const CAMERA_WIDTH = 1920;
         const CAMERA_HEIGHT = 1080;
-        let laserEditing = false;
-        let lastLaserEditTs = 0;
         let crosshairCalibrationMode = false;
 
-        // Editing guards to avoid UI snapping back during polling
+        // Editing guards to avoid UI snapping back during WebSocket updates
         const EDIT_IDLE_MS = 1500;
         let tfliteEditing = false;
         let tfliteLastEditTs = 0;
@@ -1775,37 +1773,26 @@
         function updatePulseDurationValue() {
             const value = document.getElementById('pulse-duration').value;
             document.getElementById('pulse-duration-value').textContent = value + 'ms';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
-            console.log('🔧 Laser editing - pulse duration changed:', value);
         }
 
         function updateBurstCountValue() {
             const value = document.getElementById('burst-count').value;
             document.getElementById('burst-count-value').textContent = value;
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateBurstDelayValue() {
             const value = document.getElementById('burst-delay').value;
             document.getElementById('burst-delay-value').textContent = value + 'ms';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateLaserCooldownValue() {
             const value = parseFloat(document.getElementById('laser-cooldown').value).toFixed(1);
             document.getElementById('laser-cooldown-value').textContent = value + 's';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function updateLaserPowerValue() {
             const value = parseInt(document.getElementById('laser-power').value);
             document.getElementById('laser-power-value').textContent = value + '%';
-            lastLaserEditTs = Date.now();
-            laserEditing = true;
         }
 
         function applyLaserSettings() {
@@ -1830,7 +1817,6 @@
             .then(data => {
                 if (data.status === 'success') {
                     showStatus('laser-status-message', true, `Laser settings applied (Power: ${data.power}%)`);
-                    laserEditing = false;
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
@@ -1870,36 +1856,8 @@
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
 
-                        const now = Date.now();
-                        const allowSliderSync = !laserEditing || (now - lastLaserEditTs > EDIT_IDLE_MS);
-                        if (allowSliderSync) {
-                            const pd = document.getElementById('pulse-duration');
-                            const bc = document.getElementById('burst-count');
-                            const bd = document.getElementById('burst-delay');
-                            const lcd = document.getElementById('laser-cooldown');
-                            const lp = document.getElementById('laser-power');
-
-                            pd.value = data.pulse_duration * 1000;
-                            bc.value = data.burst_count;
-                            bd.value = data.burst_delay * 1000;
-                            lcd.value = data.cooldown;
-                            if (data.power !== undefined) {
-                                lp.value = data.power;
-                            }
-
-                            // Update labels without toggling editing
-                            const pdv = document.getElementById('pulse-duration-value');
-                            const bcv = document.getElementById('burst-count-value');
-                            const bdv = document.getElementById('burst-delay-value');
-                            const lcdv = document.getElementById('laser-cooldown-value');
-                            const lpv = document.getElementById('laser-power-value');
-                            if (pdv) pdv.textContent = pd.value + 'ms';
-                            if (bcv) bcv.textContent = bc.value;
-                            if (bdv) bdv.textContent = bd.value + 'ms';
-                            if (lcdv) lcdv.textContent = parseFloat(lcd.value).toFixed(1) + 's';
-                            if (lpv) lpv.textContent = parseInt(lp.value) + '%';
-                        }
-                        
+                        // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
+                        // They are only synced on page load via syncLaserSliders()
                         
                         // Update fire button state
                         document.getElementById('fire-button').disabled = !data.ready_to_fire || !data.enabled;
@@ -2702,6 +2660,29 @@
                 })
                 .catch(error => console.error('Error fetching motion status:', error));
         }
+        
+        function syncLaserSliders() {
+            // Sync laser sliders with server state (called on page load only)
+            fetch('/laser/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('pulse-duration').value = data.pulse_duration * 1000;
+                        document.getElementById('burst-count').value = data.burst_count;
+                        document.getElementById('burst-delay').value = data.burst_delay * 1000;
+                        document.getElementById('laser-cooldown').value = data.cooldown;
+                        if (data.power !== undefined) {
+                            document.getElementById('laser-power').value = data.power;
+                        }
+                        updatePulseDurationValue();
+                        updateBurstCountValue();
+                        updateBurstDelayValue();
+                        updateLaserCooldownValue();
+                        updateLaserPowerValue();
+                    }
+                })
+                .catch(error => console.error('Error syncing laser sliders:', error));
+        }
 
         // Update crosshair position display
         function updateCrosshairPosition() {
@@ -3298,36 +3279,9 @@
                 const autoFireEl = document.getElementById('auto-fire-enabled');
                 if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
                 
-                // Update sliders with edit protection
-                const now = Date.now();
-                const allowSliderSync = !laserEditing || (now - lastLaserEditTs > EDIT_IDLE_MS);
-                const timeSinceEdit = now - lastLaserEditTs;
-                
-                if (allowSliderSync) {
-                    console.log(`⚡ WebSocket syncing laser sliders (editing=${laserEditing}, idle=${timeSinceEdit}ms)`);
-                    const pdEl = document.getElementById('pulse-duration');
-                    const bcEl = document.getElementById('burst-count');
-                    const bdEl = document.getElementById('burst-delay');
-                    const lcdEl = document.getElementById('laser-cooldown');
-                    const lpEl = document.getElementById('laser-power');
-                    
-                    if (pdEl) pdEl.value = status.laser.pulse_duration * 1000;
-                    if (bcEl) bcEl.value = status.laser.burst_count;
-                    if (bdEl) bdEl.value = status.laser.burst_delay * 1000;
-                    if (lcdEl) lcdEl.value = status.laser.cooldown;
-                    if (lpEl && status.laser.power !== undefined) lpEl.value = status.laser.power;
-                    
-                    // Update slider labels
-                    safeUpdateElement('pulse-duration-value', (status.laser.pulse_duration * 1000) + 'ms');
-                    safeUpdateElement('burst-count-value', status.laser.burst_count);
-                    safeUpdateElement('burst-delay-value', (status.laser.burst_delay * 1000) + 'ms');
-                    safeUpdateElement('laser-cooldown-value', parseFloat(status.laser.cooldown).toFixed(1) + 's');
-                    if (status.laser.power !== undefined) {
-                        safeUpdateElement('laser-power-value', parseInt(status.laser.power) + '%');
-                    }
-                } else {
-                    console.log(`🛡️ WebSocket blocked laser sync (editing=${laserEditing}, idle=${timeSinceEdit}ms)`);
-                }
+                // NOTE: Laser sliders are NOT synced from WebSocket (like motion detection)
+                // They are only updated on page load and when user clicks Apply
+                // This prevents sliders from reverting while user is adjusting them
                 
                 // Update fire button state
                 const fireButton = document.getElementById('fire-button');
@@ -3485,8 +3439,9 @@
         // Load presets on page load
         loadPresetList();
         
-        // Sync motion sliders on page load
+        // Sync sliders on page load (not from WebSocket)
         syncMotionSliders();
+        syncLaserSliders();
 
         // Initialize camera step delay display
         updateCameraStepDelayValue();
