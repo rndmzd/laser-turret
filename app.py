@@ -1,5 +1,19 @@
 from flask import Flask, Response, render_template, jsonify, request
 from flask_socketio import SocketIO
+
+async_mode = 'threading'
+try:
+    import eventlet
+
+    eventlet.monkey_patch()
+    async_mode = 'eventlet'
+except ImportError:
+    eventlet = None
+    print(
+        "Warning: eventlet not installed; Socket.IO will run in threading mode "
+        "without native WebSocket support."
+    )
+
 from picamera2 import Picamera2
 from picamera2.controls import Controls
 from libcamera import ColorSpace, Transform
@@ -33,7 +47,7 @@ except Exception:
     print("Warning: Roboflow inference client not available. Install with: pip install inference-sdk")
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 
 # Global variables
 output_frame = None

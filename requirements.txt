@@ -1,5 +1,6 @@
 Flask>=2.3.0
 Flask-SocketIO>=5.3.5
+eventlet>=0.33.0
 # Pin NumPy <2.0 for compatibility with Raspberry Pi's simplejpeg/picamera2
 numpy<2.0
 opencv-python>=4.8.0
