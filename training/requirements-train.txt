@@ -1,9 +1,0 @@
-# Training dependencies (install on a development machine, not on the Pi)
-# TensorFlow (CPU)
-tensorflow>=2.12.0
-# TFLite Model Maker (object detection)
-tflite-model-maker>=0.4.2
-# Data & annotation utilities
-lxml>=4.9.0
-pillow>=9.0.0
-pandas>=1.5.0

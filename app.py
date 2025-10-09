@@ -34,6 +34,8 @@ except Exception:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'laser-turret-secret-key-change-in-production'
+if app.config.get('SECRET_KEY') == 'laser-turret-secret-key-change-in-production':
+    print("WARNING: Using default Flask SECRET_KEY; set a unique SECRET_KEY in production.")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Global variables
@@ -408,6 +410,19 @@ def move_camera_to_absolute_position(abs_x, abs_y, background=False):
     except Exception as e:
         print(f"Error moving camera to preset position: {e}")
         return False
+
+
+def halt_stepper_motion(reason: str = ""):
+    """Stop ongoing stepper controller motion immediately."""
+    global stepper_controller
+    if stepper_controller is None:
+        return
+    try:
+        stepper_controller.stop_motion()
+        if reason:
+            print(f"Stepper motion halted: {reason}")
+    except Exception as exc:
+        print(f"Warning: failed to halt stepper motion ({reason}): {exc}")
 
 def initialize_tflite_detector():
     """Initialize TensorFlow Lite detector from config"""
@@ -1390,12 +1405,17 @@ def toggle_motion_detection():
 @app.route('/motion_detection/auto_track', methods=['POST'])
 def toggle_auto_track():
     """Toggle auto-tracking on/off"""
-    global motion_auto_track
+    global motion_auto_track, motion_smooth_center
     
     try:
         data = request.get_json()
         with motion_lock:
-            motion_auto_track = bool(data.get('enabled', not motion_auto_track))
+            new_state = bool(data.get('enabled', not motion_auto_track))
+            motion_auto_track = new_state
+            if not motion_auto_track:
+                motion_smooth_center = None
+        if not motion_auto_track:
+            halt_stepper_motion("motion auto-track disabled")
         
         return jsonify({
             'status': 'success',
@@ -1462,12 +1482,17 @@ def toggle_object_detection():
 @app.route('/object_detection/auto_track', methods=['POST'])
 def toggle_object_auto_track():
     """Toggle object auto-tracking on/off"""
-    global object_auto_track
+    global object_auto_track, object_track_smooth_center
     
     try:
         data = request.get_json()
         with object_lock:
-            object_auto_track = bool(data.get('enabled', not object_auto_track))
+            new_state = bool(data.get('enabled', not object_auto_track))
+            object_auto_track = new_state
+            if not object_auto_track:
+                object_track_smooth_center = None
+        if not object_auto_track:
+            halt_stepper_motion("object auto-track disabled")
         
         return jsonify({
             'status': 'success',
@@ -1533,9 +1558,18 @@ def object_detection_status():
             }
         })
 
+@app.route('/detection_method/config')
+def detection_method_config():
+    try:
+        config = get_config()
+        method = config.get_detection_method()
+        return jsonify({'status': 'success', 'method': method})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/detection_method/switch', methods=['POST'])
 def switch_detection_method():
-    """Switch between Haar Cascades and TensorFlow Lite"""
+    """Switch between Haar Cascades, TensorFlow Lite, and Roboflow"""
     global detection_method, tflite_detector
     
     try:
