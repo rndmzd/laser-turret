@@ -3,10 +3,10 @@
 
 [GPIO]
 # Limit switch GPIO pins (BCM numbering)
-x_ccw_limit_pin = 21
-x_cw_limit_pin = 18
-y_ccw_limit_pin = 4
-y_cw_limit_pin = 20
+x_ccw_limit_pin = 20
+x_cw_limit_pin = 21
+y_ccw_limit_pin = 18
+y_cw_limit_pin = 4
 
 [MQTT]
 # MQTT broker configuration for remote control
