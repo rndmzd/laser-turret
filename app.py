@@ -411,6 +411,19 @@ def move_camera_to_absolute_position(abs_x, abs_y, background=False):
         print(f"Error moving camera to preset position: {e}")
         return False
 
+
+def halt_stepper_motion(reason: str = ""):
+    """Stop ongoing stepper controller motion immediately."""
+    global stepper_controller
+    if stepper_controller is None:
+        return
+    try:
+        stepper_controller.stop_motion()
+        if reason:
+            print(f"Stepper motion halted: {reason}")
+    except Exception as exc:
+        print(f"Warning: failed to halt stepper motion ({reason}): {exc}")
+
 def initialize_tflite_detector():
     """Initialize TensorFlow Lite detector from config"""
     global tflite_detector, tflite_filter_classes, detection_method
@@ -1392,12 +1405,17 @@ def toggle_motion_detection():
 @app.route('/motion_detection/auto_track', methods=['POST'])
 def toggle_auto_track():
     """Toggle auto-tracking on/off"""
-    global motion_auto_track
+    global motion_auto_track, motion_smooth_center
     
     try:
         data = request.get_json()
         with motion_lock:
-            motion_auto_track = bool(data.get('enabled', not motion_auto_track))
+            new_state = bool(data.get('enabled', not motion_auto_track))
+            motion_auto_track = new_state
+            if not motion_auto_track:
+                motion_smooth_center = None
+        if not motion_auto_track:
+            halt_stepper_motion("motion auto-track disabled")
         
         return jsonify({
             'status': 'success',
@@ -1464,12 +1482,17 @@ def toggle_object_detection():
 @app.route('/object_detection/auto_track', methods=['POST'])
 def toggle_object_auto_track():
     """Toggle object auto-tracking on/off"""
-    global object_auto_track
+    global object_auto_track, object_track_smooth_center
     
     try:
         data = request.get_json()
         with object_lock:
-            object_auto_track = bool(data.get('enabled', not object_auto_track))
+            new_state = bool(data.get('enabled', not object_auto_track))
+            object_auto_track = new_state
+            if not object_auto_track:
+                object_track_smooth_center = None
+        if not object_auto_track:
+            halt_stepper_motion("object auto-track disabled")
         
         return jsonify({
             'status': 'success',
