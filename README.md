@@ -6,13 +6,13 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 
 ## Features
 
-- **Remote Control** - Wireless joystick control via MQTT (CircuitPython transmitter)
-- **Video Streaming** - Real-time camera feed with crosshair overlay and telemetry
-- **Precision Control** - A4988 stepper motor drivers with limit switches and calibration
-- **PWM Laser Control** - Variable power laser with safety features
-- **Web Interface** - Flask-based UI for camera viewing and control
-- **Camera Tracking (Stepper Motors)** - Hardware camera movement with PID tuning
-- **Flexible Detection** - Haar cascades, TensorFlow Lite, or Roboflow Inference (remote)
+- **Modern Control Panel** – Flask + Socket.IO dashboard with overlay toolbars, tabbed controls, and live telemetry for motors, optics, and detection states.
+- **Advanced Targeting** – Crosshair steering or physical camera tracking with PID tuning, preset slots, repeating patterns, and automatic re-centering.
+- **Object & Motion Detection** – Switch between Haar cascades, TensorFlow Lite (auto model download), Roboflow Inference, or balloon detection heuristics; optionally auto-track or auto-fire.
+- **Precision Motion Hardware** – Dual stepper axes, microstepping configuration, limit switch safety, and idle watchdog to disable motors when inactive.
+- **Laser Safety & Effects** – PWM power control, burst fire, cooldown enforcement, and remote enable/disable toggles.
+- **Recording & Capture** – Start/stop MP4 recordings and snapshot captures directly from the UI while streaming in real time.
+- **Remote & Local Control** – MQTT joystick transmitter, REST/Socket endpoints, and mock hardware mode for development without a Raspberry Pi.
 
 ## Hardware Requirements
 
@@ -81,15 +81,14 @@ If you want to run detection via a Roboflow Inference Server (remote or local):
 2. From the repository root, start the server:
 
 ```bash
-cd inference_server
-docker compose up -d
+docker compose -f compose.inference_server.yaml up -d
 ```
 
 Defaults:
 
 - Server will listen on port 9001
-- GPU image is configured in `inference_server/compose.yaml`
-- Cache path is mounted at `${USERPROFILE}/.inference/cache` on Windows
+- Compose file mounts `${HOME}/.inference/cache` (Linux/macOS) or `${USERPROFILE}/.inference/cache` (Windows) for model caching
+- Set your Roboflow API key and model in `laserturret.conf`
 
 Then set `detection_method = roboflow` and configure the Roboflow fields in `laserturret.conf` (see Configuration below).
 
@@ -121,6 +120,17 @@ steps_per_rev = 200
 laser_pin = 12
 laser_max_power = 100
 ```
+
+#### Optional: Develop Without Hardware
+
+Need to explore the UI or test logic on your laptop? The hardware abstraction layer automatically falls back to mock GPIO/camera backends when Raspberry Pi libraries are unavailable. You can also exercise the mocks directly:
+
+```bash
+# Exercise the abstraction layer directly
+python scripts/test_with_mock_hardware.py
+```
+
+Mock mode disables real GPIO access, simulates laser power state, and feeds synthetic camera frames so you can test workflows safely.
 
 ### On Remote Control (CircuitPython)
 
@@ -232,12 +242,14 @@ Hold the joystick button during power-on to enter calibration mode. Follow the L
 
 ### Web Interface Features
 
-- **Live video stream** with FPS counter
-- **Crosshair overlay** - Click to reposition
-- **Exposure stats** - Real-time camera telemetry
-- **Responsive design** - Works on mobile devices
-- **Camera tracking controls** - Enable camera movement, home to center, manual nudge
-- **PID tuning** - Adjust Kp, Ki, Kd at runtime and persist to calibration
+- **Overlay Toolbars** – Toggle movement/object/laser panels directly on the video feed, adjust manual step size, and fire the laser without leaving the stream.
+- **Tabbed Control Center** – Status, tracking, laser, presets, motion, object detection, exposure, image tuning, and capture tools grouped into dedicated tabs.
+- **Crosshair Calibration** – Enable per-session offsets, save/reset calibration, and instantly center the reticle.
+- **Camera Tracking Console** – Switch between crosshair and motor tracking, tune PID gains, set steps-per-pixel, dead zones, and enable re-center-on-loss.
+- **Presets & Patterns** – Store up to 10 labeled preset angles, recall them instantly, and run looping sequences with adjustable delays.
+- **Motion/Object Dashboards** – Configure motion sensitivity/area, toggle auto-track, change detection models, update confidence thresholds, and review recent detections.
+- **Laser Safety Controls** – Enable/disable the laser system, configure burst count, pulse duration, cooldowns, and toggle auto-fire with readiness indicators.
+- **Capture & Recording** – Start/stop MP4 recordings, download snapshots, and monitor elapsed recording time live.
 
 ## MQTT Message Format
 
@@ -257,6 +269,8 @@ Example: `50,-30,false,true,75`
 
 ## Configuration
 
+For a full list of configuration keys, defaults, and validation rules, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
 ### Motor Settings
 
 - **steps_per_rev**: Steps per revolution (typically 200 for 1.8° motors)
@@ -274,6 +288,7 @@ max_steps_per_update = 50
 deadzone = 5
 speed_scaling = 0.10
 step_delay = 0.0005
+idle_timeout_sec = 120.0
 ```
 
 ### Detection Settings
@@ -363,6 +378,16 @@ python3 calib_test.py          # Test calibration
 - `measure_ranges.py` - Measure joystick calibration ranges
 - `i2c_scan.py` - Scan for I2C devices
 
+See [scripts/README.md](scripts/README.md) for detailed walkthroughs, usage examples, and additional utilities such as mock hardware demos and benchmarking tools.
+
+## Additional Documentation
+
+- [docs/CAMERA_TRACKING_QUICKSTART.md](docs/CAMERA_TRACKING_QUICKSTART.md) – Enable and tune stepper-based camera tracking in minutes.
+- [docs/CAMERA_TRACKING.md](docs/CAMERA_TRACKING.md) – Deep-dive into calibration, PID tuning, and troubleshooting.
+- [docs/TENSORFLOW_QUICKSTART.md](docs/TENSORFLOW_QUICKSTART.md) – Switch to TensorFlow Lite and benchmark detection performance.
+- [docs/RASPBERRY_PI_5.md](docs/RASPBERRY_PI_5.md) – Understand GPIO backend selection across Pi generations.
+- [docs/WEBSOCKET_MIGRATION.md](docs/WEBSOCKET_MIGRATION.md) – Review the Socket.IO architecture powering the live UI.
+
 ### Code Structure
 
 ```
@@ -370,12 +395,14 @@ laser-turret/
 ├── app.py                          # Flask web server
 ├── remote_control_rx.py            # MQTT receiver (runs on Pi)
 ├── remote_control_tx.py            # MQTT transmitter (CircuitPython)
-├── inference_server/
-│   └── compose.yaml                # Roboflow Inference Server (Docker Compose)
+├── compose.inference_server.yaml   # Roboflow Inference Server (Docker Compose)
 ├── laserturret/
+│   ├── config_manager.py           # Validated configuration loader with defaults
+│   ├── hardware_interface.py       # GPIO/camera abstraction (lgpio, RPi.GPIO, mocks)
 │   ├── lasercontrol.py             # Laser PWM control
 │   ├── steppercontrol.py           # Low-level stepper motor implementation
 │   ├── stepper_controller.py       # Camera tracking controller (used by app)
+│   ├── tflite_detector.py          # TensorFlow Lite object detection wrapper
 │   ├── roboflow_detector.py        # Roboflow HTTP client wrapper
 │   └── motion/                     # Standardized motion API
 │       ├── axis.py                 # StepperAxis alias + constants
