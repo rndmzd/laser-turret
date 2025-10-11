@@ -451,15 +451,14 @@ class MockGPIO(GPIOInterface):
     def output(self, pin: int, value: int) -> None:
         if pin not in self.pins:
             self.setup(pin, PinMode.OUTPUT)
-        # Store the actual value, not just 0 or 1 (in case value is already 0 or 1)
-        self.pins[pin]['value'] = int(value)
-        print(f"MockGPIO: output(pin={pin}, value={value}) -> stored as {self.pins[pin]['value']}", flush=True)
+        self.pins[pin]['value'] = 1 if value else 0
+        logger.debug(f"MockGPIO: Set pin {pin} to {self.pins[pin]['value']}")
     
     def input(self, pin: int) -> int:
         if pin not in self.pins:
             self.setup(pin, PinMode.INPUT)
         value = self.pins[pin]['value']
-        print(f"MockGPIO: input(pin={pin}) -> {value}", flush=True)
+        logger.debug(f"MockGPIO: Read pin {pin} = {value}")
         return value
     
     def add_event_detect(
