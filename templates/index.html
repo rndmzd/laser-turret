@@ -3181,6 +3181,7 @@
             if (status.laser) {
                 syncLaserOverlay(status.laser);
                 safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
+                safeUpdateElement('laser-mock-mode', status.laser.mock_fire_mode ? 'ON (Visual Only)' : 'OFF');
                 safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
                 safeUpdateElement('laser-fire-count', status.laser.fire_count);
                 
@@ -3204,12 +3205,15 @@
                 const autoFireEl = document.getElementById('auto-fire-enabled');
                 if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
                 
+                const mockFireEl = document.getElementById('mock-fire-enabled');
+                if (mockFireEl) mockFireEl.checked = status.laser.mock_fire_mode || false;
+                
                 // NOTE: Laser sliders are NOT synced from WebSocket (like motion detection)
                 // They are only updated on page load and when user clicks Apply
                 // This prevents sliders from reverting while user is adjusting them
                 
                 // Update fire button state
-                const fireReady = status.laser.ready_to_fire && status.laser.enabled;
+                const fireReady = status.laser.ready_to_fire && (status.laser.enabled || status.laser.mock_fire_mode);
                 document.querySelectorAll('[data-fire-control]').forEach(btn => {
                     btn.disabled = !fireReady;
                 });

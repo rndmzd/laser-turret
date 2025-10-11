@@ -2597,6 +2597,7 @@ def get_consolidated_status():
         status['laser'] = {
             'enabled': laser_enabled,
             'auto_fire': laser_auto_fire,
+            'mock_fire_mode': laser_mock_fire_mode,
             'pulse_duration': laser_pulse_duration,
             'burst_count': laser_burst_count,
             'burst_delay': laser_burst_delay,
