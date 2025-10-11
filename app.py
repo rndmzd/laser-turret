@@ -920,7 +920,7 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
     crosshair_color = color
     with laser_lock:
         if mock_fire_active and laser_mock_fire_mode:
-            crosshair_color = (0, 165, 255)  # Orange/red color for firing
+            crosshair_color = (0, 0, 255)  # Red color for firing
     
     # Draw crosshair
     line_length = 40
@@ -932,19 +932,10 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
              crosshair_color, thickness)
     cv2.circle(overlay, (center_x, center_y), 6, crosshair_color, thickness)
     
-    # Draw fire indicator icon when mock firing
+    # Draw red circle around crosshair when mock firing
     with laser_lock:
         if mock_fire_active and laser_mock_fire_mode:
-            # Draw a pulsing fire indicator icon near crosshair
-            icon_offset_y = -70
-            icon_center_x = center_x
-            icon_center_y = center_y + icon_offset_y
-            
-            # Draw a filled circle with "FIRE" text
-            cv2.circle(overlay, (icon_center_x, icon_center_y), 35, (0, 165, 255), -1)
-            cv2.circle(overlay, (icon_center_x, icon_center_y), 35, (0, 100, 255), 3)
-            cv2.putText(overlay, "FIRE", (icon_center_x - 30, icon_center_y + 8),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2, cv2.LINE_AA)
+            cv2.circle(overlay, (center_x, center_y), 50, (0, 0, 255), 3)
     
     # Add stats overlay
     with fps_lock:
