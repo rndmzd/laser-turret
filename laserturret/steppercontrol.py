@@ -232,7 +232,8 @@ class StepperMotor:
             
             self.state.direction = direction
             try:
-                self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
+                # TMC2209 DIR pin levels are inverted relative to the previous driver
+                self.gpio.output(self.dir_pin, 0 if direction == CLOCKWISE else 1)
             except Exception as e:
                 logger.debug(f"[{self.name}] Failed to set direction (GPIO may be cleaned up): {e}")
                 raise
