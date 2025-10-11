@@ -2204,9 +2204,9 @@ def toggle_camera_tracking():
     global camera_tracking_enabled
     
     try:
-        logger.info(f"=== /tracking/camera/toggle endpoint called ===")
+        print(f"=== /tracking/camera/toggle endpoint called ===", flush=True)
         if stepper_controller is None:
-            logger.warning("Stepper controller not available")
+            print("Stepper controller not available", flush=True)
             return jsonify({
                 'status': 'error',
                 'message': 'Stepper controller not available'
@@ -2214,11 +2214,11 @@ def toggle_camera_tracking():
         
         data = request.get_json()
         enabled = bool(data.get('enabled', not camera_tracking_enabled))
-        logger.info(f"Toggle request: enabled={enabled}, current_tracking_mode={tracking_mode}")
+        print(f"Toggle request: enabled={enabled}, current_tracking_mode={tracking_mode}", flush=True)
         
         with tracking_mode_lock:
             if tracking_mode != 'camera':
-                logger.warning(f"Cannot toggle - not in camera mode (current: {tracking_mode})")
+                print(f"Cannot toggle - not in camera mode (current: {tracking_mode})", flush=True)
                 return jsonify({
                     'status': 'error',
                     'message': 'Must be in camera tracking mode first'
@@ -2226,7 +2226,7 @@ def toggle_camera_tracking():
             
             # Check calibration requirement before enabling
             if enabled and not stepper_controller.is_calibrated():
-                logger.warning("Cannot enable - calibration required")
+                print("Cannot enable - calibration required", flush=True)
                 return jsonify({
                     'status': 'error',
                     'message': 'Calibration required before enabling camera movement. Please run Auto-Calibrate first.'
@@ -2235,19 +2235,21 @@ def toggle_camera_tracking():
             camera_tracking_enabled = enabled
             
             if enabled:
-                logger.info("Calling stepper_controller.enable()")
+                print("Calling stepper_controller.enable()", flush=True)
                 stepper_controller.enable()
             else:
-                logger.info("Calling stepper_controller.disable()")
+                print("Calling stepper_controller.disable()", flush=True)
                 stepper_controller.disable()
         
-        logger.info(f"Toggle successful: camera_tracking_enabled={camera_tracking_enabled}")
+        print(f"Toggle successful: camera_tracking_enabled={camera_tracking_enabled}", flush=True)
         return jsonify({
             'status': 'success',
             'enabled': camera_tracking_enabled
         })
     except Exception as e:
-        logger.error(f"Error in toggle_camera_tracking: {e}", exc_info=True)
+        print(f"Error in toggle_camera_tracking: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/tracking/camera/home', methods=['POST'])
