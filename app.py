@@ -943,7 +943,7 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
             cv2.circle(overlay, (icon_center_x, icon_center_y), 35, (0, 165, 255), -1)
             cv2.circle(overlay, (icon_center_x, icon_center_y), 35, (0, 100, 255), 3)
             cv2.putText(overlay, "FIRE", (icon_center_x - 30, icon_center_y + 8),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2, cv2.LINE_AA)
     
     # Add stats overlay
     with fps_lock:
