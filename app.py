@@ -11,11 +11,15 @@ from collections import deque
 from datetime import datetime
 import os
 import json
+import logging
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
 from laserturret.motion import CameraTracker as StepperController
 from laserturret.lasercontrol import LaserControl
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Try to import TFLite detector
 try:
