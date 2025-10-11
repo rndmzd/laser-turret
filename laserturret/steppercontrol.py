@@ -381,7 +381,9 @@ class StepperMotor:
                 # Calculate delay and move one step
                 delay = self._calculate_step_delay(command)
                 if delay:
-                    self.enable()
+                    # Only enable if not suspended
+                    if not self.suspended and not self.enabled:
+                        self.enable()
                     self.step(1, delay)
 
             except Exception as e:

@@ -245,16 +245,20 @@ class StepperController:
             invalidate_calibration: If True, mark calibration as invalid.
                                    Set to False for temporary disable (e.g., idle timeout).
         """
+        logger.debug(f"disable() called: setting enable pins HIGH (x_enable_pin={self.x_enable_pin}, y_enable_pin={self.y_enable_pin})")
         self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 disables
         self.gpio.output(self.y_enable_pin, 1)
         self.enabled = False
+        logger.debug(f"Enable pins set, enabled={self.enabled}, suspending axes")
         try:
             if getattr(self, 'axis_x', None):
                 self.axis_x.set_suspended(True)
+                logger.debug(f"axis_x suspended={self.axis_x.suspended}, enabled={self.axis_x.enabled}")
             if getattr(self, 'axis_y', None):
                 self.axis_y.set_suspended(True)
-        except Exception:
-            pass
+                logger.debug(f"axis_y suspended={self.axis_y.suspended}, enabled={self.axis_y.enabled}")
+        except Exception as e:
+            logger.error(f"Error suspending axes: {e}")
         if invalidate_calibration and self.calibration.is_calibrated:
             self.calibration.is_calibrated = False
             self.calibration.calibration_timestamp = None
@@ -1141,19 +1145,26 @@ class StepperController:
         Watchdog thread that automatically disables motors after idle timeout.
         Invalidates calibration to ensure motors are re-calibrated after cooling.
         """
+        logger.info(f"Idle watchdog started. Timeout: {self.idle_timeout}s")
         while not self._idle_stop.is_set():
             try:
                 if self.enabled and self.idle_timeout and self.idle_timeout > 0:
                     if self._active_moves == 0:
-                        if (time.time() - self._last_activity) >= self.idle_timeout:
+                        idle_time = time.time() - self._last_activity
+                        if idle_time >= self.idle_timeout:
                             try:
                                 # Disable motors and invalidate calibration
+                                logger.info(f"Idle timeout reached ({idle_time:.1f}s >= {self.idle_timeout}s), disabling motors")
                                 self.disable(invalidate_calibration=True)
                                 logger.info(f"Motors auto-disabled after {self.idle_timeout:.0f}s idle timeout (calibration invalidated)")
                             except Exception as e:
                                 logger.error(f"Error in idle watchdog: {e}")
                             time.sleep(0.1)
                             continue
+                        elif idle_time > self.idle_timeout * 0.9:
+                            # Log when approaching timeout (90%)
+                            logger.debug(f"Approaching idle timeout: {idle_time:.1f}s / {self.idle_timeout}s")
                 time.sleep(0.05)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Exception in idle watchdog loop: {e}")
                 time.sleep(0.1)
