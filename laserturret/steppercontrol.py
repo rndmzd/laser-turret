@@ -194,10 +194,10 @@ class StepperMotor:
             return False
 
     def enable(self) -> None:
-        """Enable the motor driver (active LOW)"""
+        """Enable the motor driver (TMC2209: ACTIVE HIGH)"""
         try:
-            print(f"[{self.name}] enable() setting pin {self.enable_pin} to 0 via gpio={id(self.gpio)}", flush=True)
-            self.gpio.output(self.enable_pin, 0)
+            print(f"[{self.name}] enable() setting pin {self.enable_pin} to 1 (TMC2209) via gpio={id(self.gpio)}", flush=True)
+            self.gpio.output(self.enable_pin, 1)  # TMC2209: HIGH enables
             self.enabled = True
             # Read back to verify
             readback = self.gpio.input(self.enable_pin)
@@ -206,10 +206,10 @@ class StepperMotor:
             print(f"[{self.name}] Failed to enable motor: {e}", flush=True)
 
     def disable(self) -> None:
-        """Disable the motor driver"""
+        """Disable the motor driver (TMC2209: LOW disables)"""
         try:
-            print(f"[{self.name}] disable() setting pin {self.enable_pin} to 1 via gpio={id(self.gpio)}", flush=True)
-            self.gpio.output(self.enable_pin, 1)
+            print(f"[{self.name}] disable() setting pin {self.enable_pin} to 0 (TMC2209) via gpio={id(self.gpio)}", flush=True)
+            self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables
             self.enabled = False
             # Read back to verify
             readback = self.gpio.input(self.enable_pin)

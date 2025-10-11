@@ -228,10 +228,10 @@ class StepperController:
             logger.error(f"Invalid microstepping value: {microsteps}")
     
     def enable(self):
-        """Enable stepper motors"""
-        logger.info(f"enable() called: Setting enable pins LOW (x={self.x_enable_pin}, y={self.y_enable_pin})")
-        self.gpio.output(self.x_enable_pin, 0)  # Active low - 0 enables
-        self.gpio.output(self.y_enable_pin, 0)
+        """Enable stepper motors (TMC2209: enable is ACTIVE HIGH)"""
+        print(f"enable() called: Setting enable pins HIGH for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
+        self.gpio.output(self.x_enable_pin, 1)  # TMC2209: HIGH enables
+        self.gpio.output(self.y_enable_pin, 1)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
@@ -257,15 +257,15 @@ class StepperController:
             invalidate_calibration: If True, mark calibration as invalid.
                                    Set to False for temporary disable (e.g., idle timeout).
         """
-        print(f"disable() called: Setting enable pins HIGH (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
-        self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 disables
-        self.gpio.output(self.y_enable_pin, 1)
-        print(f"GPIO outputs set to 1 (HIGH)", flush=True)
+        print(f"disable() called: Setting enable pins LOW for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
+        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: LOW disables
+        self.gpio.output(self.y_enable_pin, 0)
+        print(f"GPIO outputs set to 0 (LOW)", flush=True)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
             y_state = self.gpio.input(self.y_enable_pin)
-            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 1)", flush=True)
+            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0 for disabled)", flush=True)
         except Exception as e:
             print(f"Failed to read back pin states: {e}", flush=True)
         self.enabled = False
