@@ -125,6 +125,7 @@ laser_burst_count = 1  # Number of pulses in burst mode
 laser_burst_delay = 0.1  # Delay between burst pulses
 laser_cooldown = 0.5  # Minimum time between fire commands
 laser_auto_fire = False  # Auto-fire when object/motion detected
+auto_fire_distance_threshold = 50  # Max pixels between crosshair and target for auto-fire
 laser_power = 100  # Laser power level (0-100%)
 laser_mock_fire_mode = False  # Mock fire mode for visual testing
 mock_fire_active = False  # Current mock fire state
@@ -312,22 +313,25 @@ def fire_laser():
     try:
         # In mock fire mode, only show visual indicator without firing
         if laser_mock_fire_mode:
-            mock_fire_active = True
-            mock_fire_time = current_time
-            # Calculate total burst duration for visual feedback
-            total_duration = (laser_pulse_duration * laser_burst_count) + (laser_burst_delay * (laser_burst_count - 1))
-            print(f"🟡 MOCK FIRE! {laser_burst_count} pulse(s) - Power: {laser_power}% - Duration: {laser_pulse_duration}s each")
+            with laser_lock:
+                mock_fire_active = True
+                mock_fire_time = current_time
+                # Calculate total burst duration for visual feedback
+                total_duration = (laser_pulse_duration * laser_burst_count) + (laser_burst_delay * (laser_burst_count - 1))
+                print(f"🟡 MOCK FIRE! {laser_burst_count} pulse(s) - Power: {laser_power}% - Duration: {laser_pulse_duration}s each")
             
             # Schedule mock fire deactivation
             def deactivate_mock_fire():
                 global mock_fire_active
                 time.sleep(total_duration)
-                mock_fire_active = False
+                with laser_lock:
+                    mock_fire_active = False
             
             threading.Thread(target=deactivate_mock_fire, daemon=True).start()
             
-            fire_count += laser_burst_count
-            last_fire_time = current_time
+            with laser_lock:
+                fire_count += laser_burst_count
+                last_fire_time = current_time
             return True, f'Mock fired {laser_burst_count} pulse(s) at {laser_power}% power'
         
         # Real firing mode
@@ -342,20 +346,22 @@ def fire_laser():
                 print(f"🔴 LASER FIRE (SIM)! Pulse {pulse_num + 1}/{laser_burst_count} - Power: {laser_power}% - Duration: {laser_pulse_duration}s")
                 time.sleep(laser_pulse_duration)
             
-            fire_count += 1
+            with laser_lock:
+                fire_count += 1
             
             # Delay between burst pulses (except after last pulse)
             if pulse_num < laser_burst_count - 1:
                 time.sleep(laser_burst_delay)
         
-        last_fire_time = current_time
+        with laser_lock:
+            last_fire_time = current_time
         return True, f'Fired {laser_burst_count} pulse(s) at {laser_power}% power'
     
     except Exception as e:
         return False, str(e)
 
 def check_auto_fire():
-    """Check if auto-fire conditions are met"""
+    """Check if auto-fire conditions are met - only fire when crosshair is close to target"""
     if not laser_auto_fire:
         return False
     
@@ -363,15 +369,32 @@ def check_auto_fire():
     if not laser_enabled:
         return False
     
+    # Get crosshair position based on tracking mode
+    with tracking_mode_lock:
+        if tracking_mode == 'camera' and camera_tracking_enabled:
+            with crosshair_lock:
+                crosshair_x = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+                crosshair_y = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
+        else:
+            with crosshair_lock:
+                crosshair_x = crosshair_pos['x']
+                crosshair_y = crosshair_pos['y']
+    
     # Check if object is detected and auto-track is on
     with object_lock:
-        if object_auto_track and len(detected_objects) > 0:
-            return True
+        if object_auto_track and len(detected_objects) > 0 and object_track_smooth_center is not None:
+            target_x, target_y = object_track_smooth_center
+            distance = ((crosshair_x - target_x) ** 2 + (crosshair_y - target_y) ** 2) ** 0.5
+            if distance <= auto_fire_distance_threshold:
+                return True
     
     # Check if motion is detected and auto-track is on
     with motion_lock:
-        if motion_auto_track and last_motion_center is not None:
-            return True
+        if motion_auto_track and last_motion_center is not None and motion_smooth_center is not None:
+            target_x, target_y = motion_smooth_center
+            distance = ((crosshair_x - target_x) ** 2 + (crosshair_y - target_y) ** 2) ** 0.5
+            if distance <= auto_fire_distance_threshold:
+                return True
     
     return False
 
@@ -2004,7 +2027,7 @@ def toggle_auto_fire():
 @app.route('/laser/settings', methods=['POST'])
 def update_laser_settings():
     """Update laser fire settings"""
-    global laser_pulse_duration, laser_burst_count, laser_burst_delay, laser_cooldown, laser_power
+    global laser_pulse_duration, laser_burst_count, laser_burst_delay, laser_cooldown, laser_power, auto_fire_distance_threshold
     
     try:
         data = request.get_json()
@@ -2029,6 +2052,13 @@ def update_laser_settings():
                         laser_control.set_power(laser_power)
                 else:
                     return jsonify({'status': 'error', 'message': 'Power must be 0-100'}), 400
+            
+            if 'auto_fire_distance_threshold' in data:
+                threshold = int(data['auto_fire_distance_threshold'])
+                if threshold > 0:
+                    auto_fire_distance_threshold = threshold
+                else:
+                    return jsonify({'status': 'error', 'message': 'Distance threshold must be positive'}), 400
         
         return jsonify({
             'status': 'success',
@@ -2036,7 +2066,8 @@ def update_laser_settings():
             'burst_count': laser_burst_count,
             'burst_delay': laser_burst_delay,
             'cooldown': laser_cooldown,
-            'power': laser_power
+            'power': laser_power,
+            'auto_fire_distance_threshold': auto_fire_distance_threshold
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -2054,6 +2085,7 @@ def laser_status():
             'status': 'success',
             'enabled': laser_enabled,
             'auto_fire': laser_auto_fire,
+            'auto_fire_distance_threshold': auto_fire_distance_threshold,
             'mock_fire_mode': laser_mock_fire_mode,
             'pulse_duration': laser_pulse_duration,
             'burst_count': laser_burst_count,
