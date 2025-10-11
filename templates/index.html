@@ -573,6 +573,16 @@
                         </div>
 
                         <div class="select-control">
+                            <label>Target Priority</label>
+                            <select id="target-priority" onchange="applyObjectSettings()">
+                                <option value="largest">Largest Object</option>
+                                <option value="closest">Closest Object</option>
+                                <option value="leftmost">Leftmost Object</option>
+                                <option value="rightmost">Rightmost Object</option>
+                            </select>
+                        </div>
+
+                        <div class="select-control">
                             <label>🔬 Detection Method</label>
                             <select id="detection-method" onchange="switchDetectionMethod()">
                                 <option value="haar">Haar Cascades (Fast, Faces Only)</option>
@@ -717,19 +727,9 @@
                                 </small>
                             </div>
 
-                            <button onclick="applyRoboflowSettings()" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                            <button onclick="applyRoboflowSettings()" class="btn btn-primary">
                                 Apply Roboflow Settings
                             </button>
-                        </div>
-
-                        <div class="select-control">
-                            <label>Target Priority</label>
-                            <select id="target-priority" onchange="applyObjectSettings()">
-                                <option value="largest">Largest Object</option>
-                                <option value="closest">Closest Object</option>
-                                <option value="leftmost">Leftmost Object</option>
-                                <option value="rightmost">Rightmost Object</option>
-                            </select>
                         </div>
                     </div>
 
