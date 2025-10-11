@@ -225,8 +225,16 @@ class StepperController:
     
     def enable(self):
         """Enable stepper motors"""
-        self.gpio.output(self.x_enable_pin, 0)  # Active low
+        logger.info(f"enable() called: Setting enable pins LOW (x={self.x_enable_pin}, y={self.y_enable_pin})")
+        self.gpio.output(self.x_enable_pin, 0)  # Active low - 0 enables
         self.gpio.output(self.y_enable_pin, 0)
+        # Verify the pins were actually set
+        try:
+            x_state = self.gpio.input(self.x_enable_pin)
+            y_state = self.gpio.input(self.y_enable_pin)
+            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0)")
+        except:
+            pass
         self.enabled = True
         try:
             if getattr(self, 'axis_x', None):
@@ -245,11 +253,18 @@ class StepperController:
             invalidate_calibration: If True, mark calibration as invalid.
                                    Set to False for temporary disable (e.g., idle timeout).
         """
-        logger.debug(f"disable() called: setting enable pins HIGH (x_enable_pin={self.x_enable_pin}, y_enable_pin={self.y_enable_pin})")
+        logger.info(f"disable() called: Setting enable pins HIGH (x={self.x_enable_pin}, y={self.y_enable_pin})")
         self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 disables
         self.gpio.output(self.y_enable_pin, 1)
+        # Verify the pins were actually set
+        try:
+            x_state = self.gpio.input(self.x_enable_pin)
+            y_state = self.gpio.input(self.y_enable_pin)
+            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 1)")
+        except:
+            pass
         self.enabled = False
-        logger.debug(f"Enable pins set, enabled={self.enabled}, suspending axes")
+        logger.info(f"Controller enabled flag set to {self.enabled}, suspending axes")
         try:
             if getattr(self, 'axis_x', None):
                 self.axis_x.set_suspended(True)
