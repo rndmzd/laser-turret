@@ -15,9 +15,11 @@ def test_enable_pins():
     gpio = get_gpio_backend()
     config = get_config()
     
-    # Get enable pins from config
-    x_enable = config.get_gpio_pin('x_enable_pin')
-    y_enable = config.get_gpio_pin('y_enable_pin')
+    # Get enable pins from config (they're in Motor config, not GPIO)
+    x_cfg = config.get_motor_config('x')
+    y_cfg = config.get_motor_config('y')
+    x_enable = x_cfg['enable_pin']
+    y_enable = y_cfg['enable_pin']
     
     print(f"X Enable Pin: GPIO {x_enable}")
     print(f"Y Enable Pin: GPIO {y_enable}\n")
