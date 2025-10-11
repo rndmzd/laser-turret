@@ -445,6 +445,14 @@
                             </div>
                         </div>
 
+                        <div class="slider-control">
+                            <label>🎯 Auto-Fire Distance (pixels)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="auto-fire-distance" min="10" max="200" value="50" step="5" oninput="updateAutoFireDistanceValue()">
+                                <span id="auto-fire-distance-value" class="slider-value">50px</span>
+                            </div>
+                        </div>
+
                         <button class="btn-primary" onclick="applyLaserSettings()">Apply Fire Settings</button>
                     </div>
 
@@ -1503,12 +1511,18 @@
             document.getElementById('laser-power-value').textContent = value + '%';
         }
 
+        function updateAutoFireDistanceValue() {
+            const value = parseInt(document.getElementById('auto-fire-distance').value);
+            document.getElementById('auto-fire-distance-value').textContent = value + 'px';
+        }
+
         function applyLaserSettings() {
             const pulseDuration = parseFloat(document.getElementById('pulse-duration').value) / 1000;
             const burstCount = parseInt(document.getElementById('burst-count').value);
             const burstDelay = parseFloat(document.getElementById('burst-delay').value) / 1000;
             const cooldown = parseFloat(document.getElementById('laser-cooldown').value);
             const power = parseInt(document.getElementById('laser-power').value);
+            const autoFireDistance = parseInt(document.getElementById('auto-fire-distance').value);
             
             fetch('/laser/settings', {
                 method: 'POST',
@@ -1518,7 +1532,8 @@
                     burst_count: burstCount,
                     burst_delay: burstDelay,
                     cooldown: cooldown,
-                    power: power
+                    power: power,
+                    auto_fire_distance_threshold: autoFireDistance
                 })
             })
             .then(response => response.json())
@@ -2398,11 +2413,15 @@
                         if (data.power !== undefined) {
                             document.getElementById('laser-power').value = data.power;
                         }
+                        if (data.auto_fire_distance_threshold !== undefined) {
+                            document.getElementById('auto-fire-distance').value = data.auto_fire_distance_threshold;
+                        }
                         updatePulseDurationValue();
                         updateBurstCountValue();
                         updateBurstDelayValue();
                         updateLaserCooldownValue();
                         updateLaserPowerValue();
+                        updateAutoFireDistanceValue();
                     }
                 })
                 .catch(error => console.error('Error syncing laser sliders:', error));
