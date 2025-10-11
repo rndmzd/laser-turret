@@ -2515,6 +2515,8 @@ def set_home_position():
 @app.route('/tracking/camera/auto_calibrate', methods=['POST'])
 def auto_calibrate_camera():
     """Run automatic calibration sequence"""
+    global camera_tracking_enabled
+    
     try:
         if stepper_controller is None:
             return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
@@ -2524,6 +2526,8 @@ def auto_calibrate_camera():
         
         # Run calibration in background thread
         def calibrate():
+            global camera_tracking_enabled
+            
             # Enable motors for calibration if not already enabled
             if not stepper_controller.enabled:
                 print("Enabling motors for auto-calibration")
@@ -2532,8 +2536,15 @@ def auto_calibrate_camera():
             try:
                 result = stepper_controller.auto_calibrate()
                 print(f"Auto-calibration completed: {result}")
-                # Keep motors enabled after calibration to prevent drift
-                print("Motors remain enabled after calibration to maintain position")
+                
+                # Automatically enable camera tracking after successful calibration
+                if result.get('success'):
+                    with tracking_mode_lock:
+                        camera_tracking_enabled = True
+                        stepper_controller.enable()
+                    print("Camera movement automatically enabled after successful calibration")
+                else:
+                    print("Motors remain enabled after calibration to maintain position")
             except Exception as e:
                 print(f"Auto-calibration error: {e}")
                 # Keep motors enabled even on error to maintain position
