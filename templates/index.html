@@ -66,6 +66,7 @@
                         <div class="overlay-toggle-grid">
                             <button id="overlay-laser-enable" class="overlay-toggle-chip" onclick="toggleLaserFromOverlay()">Laser System</button>
                             <button id="overlay-auto-fire" class="overlay-toggle-chip" onclick="toggleAutoFireFromOverlay()">Auto Fire</button>
+                            <button id="overlay-mock-fire" class="overlay-toggle-chip" onclick="toggleMockFireFromOverlay()">Mock Fire</button>
                         </div>
                         <div class="overlay-status-grid">
                             <div>
@@ -388,6 +389,14 @@
                             <span class="toggle-label">Auto-Fire on Detection</span>
                         </div>
 
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="mock-fire-enabled" onchange="toggleMockFire()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Mock Fire Mode (Visual Only)</span>
+                        </div>
+
                         <button id="fire-button" class="btn-success" data-fire-control onclick="fireLaser(this)" style="font-size: 16px; padding: 15px;">
                             🔴 FIRE LASER
                         </button>
@@ -444,6 +453,10 @@
                         <div class="stat-row">
                             <span class="stat-label">System Status</span>
                             <span id="laser-system-status" class="stat-value">OFF</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Mock Fire Mode</span>
+                            <span id="laser-mock-mode" class="stat-value">OFF</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Ready to Fire</span>
@@ -557,6 +570,16 @@
                                 <span class="slider"></span>
                             </label>
                             <span class="toggle-label">Auto-Track Objects</span>
+                        </div>
+
+                        <div class="select-control">
+                            <label>Target Priority</label>
+                            <select id="target-priority" onchange="applyObjectSettings()">
+                                <option value="largest">Largest Object</option>
+                                <option value="closest">Closest Object</option>
+                                <option value="leftmost">Leftmost Object</option>
+                                <option value="rightmost">Rightmost Object</option>
+                            </select>
                         </div>
 
                         <div class="select-control">
@@ -704,19 +727,9 @@
                                 </small>
                             </div>
 
-                            <button onclick="applyRoboflowSettings()" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                            <button onclick="applyRoboflowSettings()" class="btn btn-primary">
                                 Apply Roboflow Settings
                             </button>
-                        </div>
-
-                        <div class="select-control">
-                            <label>Target Priority</label>
-                            <select id="target-priority" onchange="applyObjectSettings()">
-                                <option value="largest">Largest Object</option>
-                                <option value="closest">Closest Object</option>
-                                <option value="leftmost">Leftmost Object</option>
-                                <option value="rightmost">Rightmost Object</option>
-                            </select>
                         </div>
                     </div>
 
@@ -1401,6 +1414,7 @@
                 if (data.status === 'success') {
                     showStatus('laser-status-message', true, 
                         enabled ? 'Auto-fire enabled' : 'Auto-fire disabled');
+                    updateLaserStatus();
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
@@ -1408,6 +1422,29 @@
             .catch(error => {
                 showStatus('laser-status-message', false, 'Failed to toggle auto-fire');
                 console.error('Error toggling auto-fire:', error);
+            });
+        }
+
+        function toggleMockFire() {
+            const enabled = document.getElementById('mock-fire-enabled').checked;
+            fetch('/laser/mock_fire', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, 
+                        enabled ? 'Mock fire mode enabled - Visual feedback only' : 'Mock fire mode disabled');
+                    updateLaserStatus();
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to toggle mock fire');
+                console.error('Error toggling mock fire:', error);
             });
         }
 
@@ -1505,6 +1542,8 @@
                     if (data.status === 'success') {
                         document.getElementById('laser-system-status').textContent =
                             data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('laser-mock-mode').textContent =
+                            data.mock_fire_mode ? 'ON (Visual Only)' : 'OFF';
                         document.getElementById('laser-ready').textContent =
                             data.ready_to_fire ? 'Yes' : 'No';
                         document.getElementById('laser-fire-count').textContent = 
@@ -1526,6 +1565,7 @@
                         
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
+                        document.getElementById('mock-fire-enabled').checked = data.mock_fire_mode || false;
 
                         // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
                         // They are only synced on page load via syncLaserSliders()
@@ -2725,6 +2765,13 @@
             toggleAutoFire();
         }
 
+        function toggleMockFireFromOverlay() {
+            const checkbox = document.getElementById('mock-fire-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleMockFire();
+        }
+
         function toggleObjectDetectionFromOverlay() {
             const checkbox = document.getElementById('object-enabled');
             if (!checkbox) return;
@@ -2746,6 +2793,7 @@
             const cooldownEl = document.getElementById('overlay-laser-cooldown');
             const enableBtn = document.getElementById('overlay-laser-enable');
             const autoBtn = document.getElementById('overlay-auto-fire');
+            const mockBtn = document.getElementById('overlay-mock-fire');
 
             if (systemEl) systemEl.textContent = status.enabled ? 'ON' : 'OFF';
             const fireReady = status.ready_to_fire && status.enabled;
@@ -2760,6 +2808,7 @@
             }
             if (enableBtn) enableBtn.classList.toggle('active', !!status.enabled);
             if (autoBtn) autoBtn.classList.toggle('active', !!status.auto_fire);
+            if (mockBtn) mockBtn.classList.toggle('active', !!status.mock_fire_mode);
         }
 
         function syncOverlayConfidenceFromMain() {
@@ -3132,6 +3181,7 @@
             if (status.laser) {
                 syncLaserOverlay(status.laser);
                 safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
+                safeUpdateElement('laser-mock-mode', status.laser.mock_fire_mode ? 'ON (Visual Only)' : 'OFF');
                 safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
                 safeUpdateElement('laser-fire-count', status.laser.fire_count);
                 
@@ -3154,6 +3204,9 @@
                 
                 const autoFireEl = document.getElementById('auto-fire-enabled');
                 if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
+                
+                const mockFireEl = document.getElementById('mock-fire-enabled');
+                if (mockFireEl) mockFireEl.checked = status.laser.mock_fire_mode || false;
                 
                 // NOTE: Laser sliders are NOT synced from WebSocket (like motion detection)
                 // They are only updated on page load and when user clicks Apply
