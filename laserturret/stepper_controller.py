@@ -414,7 +414,7 @@ class StepperController:
             self.calibration.y_position += direction_sign * moved_total
         self._active_moves -= 1
         self._mark_activity()
-        self.enable()
+        # Don't force enable here - respect user's enable/disable state
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
     
     def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
@@ -642,8 +642,7 @@ class StepperController:
         moved_x = 0
         moved_y = 0
         
-        # Enable both motors before starting
-        self.enable()
+        # Don't force enable - motors should already be enabled if needed
         
         for i in range(major):
             cur = compute_delay(i)
@@ -762,7 +761,7 @@ class StepperController:
             self.step('y', -cur_y)
         
         logger.info("Camera homed to center position")
-        self.enable()
+        # Don't force enable - respect user's enable/disable state
     
     def set_home_position(self):
         """
@@ -873,7 +872,7 @@ class StepperController:
                 
                 # Save calibration to file
                 self.save_calibration()
-                self.enable()
+                # Don't auto-enable after calibration - let user control enable state
                 
                 report('success', f'Calibration complete! Range: X=±{x_half_range}, Y=±{y_half_range}')
                 
