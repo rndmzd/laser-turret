@@ -140,8 +140,8 @@ class StepperMotor:
         self.gpio.output(self.ms_pins[1], ms2_val)
         self.gpio.output(self.ms_pins[2], ms3_val)
         
-        # Disable motor initially
-        self.gpio.output(self.enable_pin, 1)  # Active LOW
+        # Disable motor initially (TMC2209: LOW = disabled)
+        self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables
         
         # Setup limit switches with pull-ups (polling-based, not event-based)
         if cw_limit_switch_pin:

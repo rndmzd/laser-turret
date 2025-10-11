@@ -202,9 +202,9 @@ class StepperController:
         self.microsteps = microsteps
         self._set_microstepping(microsteps)
         
-        # Disable motors initially
-        self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 is disabled
-        self.gpio.output(self.y_enable_pin, 1)
+        # Disable motors initially (TMC2209: LOW = disabled)
+        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: 0 is disabled
+        self.gpio.output(self.y_enable_pin, 0)
         
         logger.debug("GPIO pins configured for stepper control")
     
