@@ -10,9 +10,11 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 - **Video Streaming** - Real-time camera feed with crosshair overlay and telemetry
 - **Precision Control** - A4988 stepper motor drivers with limit switches and calibration
 - **PWM Laser Control** - Variable power laser with safety features
-- **Web Interface** - Flask-based UI for camera viewing and control
+- **Web Interface** - Flask-based UI with WebSocket real-time updates
 - **Camera Tracking (Stepper Motors)** - Hardware camera movement with PID tuning
 - **Flexible Detection** - Haar cascades, TensorFlow Lite, or Roboflow Inference (remote)
+- **Motion Package API** - Standardized `laserturret.motion` module for stepper control
+- **Real-time PID Tuning** - Adjust tracking PID gains via UI or REST API
 
 ## Hardware Requirements
 
@@ -149,7 +151,7 @@ Copy `remote_control_tx.py` to your CircuitPython device as `code.py`
 
 ### Stepper Motor Connections (A4988)
 
-```
+```text
 Raspberry Pi          A4988 Driver
 GPIO 23 (X_STEP) --> STEP
 GPIO 19 (X_DIR)  --> DIR
@@ -165,7 +167,7 @@ GPIO 22 (MS3)    --> MS3
 
 ### Limit Switch Connections
 
-```
+```text
 Raspberry Pi          Limit Switch
 GPIO 18 ------------ X CW Limit (NO)
 GPIO 21 ------------ X CCW Limit (NO)
@@ -178,7 +180,7 @@ All limit switches use internal pull-up resistors and trigger on FALLING edge.
 
 ### Laser Connection
 
-```
+```text
 Raspberry Pi          MOSFET/Driver
 GPIO 12 (PWM) ------- Gate
 GND ----------------- Source
@@ -237,13 +239,14 @@ Hold the joystick button during power-on to enter calibration mode. Follow the L
 - **Exposure stats** - Real-time camera telemetry
 - **Responsive design** - Works on mobile devices
 - **Camera tracking controls** - Enable camera movement, home to center, manual nudge
-- **PID tuning** - Adjust Kp, Ki, Kd at runtime and persist to calibration
+- **PID tuning** - Adjust Kp, Ki, Kd gains at runtime via UI sliders or REST API
+- **WebSocket updates** - Real-time status push (2Hz) replaces HTTP polling
 
 ## MQTT Message Format
 
 Messages are sent to topic `laserturret` in CSV format:
 
-```
+```text
 x_axis,y_axis,joystick_button,laser_button,laser_power
 ```
 
@@ -254,6 +257,36 @@ Example: `50,-30,false,true,75`
 - Joystick button: not pressed
 - Laser button: pressed
 - Laser power: 75%
+
+## Motion Package API (Recommended)
+
+The project now provides a standardized motion API in `laserturret.motion` for cleaner imports:
+
+```python
+from laserturret.motion import StepperAxis, CameraTracker
+
+# StepperAxis is an alias of StepperMotor (backward compatible)
+# CameraTracker is an alias of StepperController (backward compatible)
+```
+
+**Benefits:**
+
+- Cleaner, more semantic imports
+- Future-proof API with backward compatibility
+- All motion-related classes in one package
+
+**Example Usage:**
+
+```python
+# Old imports (still work)
+from laserturret.steppercontrol import StepperMotor
+from laserturret.stepper_controller import StepperController
+
+# New imports (recommended)
+from laserturret.motion import StepperAxis, CameraTracker
+```
+
+See `laserturret/motion/__init__.py` for available exports including `MotorStatus`, `CLOCKWISE`, `COUNTER_CLOCKWISE`, and `MICROSTEP_CONFIG`.
 
 ## Configuration
 
@@ -297,7 +330,49 @@ roboflow_model_id =            # e.g. workspace/project/1
 roboflow_api_key =             # required for private/hosted models
 roboflow_confidence = 0.5
 roboflow_class_filter =        # e.g. balloon
+
+# Balloon detection (HSV + shape-based, used with Haar method)
+balloon_v_threshold = 60
+balloon_min_area = 2000
+balloon_circularity_min = 0.55
+balloon_fill_ratio_min = 0.5
+balloon_aspect_ratio_min = 0.6
+balloon_aspect_ratio_max = 1.6
 ```
+
+**Detection Method Comparison:**
+
+| Method | Speed | Accuracy | Hardware | Best For |
+|--------|-------|----------|----------|----------|
+| **Haar** | Fast | Low | CPU only | Simple shapes, faces |
+| **TFLite** | Medium | High | CPU/Coral | 80+ object classes |
+| **Roboflow** | Medium | Very High | Remote GPU | Custom trained models |
+
+### PID Tuning Settings
+
+Camera tracking uses PID control for smooth, responsive movement. Tune gains via:
+
+**Web UI:**
+
+- Navigate to "📹 Track" → "Camera Tracking" → "PID Tuning" section
+- Adjust sliders: Kp (0-2), Ki (0-1), Kd (0-2)
+- Click "Apply PID" to save to `camera_calibration.json`
+
+**REST API:**
+
+```bash
+curl -X POST http://localhost:5000/tracking/camera/pid \
+  -H "Content-Type: application/json" \
+  -d '{"kp": 0.8, "ki": 0.0, "kd": 0.2}'
+```
+
+**Recommended Starting Values:**
+
+- **Kp (Proportional):** 0.8 - Primary responsiveness
+- **Ki (Integral):** 0.0 - Keep low to avoid drift
+- **Kd (Derivative):** 0.2 - Damping to reduce overshoot
+
+Adjust based on mechanical setup, camera weight, and motor characteristics. See `docs/CAMERA_TRACKING.md` for detailed tuning guide.
 
 ## Safety
 
@@ -315,6 +390,101 @@ The software includes:
 - Limit switches to prevent mechanical damage
 - Configurable laser power limits
 - Emergency stop capability (Ctrl+C)
+
+## WebSocket Status Updates
+
+The control panel uses WebSocket (Socket.IO) for real-time status updates:
+
+**Before (HTTP Polling):**
+
+- ~10 HTTP requests/second
+- 500-1000ms latency
+- High overhead
+
+**After (WebSocket):**
+
+- Single persistent connection
+- <50ms latency
+- 90% less network traffic
+- 2Hz status push (500ms intervals)
+
+**Status includes:** FPS, exposure, crosshair position, laser state, object/motion detection, recording status, tracking position, and PID values.
+
+See `docs/WEBSOCKET_MIGRATION.md` for migration details and performance metrics.
+
+## REST API Reference
+
+The control panel exposes a comprehensive REST API for automation and integration:
+
+### Core Endpoints
+
+- `GET /` - Web UI
+- `GET /video_feed` - MJPEG video stream
+- `GET /get_fps` - Current FPS
+- `GET /exposure_stats` - Camera exposure statistics
+- `GET /get_camera_settings` - Current camera configuration
+
+### Camera Control
+
+- `POST /set_exposure` - Set exposure mode and parameters
+- `POST /set_image_params` - Brightness, contrast, saturation
+- `POST /set_white_balance` - White balance mode
+- `POST /capture_image` - Capture still image
+- `POST /start_recording` - Start video recording
+- `POST /stop_recording` - Stop video recording
+- `GET /recording_status` - Recording status
+
+### Crosshair Control
+
+- `GET /get_crosshair_position` - Position (relative coordinates)
+- `POST /update_crosshair` - Update position
+- `POST /reset_crosshair` - Reset to center
+- `GET /crosshair/calibration` - Get calibration offset
+- `POST /crosshair/calibration/set` - Set calibration offset
+- `POST /crosshair/calibration/reset` - Reset calibration
+
+### Tracking Control
+
+- `GET /tracking/mode` - Get current mode (crosshair/camera)
+- `POST /tracking/mode` - Set tracking mode
+- `GET /tracking/camera/status` - Camera tracking status
+- `POST /tracking/camera/toggle` - Enable/disable camera tracking
+- `POST /tracking/camera/home` - Home camera to center
+- `POST /tracking/camera/settings` - Update tracking settings
+- `GET /tracking/camera/pid` - Get PID values
+- `POST /tracking/camera/pid` - Set PID values (persisted)
+- `POST /tracking/camera/recenter_on_loss` - Re-center behavior
+
+### Object Detection
+
+- `GET /object_detection/status` - Detection status and settings
+- `POST /object_detection/toggle` - Enable/disable detection
+- `POST /object_detection/auto_track` - Enable/disable auto-tracking
+- `POST /object_detection/settings` - Update detection settings
+- `GET /detection_method/config` - Current detection method config
+- `POST /detection_method/switch` - Switch detection method
+- `POST /tflite/settings` - TensorFlow Lite settings
+- `POST /roboflow/settings` - Roboflow settings
+
+### Motion Detection
+
+- `GET /motion_detection/status` - Motion detection status
+- `POST /motion_detection/toggle` - Enable/disable motion detection
+- `POST /motion_detection/auto_track` - Enable/disable auto-tracking
+- `POST /motion_detection/settings` - Update sensitivity and thresholds
+
+### Laser Control
+
+- `GET /laser/status` - Laser state and power
+- `POST /laser/toggle` - Enable/disable laser
+- `POST /laser/power` - Set laser power (0-100%)
+- `POST /laser/auto_fire` - Enable/disable auto-fire
+
+**WebSocket Event:**
+
+- `status_update` - Consolidated status (emitted at 2Hz)
+
+For detailed API usage examples, see `docs/CAMERA_TRACKING.md` and `docs/WEBSOCKET_MIGRATION.md`.
 
 ## Troubleshooting
 
@@ -345,6 +515,21 @@ The software includes:
 - Verify GPIO pins in config
 - Check pull-up resistors are enabled
 - Run calibration in debug mode
+- Use `scripts/test_limit_switches.py` for diagnostics
+
+### WebSocket Connection Issues
+
+- Check browser console (F12) for connection errors
+- Verify Flask-SocketIO installed: `pip show flask-socketio`
+- Firewall must allow port 5000
+- Look for "✅ WebSocket connected" in browser console
+
+### Roboflow Inference Server Not Responding
+
+- Verify Docker container running: `docker ps`
+- Check server logs: `docker logs inference_server`
+- Ensure `roboflow_server_url` in config matches container port
+- Test connection: `curl http://localhost:9001/`
 
 ## Development
 
@@ -365,9 +550,9 @@ python3 calib_test.py          # Test calibration
 
 ### Code Structure
 
-```
+```text
 laser-turret/
-├── app.py                          # Flask web server
+├── app.py                          # Flask web server with WebSocket support
 ├── remote_control_rx.py            # MQTT receiver (runs on Pi)
 ├── remote_control_tx.py            # MQTT transmitter (CircuitPython)
 ├── inference_server/
@@ -377,12 +562,18 @@ laser-turret/
 │   ├── steppercontrol.py           # Low-level stepper motor implementation
 │   ├── stepper_controller.py       # Camera tracking controller (used by app)
 │   ├── roboflow_detector.py        # Roboflow HTTP client wrapper
-│   └── motion/                     # Standardized motion API
-│       ├── axis.py                 # StepperAxis alias + constants
-│       ├── tracker.py              # CameraTracker alias of StepperController
-│       └── constants.py
+│   ├── tflite_detector.py          # TensorFlow Lite object detection
+│   ├── hardware_interface.py       # GPIO abstraction (lgpio/RPi.GPIO)
+│   ├── config_manager.py           # Configuration file management
+│   └── motion/                     # Standardized motion API (recommended)
+│       ├── __init__.py             # StepperAxis, CameraTracker exports
+│       ├── axis.py                 # StepperAxis (alias of StepperMotor)
+│       ├── tracker.py              # CameraTracker (alias of StepperController)
+│       └── constants.py            # Microstepping and direction constants
 ├── templates/
-│   └── index.html                  # Web UI
+│   └── index.html                  # Web UI with Socket.IO integration
+├── static/
+│   └── style.css                   # UI styling
 └── scripts/                        # Test and utility scripts
 ```
 
