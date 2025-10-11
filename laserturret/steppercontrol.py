@@ -196,18 +196,26 @@ class StepperMotor:
     def enable(self) -> None:
         """Enable the motor driver (active LOW)"""
         try:
+            print(f"[{self.name}] enable() setting pin {self.enable_pin} to 0 via gpio={id(self.gpio)}", flush=True)
             self.gpio.output(self.enable_pin, 0)
             self.enabled = True
+            # Read back to verify
+            readback = self.gpio.input(self.enable_pin)
+            print(f"[{self.name}] enable() readback: pin {self.enable_pin} = {readback}", flush=True)
         except Exception as e:
-            logger.debug(f"[{self.name}] Failed to enable motor (GPIO may be cleaned up): {e}")
+            print(f"[{self.name}] Failed to enable motor: {e}", flush=True)
 
     def disable(self) -> None:
         """Disable the motor driver"""
         try:
+            print(f"[{self.name}] disable() setting pin {self.enable_pin} to 1 via gpio={id(self.gpio)}", flush=True)
             self.gpio.output(self.enable_pin, 1)
             self.enabled = False
+            # Read back to verify
+            readback = self.gpio.input(self.enable_pin)
+            print(f"[{self.name}] disable() readback: pin {self.enable_pin} = {readback}", flush=True)
         except Exception as e:
-            logger.debug(f"[{self.name}] Failed to disable motor (GPIO may be cleaned up): {e}")
+            print(f"[{self.name}] Failed to disable motor: {e}", flush=True)
 
     def set_suspended(self, suspended: bool) -> None:
         self.suspended = suspended
