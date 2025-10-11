@@ -253,34 +253,35 @@ class StepperController:
             invalidate_calibration: If True, mark calibration as invalid.
                                    Set to False for temporary disable (e.g., idle timeout).
         """
-        logger.info(f"disable() called: Setting enable pins HIGH (x={self.x_enable_pin}, y={self.y_enable_pin})")
+        print(f"disable() called: Setting enable pins HIGH (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
         self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 disables
         self.gpio.output(self.y_enable_pin, 1)
+        print(f"GPIO outputs set to 1 (HIGH)", flush=True)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
             y_state = self.gpio.input(self.y_enable_pin)
-            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 1)")
-        except:
-            pass
+            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 1)", flush=True)
+        except Exception as e:
+            print(f"Failed to read back pin states: {e}", flush=True)
         self.enabled = False
-        logger.info(f"Controller enabled flag set to {self.enabled}, suspending axes")
+        print(f"Controller enabled flag set to {self.enabled}, suspending axes", flush=True)
         try:
             if getattr(self, 'axis_x', None):
                 self.axis_x.set_suspended(True)
-                logger.debug(f"axis_x suspended={self.axis_x.suspended}, enabled={self.axis_x.enabled}")
+                print(f"axis_x suspended={self.axis_x.suspended}, enabled={self.axis_x.enabled}", flush=True)
             if getattr(self, 'axis_y', None):
                 self.axis_y.set_suspended(True)
-                logger.debug(f"axis_y suspended={self.axis_y.suspended}, enabled={self.axis_y.enabled}")
+                print(f"axis_y suspended={self.axis_y.suspended}, enabled={self.axis_y.enabled}", flush=True)
         except Exception as e:
-            logger.error(f"Error suspending axes: {e}")
+            print(f"Error suspending axes: {e}", flush=True)
         if invalidate_calibration and self.calibration.is_calibrated:
             self.calibration.is_calibrated = False
             self.calibration.calibration_timestamp = None
             self.save_calibration()
-            logger.info("Stepper motors disabled (calibration invalidated)")
+            print("Stepper motors disabled (calibration invalidated)", flush=True)
         else:
-            logger.info("Stepper motors disabled (calibration preserved)")
+            print("Stepper motors disabled (calibration preserved)", flush=True)
     
     def check_limit_switch(self, axis: str, direction: int) -> bool:
         """
