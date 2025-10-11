@@ -1570,7 +1570,7 @@
                         // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
                         // They are only synced on page load via syncLaserSliders()
 
-                        const fireReady = data.ready_to_fire && (data.enabled || data.mock_fire_mode);
+                        const fireReady = data.ready_to_fire && data.enabled;
                         document.querySelectorAll('[data-fire-control]').forEach(btn => {
                             btn.disabled = !fireReady;
                         });
@@ -2796,7 +2796,7 @@
             const mockBtn = document.getElementById('overlay-mock-fire');
 
             if (systemEl) systemEl.textContent = status.enabled ? 'ON' : 'OFF';
-            const fireReady = status.ready_to_fire && (status.enabled || status.mock_fire_mode);
+            const fireReady = status.ready_to_fire && status.enabled;
             if (readyEl) readyEl.textContent = fireReady ? 'Yes' : 'No';
             if (powerEl && status.power !== undefined) powerEl.textContent = `${status.power}%`;
             if (cooldownEl) {
@@ -3213,7 +3213,7 @@
                 // This prevents sliders from reverting while user is adjusting them
                 
                 // Update fire button state
-                const fireReady = status.laser.ready_to_fire && (status.laser.enabled || status.laser.mock_fire_mode);
+                const fireReady = status.laser.ready_to_fire && status.laser.enabled;
                 document.querySelectorAll('[data-fire-control]').forEach(btn => {
                     btn.disabled = !fireReady;
                 });

@@ -301,8 +301,9 @@ def fire_laser():
     if last_fire_time and (current_time - last_fire_time) < laser_cooldown:
         return False, 'Laser cooling down'
     
-    if not laser_enabled and not laser_mock_fire_mode:
-        return False, 'Laser disabled'
+    # Laser system must be enabled for both real and mock fire
+    if not laser_enabled:
+        return False, 'Laser system disabled'
     
     try:
         # In mock fire mode, only show visual indicator without firing
@@ -354,8 +355,8 @@ def check_auto_fire():
     if not laser_auto_fire:
         return False
     
-    # Auto-fire works with both real laser and mock fire mode
-    if not laser_enabled and not laser_mock_fire_mode:
+    # Auto-fire requires laser system to be enabled (works with both real and mock fire mode)
+    if not laser_enabled:
         return False
     
     # Check if object is detected and auto-track is on
