@@ -237,9 +237,15 @@ class StepperController:
             pass
         logger.info("Stepper motors enabled")
     
-    def disable(self):
-        """Disable stepper motors"""
-        self.gpio.output(self.x_enable_pin, 1)
+    def disable(self, invalidate_calibration: bool = True):
+        """
+        Disable stepper motors (release torque).
+        
+        Args:
+            invalidate_calibration: If True, mark calibration as invalid.
+                                   Set to False for temporary disable (e.g., idle timeout).
+        """
+        self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 disables
         self.gpio.output(self.y_enable_pin, 1)
         self.enabled = False
         try:
@@ -249,11 +255,13 @@ class StepperController:
                 self.axis_y.set_suspended(True)
         except Exception:
             pass
-        if self.calibration.is_calibrated:
+        if invalidate_calibration and self.calibration.is_calibrated:
             self.calibration.is_calibrated = False
             self.calibration.calibration_timestamp = None
             self.save_calibration()
-        logger.info("Stepper motors disabled")
+            logger.info("Stepper motors disabled (calibration invalidated)")
+        else:
+            logger.info("Stepper motors disabled (calibration preserved)")
     
     def check_limit_switch(self, axis: str, direction: int) -> bool:
         """
@@ -1129,15 +1137,21 @@ class StepperController:
         self._last_activity = time.time()
 
     def _idle_watchdog(self) -> None:
+        """
+        Watchdog thread that automatically disables motors after idle timeout.
+        Invalidates calibration to ensure motors are re-calibrated after cooling.
+        """
         while not self._idle_stop.is_set():
             try:
                 if self.enabled and self.idle_timeout and self.idle_timeout > 0:
                     if self._active_moves == 0:
                         if (time.time() - self._last_activity) >= self.idle_timeout:
                             try:
-                                self.disable()
-                            except Exception:
-                                pass
+                                # Disable motors and invalidate calibration
+                                self.disable(invalidate_calibration=True)
+                                logger.info(f"Motors auto-disabled after {self.idle_timeout:.0f}s idle timeout (calibration invalidated)")
+                            except Exception as e:
+                                logger.error(f"Error in idle watchdog: {e}")
                             time.sleep(0.1)
                             continue
                 time.sleep(0.05)

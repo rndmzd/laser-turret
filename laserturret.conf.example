@@ -46,7 +46,11 @@ speed_scaling = 0.10
 
 # Delay between steps in seconds (lower = faster, but may skip steps)
 step_delay = 0.0005
-idle_timeout_sec = 120.0
+
+# Idle timeout in seconds before motors auto-disable to cool down (invalidates calibration)
+# Motors must be re-calibrated after disable. Set to 0 to disable auto-timeout.
+# Default: 600 seconds (10 minutes)
+idle_timeout_sec = 600.0
 
 [Laser]
 # Laser control pin (BCM numbering)
