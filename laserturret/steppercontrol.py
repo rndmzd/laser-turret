@@ -140,8 +140,8 @@ class StepperMotor:
         self.gpio.output(self.ms_pins[1], ms2_val)
         self.gpio.output(self.ms_pins[2], ms3_val)
         
-        # Disable motor initially
-        self.gpio.output(self.enable_pin, 1)  # Active LOW
+        # Disable motor initially (TMC2209: LOW = disabled)
+        self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables
         
         # Setup limit switches with pull-ups (polling-based, not event-based)
         if cw_limit_switch_pin:
@@ -194,20 +194,28 @@ class StepperMotor:
             return False
 
     def enable(self) -> None:
-        """Enable the motor driver (active LOW)"""
+        """Enable the motor driver (TMC2209: ACTIVE HIGH)"""
         try:
-            self.gpio.output(self.enable_pin, 0)
+            print(f"[{self.name}] enable() setting pin {self.enable_pin} to 1 (TMC2209) via gpio={id(self.gpio)}", flush=True)
+            self.gpio.output(self.enable_pin, 1)  # TMC2209: HIGH enables
             self.enabled = True
+            # Read back to verify
+            readback = self.gpio.input(self.enable_pin)
+            print(f"[{self.name}] enable() readback: pin {self.enable_pin} = {readback}", flush=True)
         except Exception as e:
-            logger.debug(f"[{self.name}] Failed to enable motor (GPIO may be cleaned up): {e}")
+            print(f"[{self.name}] Failed to enable motor: {e}", flush=True)
 
     def disable(self) -> None:
-        """Disable the motor driver"""
+        """Disable the motor driver (TMC2209: LOW disables)"""
         try:
-            self.gpio.output(self.enable_pin, 1)
+            print(f"[{self.name}] disable() setting pin {self.enable_pin} to 0 (TMC2209) via gpio={id(self.gpio)}", flush=True)
+            self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables
             self.enabled = False
+            # Read back to verify
+            readback = self.gpio.input(self.enable_pin)
+            print(f"[{self.name}] disable() readback: pin {self.enable_pin} = {readback}", flush=True)
         except Exception as e:
-            logger.debug(f"[{self.name}] Failed to disable motor (GPIO may be cleaned up): {e}")
+            print(f"[{self.name}] Failed to disable motor: {e}", flush=True)
 
     def set_suspended(self, suspended: bool) -> None:
         self.suspended = suspended
@@ -232,7 +240,8 @@ class StepperMotor:
             
             self.state.direction = direction
             try:
-                self.gpio.output(self.dir_pin, 1 if direction == CLOCKWISE else 0)
+                # TMC2209 DIR pin levels are inverted relative to the previous driver
+                self.gpio.output(self.dir_pin, 0 if direction == CLOCKWISE else 1)
             except Exception as e:
                 logger.debug(f"[{self.name}] Failed to set direction (GPIO may be cleaned up): {e}")
                 raise
@@ -257,6 +266,7 @@ class StepperMotor:
         
         try:
             if self.suspended:
+                logger.debug(f"[{self.name}] step() called but motor is suspended, returning")
                 return 0
             # Check initial limit state by polling
             if self._check_limit_switch(self.state.direction):
@@ -264,10 +274,13 @@ class StepperMotor:
                     f"Cannot move {self.state.direction}, limit switch is pressed"
                 )
             
-            if not self.suspended:
+            # Don't enable if suspended - respect controller's disable state
+            if not self.suspended and not self.enabled:
+                print(f"[{self.name}] step() enabling motor for movement (suspended={self.suspended})", flush=True)
                 self.enable()
-            else:
-                return 0
+            elif self.suspended:
+                print(f"[{self.name}] step() skipping enable - motor is suspended", flush=True)
+                return 0  # Don't move if suspended
             self.state.status = MotorStatus.MOVING
             
             for _ in range(steps):
@@ -381,7 +394,9 @@ class StepperMotor:
                 # Calculate delay and move one step
                 delay = self._calculate_step_delay(command)
                 if delay:
-                    self.enable()
+                    # Only enable if not suspended
+                    if not self.suspended and not self.enabled:
+                        self.enable()
                     self.step(1, delay)
 
             except Exception as e:

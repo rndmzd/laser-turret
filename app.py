@@ -11,11 +11,15 @@ from collections import deque
 from datetime import datetime
 import os
 import json
+import logging
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
 from laserturret.motion import CameraTracker as StepperController
 from laserturret.lasercontrol import LaserControl
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Try to import TFLite detector
 try:
@@ -2200,7 +2204,9 @@ def toggle_camera_tracking():
     global camera_tracking_enabled
     
     try:
+        print(f"=== /tracking/camera/toggle endpoint called ===", flush=True)
         if stepper_controller is None:
+            print("Stepper controller not available", flush=True)
             return jsonify({
                 'status': 'error',
                 'message': 'Stepper controller not available'
@@ -2208,9 +2214,11 @@ def toggle_camera_tracking():
         
         data = request.get_json()
         enabled = bool(data.get('enabled', not camera_tracking_enabled))
+        print(f"Toggle request: enabled={enabled}, current_tracking_mode={tracking_mode}", flush=True)
         
         with tracking_mode_lock:
             if tracking_mode != 'camera':
+                print(f"Cannot toggle - not in camera mode (current: {tracking_mode})", flush=True)
                 return jsonify({
                     'status': 'error',
                     'message': 'Must be in camera tracking mode first'
@@ -2218,6 +2226,7 @@ def toggle_camera_tracking():
             
             # Check calibration requirement before enabling
             if enabled and not stepper_controller.is_calibrated():
+                print("Cannot enable - calibration required", flush=True)
                 return jsonify({
                     'status': 'error',
                     'message': 'Calibration required before enabling camera movement. Please run Auto-Calibrate first.'
@@ -2226,15 +2235,21 @@ def toggle_camera_tracking():
             camera_tracking_enabled = enabled
             
             if enabled:
+                print("Calling stepper_controller.enable()", flush=True)
                 stepper_controller.enable()
             else:
+                print("Calling stepper_controller.disable()", flush=True)
                 stepper_controller.disable()
         
+        print(f"Toggle successful: camera_tracking_enabled={camera_tracking_enabled}", flush=True)
         return jsonify({
             'status': 'success',
             'enabled': camera_tracking_enabled
         })
     except Exception as e:
+        print(f"Error in toggle_camera_tracking: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/tracking/camera/home', methods=['POST'])
@@ -2500,6 +2515,8 @@ def set_home_position():
 @app.route('/tracking/camera/auto_calibrate', methods=['POST'])
 def auto_calibrate_camera():
     """Run automatic calibration sequence"""
+    global camera_tracking_enabled
+    
     try:
         if stepper_controller is None:
             return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
@@ -2509,6 +2526,8 @@ def auto_calibrate_camera():
         
         # Run calibration in background thread
         def calibrate():
+            global camera_tracking_enabled
+            
             # Enable motors for calibration if not already enabled
             if not stepper_controller.enabled:
                 print("Enabling motors for auto-calibration")
@@ -2517,8 +2536,15 @@ def auto_calibrate_camera():
             try:
                 result = stepper_controller.auto_calibrate()
                 print(f"Auto-calibration completed: {result}")
-                # Keep motors enabled after calibration to prevent drift
-                print("Motors remain enabled after calibration to maintain position")
+                
+                # Automatically enable camera tracking after successful calibration
+                if result.get('success'):
+                    with tracking_mode_lock:
+                        camera_tracking_enabled = True
+                        stepper_controller.enable()
+                    print("Camera movement automatically enabled after successful calibration")
+                else:
+                    print("Motors remain enabled after calibration to maintain position")
             except Exception as e:
                 print(f"Auto-calibration error: {e}")
                 # Keep motors enabled even on error to maintain position

@@ -93,10 +93,12 @@ class StepperController:
             self.has_limit_switches = False
             logger.warning("Limit switches not configured - using software limits only")
         
-        # Axis drivers
+        # Axis drivers - IMPORTANT: Pass the shared GPIO backend instance
+        # so all components control the same physical pins
         try:
             x_cfg = self.config.get_motor_config('x')
             y_cfg = self.config.get_motor_config('y')
+            print(f"Creating axis_x with gpio_backend={self.gpio}, enable_pin={x_cfg['enable_pin']}", flush=True)
             self.axis_x = StepperAxis(
                 step_pin=x_cfg['step_pin'],
                 dir_pin=x_cfg['dir_pin'],
@@ -113,8 +115,9 @@ class StepperController:
                 name='AxisX',
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
-                gpio_backend=self.gpio,
+                gpio_backend=self.gpio,  # Share the same GPIO backend!
             )
+            print(f"Creating axis_y with gpio_backend={self.gpio}, enable_pin={y_cfg['enable_pin']}", flush=True)
             self.axis_y = StepperAxis(
                 step_pin=y_cfg['step_pin'],
                 dir_pin=y_cfg['dir_pin'],
@@ -131,8 +134,9 @@ class StepperController:
                 name='AxisY',
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
-                gpio_backend=self.gpio,
+                gpio_backend=self.gpio,  # Share the same GPIO backend!
             )
+            print(f"Axes created: axis_x.gpio={id(self.axis_x.gpio)}, axis_y.gpio={id(self.axis_y.gpio)}, controller.gpio={id(self.gpio)}", flush=True)
         except Exception as _:
             self.axis_x = None
             self.axis_y = None
@@ -198,9 +202,9 @@ class StepperController:
         self.microsteps = microsteps
         self._set_microstepping(microsteps)
         
-        # Disable motors initially
-        self.gpio.output(self.x_enable_pin, 1)  # Active low - 1 is disabled
-        self.gpio.output(self.y_enable_pin, 1)
+        # Disable motors initially (TMC2209: LOW = disabled)
+        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: 0 is disabled
+        self.gpio.output(self.y_enable_pin, 0)
         
         logger.debug("GPIO pins configured for stepper control")
     
@@ -224,9 +228,17 @@ class StepperController:
             logger.error(f"Invalid microstepping value: {microsteps}")
     
     def enable(self):
-        """Enable stepper motors"""
-        self.gpio.output(self.x_enable_pin, 0)  # Active low
-        self.gpio.output(self.y_enable_pin, 0)
+        """Enable stepper motors (TMC2209: enable is ACTIVE HIGH)"""
+        print(f"enable() called: Setting enable pins HIGH for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
+        self.gpio.output(self.x_enable_pin, 1)  # TMC2209: HIGH enables
+        self.gpio.output(self.y_enable_pin, 1)
+        # Verify the pins were actually set
+        try:
+            x_state = self.gpio.input(self.x_enable_pin)
+            y_state = self.gpio.input(self.y_enable_pin)
+            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0)")
+        except:
+            pass
         self.enabled = True
         try:
             if getattr(self, 'axis_x', None):
@@ -237,23 +249,43 @@ class StepperController:
             pass
         logger.info("Stepper motors enabled")
     
-    def disable(self):
-        """Disable stepper motors"""
-        self.gpio.output(self.x_enable_pin, 1)
-        self.gpio.output(self.y_enable_pin, 1)
+    def disable(self, invalidate_calibration: bool = True):
+        """
+        Disable stepper motors (release torque).
+        
+        Args:
+            invalidate_calibration: If True, mark calibration as invalid.
+                                   Set to False for temporary disable (e.g., idle timeout).
+        """
+        print(f"disable() called: Setting enable pins LOW for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
+        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: LOW disables
+        self.gpio.output(self.y_enable_pin, 0)
+        print(f"GPIO outputs set to 0 (LOW)", flush=True)
+        # Verify the pins were actually set
+        try:
+            x_state = self.gpio.input(self.x_enable_pin)
+            y_state = self.gpio.input(self.y_enable_pin)
+            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0 for disabled)", flush=True)
+        except Exception as e:
+            print(f"Failed to read back pin states: {e}", flush=True)
         self.enabled = False
+        print(f"Controller enabled flag set to {self.enabled}, suspending axes", flush=True)
         try:
             if getattr(self, 'axis_x', None):
                 self.axis_x.set_suspended(True)
+                print(f"axis_x suspended={self.axis_x.suspended}, enabled={self.axis_x.enabled}", flush=True)
             if getattr(self, 'axis_y', None):
                 self.axis_y.set_suspended(True)
-        except Exception:
-            pass
-        if self.calibration.is_calibrated:
+                print(f"axis_y suspended={self.axis_y.suspended}, enabled={self.axis_y.enabled}", flush=True)
+        except Exception as e:
+            print(f"Error suspending axes: {e}", flush=True)
+        if invalidate_calibration and self.calibration.is_calibrated:
             self.calibration.is_calibrated = False
             self.calibration.calibration_timestamp = None
             self.save_calibration()
-        logger.info("Stepper motors disabled")
+            print("Stepper motors disabled (calibration invalidated)", flush=True)
+        else:
+            print("Stepper motors disabled (calibration preserved)", flush=True)
     
     def check_limit_switch(self, axis: str, direction: int) -> bool:
         """
@@ -402,7 +434,7 @@ class StepperController:
             self.calibration.y_position += direction_sign * moved_total
         self._active_moves -= 1
         self._mark_activity()
-        self.enable()
+        # Don't force enable here - respect user's enable/disable state
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
     
     def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
@@ -630,8 +662,7 @@ class StepperController:
         moved_x = 0
         moved_y = 0
         
-        # Enable both motors before starting
-        self.enable()
+        # Don't force enable - motors should already be enabled if needed
         
         for i in range(major):
             cur = compute_delay(i)
@@ -750,7 +781,7 @@ class StepperController:
             self.step('y', -cur_y)
         
         logger.info("Camera homed to center position")
-        self.enable()
+        # Don't force enable - respect user's enable/disable state
     
     def set_home_position(self):
         """
@@ -861,7 +892,7 @@ class StepperController:
                 
                 # Save calibration to file
                 self.save_calibration()
-                self.enable()
+                # Don't auto-enable after calibration - let user control enable state
                 
                 report('success', f'Calibration complete! Range: X=±{x_half_range}, Y=±{y_half_range}')
                 
@@ -1129,17 +1160,30 @@ class StepperController:
         self._last_activity = time.time()
 
     def _idle_watchdog(self) -> None:
+        """
+        Watchdog thread that automatically disables motors after idle timeout.
+        Invalidates calibration to ensure motors are re-calibrated after cooling.
+        """
+        logger.info(f"Idle watchdog started. Timeout: {self.idle_timeout}s")
         while not self._idle_stop.is_set():
             try:
                 if self.enabled and self.idle_timeout and self.idle_timeout > 0:
                     if self._active_moves == 0:
-                        if (time.time() - self._last_activity) >= self.idle_timeout:
+                        idle_time = time.time() - self._last_activity
+                        if idle_time >= self.idle_timeout:
                             try:
-                                self.disable()
-                            except Exception:
-                                pass
+                                # Disable motors and invalidate calibration
+                                logger.info(f"Idle timeout reached ({idle_time:.1f}s >= {self.idle_timeout}s), disabling motors")
+                                self.disable(invalidate_calibration=True)
+                                logger.info(f"Motors auto-disabled after {self.idle_timeout:.0f}s idle timeout (calibration invalidated)")
+                            except Exception as e:
+                                logger.error(f"Error in idle watchdog: {e}")
                             time.sleep(0.1)
                             continue
+                        elif idle_time > self.idle_timeout * 0.9:
+                            # Log when approaching timeout (90%)
+                            logger.debug(f"Approaching idle timeout: {idle_time:.1f}s / {self.idle_timeout}s")
                 time.sleep(0.05)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Exception in idle watchdog loop: {e}")
                 time.sleep(0.1)

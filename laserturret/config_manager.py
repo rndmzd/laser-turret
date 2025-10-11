@@ -52,7 +52,7 @@ class ConfigManager:
             'deadzone': 5,
             'speed_scaling': 0.10,
             'step_delay': 0.0005,
-            'idle_timeout_sec': 120.0,
+            'idle_timeout_sec': 600.0,
         },
         'Laser': {
             'laser_pin': 12,
