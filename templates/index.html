@@ -1414,6 +1414,7 @@
                 if (data.status === 'success') {
                     showStatus('laser-status-message', true, 
                         enabled ? 'Auto-fire enabled' : 'Auto-fire disabled');
+                    updateLaserStatus();
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
@@ -1436,6 +1437,7 @@
                 if (data.status === 'success') {
                     showStatus('laser-status-message', true, 
                         enabled ? 'Mock fire mode enabled - Visual feedback only' : 'Mock fire mode disabled');
+                    updateLaserStatus();
                 } else {
                     showStatus('laser-status-message', false, data.message);
                 }
