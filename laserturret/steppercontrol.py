@@ -266,10 +266,13 @@ class StepperMotor:
                     f"Cannot move {self.state.direction}, limit switch is pressed"
                 )
             
-            # Only enable if we're not already enabled (don't override controller disable)
-            if not self.enabled:
-                logger.debug(f"[{self.name}] step() enabling motor for movement")
+            # Don't enable if suspended - respect controller's disable state
+            if not self.suspended and not self.enabled:
+                print(f"[{self.name}] step() enabling motor for movement (suspended={self.suspended})", flush=True)
                 self.enable()
+            elif self.suspended:
+                print(f"[{self.name}] step() skipping enable - motor is suspended", flush=True)
+                return 0  # Don't move if suspended
             self.state.status = MotorStatus.MOVING
             
             for _ in range(steps):

@@ -93,10 +93,12 @@ class StepperController:
             self.has_limit_switches = False
             logger.warning("Limit switches not configured - using software limits only")
         
-        # Axis drivers
+        # Axis drivers - IMPORTANT: Pass the shared GPIO backend instance
+        # so all components control the same physical pins
         try:
             x_cfg = self.config.get_motor_config('x')
             y_cfg = self.config.get_motor_config('y')
+            print(f"Creating axis_x with gpio_backend={self.gpio}, enable_pin={x_cfg['enable_pin']}", flush=True)
             self.axis_x = StepperAxis(
                 step_pin=x_cfg['step_pin'],
                 dir_pin=x_cfg['dir_pin'],
@@ -113,8 +115,9 @@ class StepperController:
                 name='AxisX',
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
-                gpio_backend=self.gpio,
+                gpio_backend=self.gpio,  # Share the same GPIO backend!
             )
+            print(f"Creating axis_y with gpio_backend={self.gpio}, enable_pin={y_cfg['enable_pin']}", flush=True)
             self.axis_y = StepperAxis(
                 step_pin=y_cfg['step_pin'],
                 dir_pin=y_cfg['dir_pin'],
@@ -131,8 +134,9 @@ class StepperController:
                 name='AxisY',
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
-                gpio_backend=self.gpio,
+                gpio_backend=self.gpio,  # Share the same GPIO backend!
             )
+            print(f"Axes created: axis_x.gpio={id(self.axis_x.gpio)}, axis_y.gpio={id(self.axis_y.gpio)}, controller.gpio={id(self.gpio)}", flush=True)
         except Exception as _:
             self.axis_x = None
             self.axis_y = None
