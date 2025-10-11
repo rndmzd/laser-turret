@@ -66,6 +66,7 @@
                         <div class="overlay-toggle-grid">
                             <button id="overlay-laser-enable" class="overlay-toggle-chip" onclick="toggleLaserFromOverlay()">Laser System</button>
                             <button id="overlay-auto-fire" class="overlay-toggle-chip" onclick="toggleAutoFireFromOverlay()">Auto Fire</button>
+                            <button id="overlay-mock-fire" class="overlay-toggle-chip" onclick="toggleMockFireFromOverlay()">Mock Fire</button>
                         </div>
                         <div class="overlay-status-grid">
                             <div>
@@ -388,6 +389,14 @@
                             <span class="toggle-label">Auto-Fire on Detection</span>
                         </div>
 
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="mock-fire-enabled" onchange="toggleMockFire()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Mock Fire Mode (Visual Only)</span>
+                        </div>
+
                         <button id="fire-button" class="btn-success" data-fire-control onclick="fireLaser(this)" style="font-size: 16px; padding: 15px;">
                             🔴 FIRE LASER
                         </button>
@@ -444,6 +453,10 @@
                         <div class="stat-row">
                             <span class="stat-label">System Status</span>
                             <span id="laser-system-status" class="stat-value">OFF</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Mock Fire Mode</span>
+                            <span id="laser-mock-mode" class="stat-value">OFF</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Ready to Fire</span>
@@ -1411,6 +1424,28 @@
             });
         }
 
+        function toggleMockFire() {
+            const enabled = document.getElementById('mock-fire-enabled').checked;
+            fetch('/laser/mock_fire', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('laser-status-message', true, 
+                        enabled ? 'Mock fire mode enabled - Visual feedback only' : 'Mock fire mode disabled');
+                } else {
+                    showStatus('laser-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('laser-status-message', false, 'Failed to toggle mock fire');
+                console.error('Error toggling mock fire:', error);
+            });
+        }
+
         function fireLaser(triggerButton) {
             const fireButtons = Array.from(document.querySelectorAll('[data-fire-control]'));
 
@@ -1505,6 +1540,8 @@
                     if (data.status === 'success') {
                         document.getElementById('laser-system-status').textContent =
                             data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('laser-mock-mode').textContent =
+                            data.mock_fire_mode ? 'ON (Visual Only)' : 'OFF';
                         document.getElementById('laser-ready').textContent =
                             data.ready_to_fire ? 'Yes' : 'No';
                         document.getElementById('laser-fire-count').textContent = 
@@ -1526,11 +1563,12 @@
                         
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
+                        document.getElementById('mock-fire-enabled').checked = data.mock_fire_mode || false;
 
                         // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
                         // They are only synced on page load via syncLaserSliders()
 
-                        const fireReady = data.ready_to_fire && data.enabled;
+                        const fireReady = data.ready_to_fire && (data.enabled || data.mock_fire_mode);
                         document.querySelectorAll('[data-fire-control]').forEach(btn => {
                             btn.disabled = !fireReady;
                         });
@@ -2725,6 +2763,13 @@
             toggleAutoFire();
         }
 
+        function toggleMockFireFromOverlay() {
+            const checkbox = document.getElementById('mock-fire-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleMockFire();
+        }
+
         function toggleObjectDetectionFromOverlay() {
             const checkbox = document.getElementById('object-enabled');
             if (!checkbox) return;
@@ -2746,9 +2791,10 @@
             const cooldownEl = document.getElementById('overlay-laser-cooldown');
             const enableBtn = document.getElementById('overlay-laser-enable');
             const autoBtn = document.getElementById('overlay-auto-fire');
+            const mockBtn = document.getElementById('overlay-mock-fire');
 
             if (systemEl) systemEl.textContent = status.enabled ? 'ON' : 'OFF';
-            const fireReady = status.ready_to_fire && status.enabled;
+            const fireReady = status.ready_to_fire && (status.enabled || status.mock_fire_mode);
             if (readyEl) readyEl.textContent = fireReady ? 'Yes' : 'No';
             if (powerEl && status.power !== undefined) powerEl.textContent = `${status.power}%`;
             if (cooldownEl) {
@@ -2760,6 +2806,7 @@
             }
             if (enableBtn) enableBtn.classList.toggle('active', !!status.enabled);
             if (autoBtn) autoBtn.classList.toggle('active', !!status.auto_fire);
+            if (mockBtn) mockBtn.classList.toggle('active', !!status.mock_fire_mode);
         }
 
         function syncOverlayConfidenceFromMain() {

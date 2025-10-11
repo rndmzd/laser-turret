@@ -122,6 +122,9 @@ laser_burst_delay = 0.1  # Delay between burst pulses
 laser_cooldown = 0.5  # Minimum time between fire commands
 laser_auto_fire = False  # Auto-fire when object/motion detected
 laser_power = 100  # Laser power level (0-100%)
+laser_mock_fire_mode = False  # Mock fire mode for visual testing
+mock_fire_active = False  # Current mock fire state
+mock_fire_time = None  # When mock fire started
 laser_lock = threading.Lock()
 last_fire_time = None
 fire_count = 0  # Track total fires
@@ -290,7 +293,7 @@ def monitor_exposure():
 
 def fire_laser():
     """Fire the laser using LaserControl with PWM power control"""
-    global last_fire_time, fire_count
+    global last_fire_time, fire_count, mock_fire_active, mock_fire_time
     
     current_time = time.time()
     
@@ -298,10 +301,31 @@ def fire_laser():
     if last_fire_time and (current_time - last_fire_time) < laser_cooldown:
         return False, 'Laser cooling down'
     
-    if not laser_enabled:
+    if not laser_enabled and not laser_mock_fire_mode:
         return False, 'Laser disabled'
     
     try:
+        # In mock fire mode, only show visual indicator without firing
+        if laser_mock_fire_mode:
+            mock_fire_active = True
+            mock_fire_time = current_time
+            # Calculate total burst duration for visual feedback
+            total_duration = (laser_pulse_duration * laser_burst_count) + (laser_burst_delay * (laser_burst_count - 1))
+            print(f"🟡 MOCK FIRE! {laser_burst_count} pulse(s) - Power: {laser_power}% - Duration: {laser_pulse_duration}s each")
+            
+            # Schedule mock fire deactivation
+            def deactivate_mock_fire():
+                global mock_fire_active
+                time.sleep(total_duration)
+                mock_fire_active = False
+            
+            threading.Thread(target=deactivate_mock_fire, daemon=True).start()
+            
+            fire_count += laser_burst_count
+            last_fire_time = current_time
+            return True, f'Mock fired {laser_burst_count} pulse(s) at {laser_power}% power'
+        
+        # Real firing mode
         # Execute burst
         for pulse_num in range(laser_burst_count):
             if laser_control:
@@ -327,7 +351,11 @@ def fire_laser():
 
 def check_auto_fire():
     """Check if auto-fire conditions are met"""
-    if not laser_auto_fire or not laser_enabled:
+    if not laser_auto_fire:
+        return False
+    
+    # Auto-fire works with both real laser and mock fire mode
+    if not laser_enabled and not laser_mock_fire_mode:
         return False
     
     # Check if object is detected and auto-track is on
@@ -887,15 +915,35 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 center_x = crosshair_pos['x']
                 center_y = crosshair_pos['y']
     
+    # Change crosshair color if mock firing is active
+    crosshair_color = color
+    with laser_lock:
+        if mock_fire_active and laser_mock_fire_mode:
+            crosshair_color = (0, 165, 255)  # Orange/red color for firing
+    
     # Draw crosshair
     line_length = 40
     cv2.line(overlay, (center_x - line_length, center_y),
              (center_x + line_length, center_y),
-             color, thickness)
+             crosshair_color, thickness)
     cv2.line(overlay, (center_x, center_y - line_length),
              (center_x, center_y + line_length),
-             color, thickness)
-    cv2.circle(overlay, (center_x, center_y), 6, color, thickness)
+             crosshair_color, thickness)
+    cv2.circle(overlay, (center_x, center_y), 6, crosshair_color, thickness)
+    
+    # Draw fire indicator icon when mock firing
+    with laser_lock:
+        if mock_fire_active and laser_mock_fire_mode:
+            # Draw a pulsing fire indicator icon near crosshair
+            icon_offset_y = -70
+            icon_center_x = center_x
+            icon_center_y = center_y + icon_offset_y
+            
+            # Draw a filled circle with "FIRE" text
+            cv2.circle(overlay, (icon_center_x, icon_center_y), 35, (0, 165, 255), -1)
+            cv2.circle(overlay, (icon_center_x, icon_center_y), 35, (0, 100, 255), 3)
+            cv2.putText(overlay, "FIRE", (icon_center_x - 30, icon_center_y + 8),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
     
     # Add stats overlay
     with fps_lock:
@@ -2010,6 +2058,7 @@ def laser_status():
             'status': 'success',
             'enabled': laser_enabled,
             'auto_fire': laser_auto_fire,
+            'mock_fire_mode': laser_mock_fire_mode,
             'pulse_duration': laser_pulse_duration,
             'burst_count': laser_burst_count,
             'burst_delay': laser_burst_delay,
@@ -2020,6 +2069,23 @@ def laser_status():
             'power': laser_power,
             'hardware_available': laser_control is not None
         })
+
+@app.route('/laser/mock_fire', methods=['POST'])
+def toggle_mock_fire():
+    """Toggle mock fire mode"""
+    global laser_mock_fire_mode
+    
+    try:
+        data = request.get_json()
+        with laser_lock:
+            laser_mock_fire_mode = bool(data.get('enabled', not laser_mock_fire_mode))
+        
+        return jsonify({
+            'status': 'success',
+            'enabled': laser_mock_fire_mode
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/laser/reset_count', methods=['POST'])
 def reset_fire_count():
