@@ -2627,7 +2627,7 @@ def get_consolidated_status():
         status['recording'] = {
             'is_recording': is_recording,
             'filename': recording_filename,
-            'duration': (time.time() - recording_start_time) if is_recording and recording_start_time else 0
+            'duration': (datetime.now() - recording_start_time).total_seconds() if is_recording and recording_start_time else 0
         }
     
     # Pattern status
