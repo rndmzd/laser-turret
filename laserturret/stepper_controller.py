@@ -869,19 +869,19 @@ class StepperController:
                 y_center = (y_range['min'] + y_range['max']) // 2
                 
                 report('info', f'Moving to center position: X={x_center}, Y={y_center}')
-                
-                # Move to center (bypass limits since we're still calibrating) using default step delay
-                self.step('x', x_center - self.calibration.x_position, bypass_limits=True)
-                self.step('y', y_center - self.calibration.y_position, bypass_limits=True)
-                
+
+                # Update max limits based on discovered range before we adjust positions.
+                x_half_range = (x_range['max'] - x_range['min']) // 2
+                y_half_range = (y_range['max'] - y_range['min']) // 2
+
+                # Move each axis to the discovered center with a backlash/limit-settle routine.
+                self._move_axis_to_center('x', x_center, x_half_range, report)
+                self._move_axis_to_center('y', y_center, y_half_range, report)
+
                 # Set this as home (0, 0)
                 self.calibration.x_position = 0
                 self.calibration.y_position = 0
-                
-                # Update max limits based on discovered range
-                x_half_range = (x_range['max'] - x_range['min']) // 2
-                y_half_range = (y_range['max'] - y_range['min']) // 2
-                
+
                 self.calibration.x_max_steps = x_half_range
                 self.calibration.y_max_steps = y_half_range
                 
@@ -914,7 +914,7 @@ class StepperController:
     def _find_axis_limits(self, axis: str, report) -> dict:
         """
         Find the limits of movement for an axis.
-        
+
         Returns:
             dict with 'min' and 'max' step positions
         """
@@ -977,6 +977,53 @@ class StepperController:
             'min': negative_limit,
             'max': positive_limit
         }
+
+    def _move_axis_to_center(self, axis: str, target: int, half_range: int, report) -> None:
+        """Move an axis to the desired center position with backlash compensation."""
+        pos_attr = 'x_position' if axis == 'x' else 'y_position'
+        current = getattr(self.calibration, pos_attr)
+        delta = target - current
+
+        if delta != 0:
+            self.step(axis, delta, bypass_limits=True)
+
+        new_pos = getattr(self.calibration, pos_attr)
+        if new_pos != target:
+            # If we failed to reach the target (likely due to a still-engaged limit
+            # switch), jog away from the limit and retry once.
+            wiggle_steps = min(max(half_range // 40, 3), half_range) if half_range else 0
+            if wiggle_steps > 0:
+                direction = -wiggle_steps if delta > 0 else wiggle_steps
+                report(
+                    'info',
+                    (
+                        f"{axis.upper()} axis: releasing limit switch with "
+                        f"{wiggle_steps} recovery steps"
+                    ),
+                )
+                self.step(axis, direction, delay=0.001, bypass_limits=True)
+                retry_delta = target - getattr(self.calibration, pos_attr)
+                if retry_delta != 0:
+                    self.step(axis, retry_delta, bypass_limits=True)
+
+        # Perform a short settling routine so the final approach to center always
+        # happens from the same direction, which mirrors users running calibration twice.
+        settle = min(max(half_range // 20, 5), half_range) if half_range else 0
+        if settle > 0:
+            report(
+                'info',
+                (
+                    f"{axis.upper()} axis: settling around center "
+                    f"(±{settle} steps)"
+                ),
+            )
+            self.step(axis, settle, delay=0.001, bypass_limits=True)
+            self.step(axis, -2 * settle, delay=0.001, bypass_limits=True)
+            self.step(axis, settle, delay=0.001, bypass_limits=True)
+
+        # Ensure our software position aligns with the intended target after
+        # the settling sequence.
+        setattr(self.calibration, pos_attr, target)
     
     def calibrate_steps_per_pixel(self, axis: str, pixels_moved: float, 
                                    steps_executed: int):
