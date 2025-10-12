@@ -854,6 +854,10 @@ class StepperController:
             try:
                 results = {}
                 
+                # Track starting positions before calibration
+                x_start_position = self.calibration.x_position
+                y_start_position = self.calibration.y_position
+                
                 # Calibrate X axis
                 report('info', 'Calibrating X axis - finding limits')
                 x_range = self._find_axis_limits('x', report)
@@ -864,15 +868,19 @@ class StepperController:
                 y_range = self._find_axis_limits('y', report)
                 results['y_range'] = y_range
                 
-                # Calculate center and move there
-                x_center = (x_range['min'] + x_range['max']) // 2
-                y_center = (y_range['min'] + y_range['max']) // 2
+                # Calculate center positions (offsets from where each axis started)
+                x_center_offset = (x_range['min'] + x_range['max']) // 2
+                y_center_offset = (y_range['min'] + y_range['max']) // 2
                 
-                report('info', f'Moving to center position: X={x_center}, Y={y_center}')
+                # Convert to absolute positions
+                x_center_absolute = x_start_position + x_center_offset
+                y_center_absolute = y_start_position + y_center_offset
+                
+                report('info', f'Moving to center position: X={x_center_absolute}, Y={y_center_absolute}')
                 
                 # Move to center (bypass limits since we're still calibrating) using default step delay
-                self.step('x', x_center - self.calibration.x_position, bypass_limits=True)
-                self.step('y', y_center - self.calibration.y_position, bypass_limits=True)
+                self.step('x', x_center_absolute - self.calibration.x_position, bypass_limits=True)
+                self.step('y', y_center_absolute - self.calibration.y_position, bypass_limits=True)
                 
                 # Set this as home (0, 0)
                 self.calibration.x_position = 0
