@@ -970,12 +970,23 @@ class StepperController:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
         
         negative_limit = -steps_moved
-        
-        report('info', f'{axis.upper()} axis range: {negative_limit} to {positive_limit} steps')
-        
+
+        # Convert range to absolute coordinates relative to the original start position.
+        # Without this adjustment, callers that rely on absolute axis positions will
+        # underestimate the distance required to reach the true center when the
+        # calibration begins away from the prior origin (e.g., after manual moves
+        # while motors were disabled). This manifested as the first auto-calibration
+        # attempt stopping short of center until a second pass corrected the stored
+        # position. Returning absolute min/max ensures we measure deltas from the
+        # same frame of reference used by the controller's position tracker.
+        range_min = start_pos + negative_limit
+        range_max = start_pos + positive_limit
+
+        report('info', f'{axis.upper()} axis range: {range_min} to {range_max} steps (absolute)')
+
         return {
-            'min': negative_limit,
-            'max': positive_limit
+            'min': range_min,
+            'max': range_max
         }
     
     def calibrate_steps_per_pixel(self, axis: str, pixels_moved: float, 
