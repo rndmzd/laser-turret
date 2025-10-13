@@ -210,15 +210,15 @@
                     </div>
 
                     <div id="camera-tracking-controls" style="display: none;">
-            <!-- Calibration Required Warning -->
-            <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
-                <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
-                <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
-                <p style="font-size: 12px; opacity: 0.9;">This only needs to be done once. Calibration data will be saved and reloaded on restart.</p>
-            </div>
+                        <!-- Calibration Required Warning -->
+                        <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
+                            <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
+                            <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
+                            <p style="font-size: 12px; opacity: 0.9;">This only needs to be done once. Calibration data will be saved and reloaded on restart.</p>
+                        </div>
 
-            <div class="control-group">
-                <h3>🎮 Camera Control</h3>
+                        <div class="control-group">
+                            <h3>🎮 Camera Control</h3>
                             
                             <div class="toggle-switch">
                                 <label class="switch">
@@ -243,88 +243,126 @@
                             <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
                                 <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
                             </div>
-            </div>
+                        </div>
 
-            <div class="control-group">
-                <h3>🔧 Calibration</h3>
-                <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                    Automatically find limits and set home position, or manually calibrate steps-per-pixel
-                </p>
+                        <div class="control-group">
+                            <h3>⚙️ Camera Settings</h3>
 
-                <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
-                    🤖 Auto-Calibrate & Home
-                </button>
+                            <div class="slider-control">
+                                <label>Dead Zone (pixels)</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
+                                    <span id="camera-dead-zone-value" class="slider-value">20px</span>
+                                </div>
+                            </div>
 
-                <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                    <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
-                </div>
+                            <div class="slider-control">
+                                <label>Movement Speed</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
+                                    <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
+                                </div>
+                            </div>
 
-                <div class="slider-control">
-                    <label>X-Axis Steps/Pixel</label>
-                    <div class="slider-wrapper">
-                        <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
-                        <span id="camera-x-steps-value" class="slider-value">0.10</span>
-                    </div>
-                </div>
+                            <button class="btn-primary" onclick="applyCameraTrackingSettings()">Apply Settings</button>
+                        </div>
 
-                <div class="slider-control">
-                    <label>Y-Axis Steps/Pixel</label>
-                    <div class="slider-wrapper">
-                        <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
-                        <span id="camera-y-steps-value" class="slider-value">0.10</span>
-                    </div>
-                </div>
+                        <div class="control-group">
+                            <h3>🧪 PID Tuning</h3>
+                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                                Adjust PID gains for camera tracking responsiveness. Lower Ki is recommended to avoid drift.
+                            </p>
+                            <div class="slider-control">
+                                <label>Kp</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="pid-kp" min="0" max="3" value="0.8" step="0.05" oninput="updatePIDLabel('kp')">
+                                    <span id="pid-kp-value" class="slider-value">0.80</span>
+                                </div>
+                            </div>
+                            <div class="slider-control">
+                                <label>Ki</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="pid-ki" min="0" max="0.5" value="0.0" step="0.005" oninput="updatePIDLabel('ki')">
+                                    <span id="pid-ki-value" class="slider-value">0.00</span>
+                                </div>
+                            </div>
+                            <div class="slider-control">
+                                <label>Kd</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="pid-kd" min="0" max="1.5" value="0.2" step="0.05" oninput="updatePIDLabel('kd')">
+                                    <span id="pid-kd-value" class="slider-value">0.20</span>
+                                </div>
+                            </div>
+                            <button class="btn-primary" onclick="applyPID()">Apply PID</button>
+                        </div>
 
-                <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
-            </div>
+                        <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
+                            <h3>🎯 Manual Position Control</h3>
+                            <p style="font-size: 13px; color: #4338ca;">
+                                Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
+                            </p>
+                        </div>
 
-            <div class="control-group">
-                <h3>⚙️ Camera Settings</h3>
+                        <div class="control-group">
+                            <h3>🔧 Calibration</h3>
+                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                                Automatically find limits and set home position, or manually calibrate steps-per-pixel
+                            </p>
 
-                <div class="slider-control">
-                    <label>Dead Zone (pixels)</label>
-                    <div class="slider-wrapper">
-                        <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
-                        <span id="camera-dead-zone-value" class="slider-value">20px</span>
-                    </div>
-                </div>
+                            <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
+                                🤖 Auto-Calibrate & Home
+                            </button>
 
-                <div class="slider-control">
-                    <label>Movement Speed</label>
-                    <div class="slider-wrapper">
-                        <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
-                        <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
-                    </div>
-                </div>
-            </div>
+                            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
+                                <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
+                            </div>
 
-            <div class="control-group">
-                <h3>📊 Camera Status</h3>
-                <div class="stat-row">
-                    <span class="stat-label">System Status</span>
-                    <span id="camera-system-status" class="stat-value">Initializing...</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Calibration Status</span>
-                    <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Camera Movement Enabled</span>
-                    <span id="camera-enabled-status" class="stat-value">No</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Camera Position (X, Y)</span>
-                    <span id="camera-position" class="stat-value">0, 0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Crosshair Position (X, Y)</span>
-                    <span id="crosshair-position" class="stat-value">0, 0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Moving</span>
-                    <span id="camera-moving" class="stat-value">No</span>
-                </div>
-            </div>
+                            <div class="slider-control">
+                                <label>X-Axis Steps/Pixel</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
+                                    <span id="camera-x-steps-value" class="slider-value">0.10</span>
+                                </div>
+                            </div>
+
+                            <div class="slider-control">
+                                <label>Y-Axis Steps/Pixel</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
+                                    <span id="camera-y-steps-value" class="slider-value">0.10</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
+                        </div>
+
+                        <div class="control-group">
+                            <h3>📊 Camera Status</h3>
+                            <div class="stat-row">
+                                <span class="stat-label">System Status</span>
+                                <span id="camera-system-status" class="stat-value">Initializing...</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Calibration Status</span>
+                                <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Camera Movement Enabled</span>
+                                <span id="camera-enabled-status" class="stat-value">No</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Camera Position (X, Y)</span>
+                                <span id="camera-position" class="stat-value">0, 0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Crosshair Position (X, Y)</span>
+                                <span id="crosshair-position" class="stat-value">0, 0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Moving</span>
+                                <span id="camera-moving" class="stat-value">No</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="tracking-status-message" class="status-message"></div>
@@ -1448,18 +1486,13 @@
 
         function fireLaser(triggerButton) {
             const fireButtons = Array.from(document.querySelectorAll('[data-fire-control]'));
+
             if (triggerButton instanceof HTMLElement && !fireButtons.includes(triggerButton)) {
                 fireButtons.push(triggerButton);
             }
-            if (!isLaserEnabled) {
-                showStatus('laser-status-message', false, 'Enable the Laser system before firing.');
-                return;
-            }
-            if (!isLaserReadyToFire) {
-                showStatus('laser-status-message', false, 'Laser is not ready to fire yet.');
-                return;
-            }
+
             fireButtons.forEach(btn => btn.disabled = true);
+
             fetch('/laser/fire', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -1566,22 +1599,23 @@
                             document.getElementById('laser-cooldown-remaining').textContent = 'Ready';
                         }
                         
+                        // Display power level and hardware status
                         if (data.power !== undefined) {
                             document.getElementById('laser-power-level').textContent = data.power + '%';
                         }
                         document.getElementById('laser-hardware-status').textContent = 
                             data.hardware_available ? 'Connected' : 'Simulation';
-
+                        
                         document.getElementById('laser-enabled').checked = data.enabled;
                         document.getElementById('auto-fire-enabled').checked = data.auto_fire;
                         document.getElementById('mock-fire-enabled').checked = data.mock_fire_mode || false;
 
-                        isLaserEnabled = !!data.enabled;
-                        isLaserReadyToFire = !!(data.ready_to_fire && data.enabled);
-                        const fireReady = isLaserReadyToFire;
+                        // NOTE: Sliders are NOT synced from status updates (matches motion detection pattern)
+                        // They are only synced on page load via syncLaserSliders()
+
+                        const fireReady = data.ready_to_fire && data.enabled;
                         document.querySelectorAll('[data-fire-control]').forEach(btn => {
-                            btn.disabled = false;
-                            btn.dataset.fireReady = fireReady ? '1' : '0';
+                            btn.disabled = !fireReady;
                         });
 
                         syncLaserOverlay(data);
@@ -1611,26 +1645,1548 @@
                 console.error('Error resetting counter:', error);
             });
         }
+
+        // Preset position controls
+        function savePreset() {
+            const slot = parseInt(document.getElementById('save-slot').value);
+            const label = document.getElementById('preset-label').value || `Preset ${slot}`;
+            
+            fetch('/presets/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot, label: label })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, `Saved to slot ${slot}`);
+                    document.getElementById('preset-label').value = '';
+                    loadPresetList();
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to save preset');
+                console.error('Error saving preset:', error);
+            });
+        }
+
+        function loadPreset(slot) {
+            fetch(`/presets/load/${slot}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, `Loaded ${data.label}`);
+                    document.getElementById('position').textContent = `X: ${data.position.x}, Y: ${data.position.y}`;
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to load preset');
+                console.error('Error loading preset:', error);
+            });
+        }
+
+        function deletePreset(slot) {
+            if (!confirm(`Delete preset ${slot}?`)) return;
+            
+            fetch(`/presets/delete/${slot}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, `Deleted slot ${slot}`);
+                    loadPresetList();
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to delete preset');
+                console.error('Error deleting preset:', error);
+            });
+        }
+
+        function loadPresetList() {
+            fetch('/presets/list')
+                .then(response => response.json())
+                .then(data => {
+                    const listEl = document.getElementById('preset-list');
+                    const presets = data.presets;
+                    
+                    if (Object.keys(presets).length === 0) {
+                        listEl.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No presets saved</p>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    for (const [slot, preset] of Object.entries(presets).sort((a, b) => a[0] - b[0])) {
+                        html += `
+                            <div class="preset-item">
+                                <div class="preset-info">
+                                    <div><span class="preset-slot">#${slot}</span> <span class="preset-label">${preset.label}</span></div>
+                                    <div class="preset-coords">X: ${preset.x}, Y: ${preset.y}</div>
+                                </div>
+                                <div class="preset-actions">
+                                    <button class="preset-btn preset-btn-load" onclick="loadPreset(${slot})">Load</button>
+                                    <button class="preset-btn preset-btn-delete" onclick="deletePreset(${slot})">Delete</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    listEl.innerHTML = html;
+                })
+                .catch(error => console.error('Error loading preset list:', error));
+        }
+
+        function updatePatternDelayValue() {
+            const value = parseFloat(document.getElementById('pattern-delay').value).toFixed(1);
+            document.getElementById('pattern-delay-value').textContent = value + 's';
+        }
+
+        function startPattern() {
+            const sequenceStr = document.getElementById('pattern-sequence').value;
+            const delay = parseFloat(document.getElementById('pattern-delay').value);
+            const loop = document.getElementById('pattern-loop').checked;
+            
+            // Parse sequence
+            const sequence = sequenceStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            
+            if (sequence.length === 0) {
+                showStatus('preset-status', false, 'Enter a valid sequence');
+                return;
+            }
+            
+            fetch('/presets/pattern/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sequence: sequence, delay: delay, loop: loop })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, 'Pattern started');
+                    document.getElementById('start-pattern-btn').style.display = 'none';
+                    document.getElementById('stop-pattern-btn').style.display = 'block';
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to start pattern');
+                console.error('Error starting pattern:', error);
+            });
+        }
+
+        function stopPattern() {
+            fetch('/presets/pattern/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('preset-status', true, 'Pattern stopped');
+                    document.getElementById('start-pattern-btn').style.display = 'block';
+                    document.getElementById('stop-pattern-btn').style.display = 'none';
+                } else {
+                    showStatus('preset-status', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('preset-status', false, 'Failed to stop pattern');
+                console.error('Error stopping pattern:', error);
+            });
+        }
+
+        function updatePatternStatus() {
+            fetch('/presets/pattern/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.running) {
+                        document.getElementById('start-pattern-btn').style.display = 'none';
+                        document.getElementById('stop-pattern-btn').style.display = 'block';
+                    } else {
+                        document.getElementById('start-pattern-btn').style.display = 'block';
+                        document.getElementById('stop-pattern-btn').style.display = 'none';
+                    }
+                })
+                .catch(error => console.error('Error checking pattern status:', error));
+        }
+
+        // Keyboard shortcuts for presets (1-9, 0 for slot 10)
+        document.addEventListener('keydown', function(e) {
+            // Only trigger if not typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            const key = e.key;
+            if (key >= '1' && key <= '9') {
+                const slot = parseInt(key);
+                loadPreset(slot);
+                e.preventDefault();
+            } else if (key === '0') {
+                loadPreset(10);
+                e.preventDefault();
+            }
+        });
+
+        // Object detection controls
+        function toggleObjectDetection() {
+            const enabled = document.getElementById('object-enabled').checked;
+            fetch('/object_detection/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        enabled ? 'Object detection enabled' : 'Object detection disabled');
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to toggle object detection');
+                console.error('Error toggling object detection:', error);
+            });
+        }
+
+        function toggleObjectAutoTrack() {
+            const enabled = document.getElementById('object-auto-track-enabled').checked;
+            fetch('/object_detection/auto_track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true,
+                        enabled ? 'Object auto-tracking enabled' : 'Object auto-tracking disabled');
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to toggle object auto-track');
+                console.error('Error toggling object auto-track:', error);
+            });
+        }
+
+        function applyObjectSettings() {
+            const mode = document.getElementById('detection-mode').value;
+            const priority = document.getElementById('target-priority').value;
+            // Update balloon settings visibility immediately
+            showHideBalloonSettings();
+            
+            fetch('/object_detection/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: mode,
+                    priority: priority
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 'Object detection settings applied');
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply object settings');
+                console.error('Error applying object settings:', error);
+            });
+        }
+
+        function switchDetectionMethod() {
+            const method = document.getElementById('detection-method').value;
+            
+            // Show/hide method-specific settings
+            const haarSettings = document.getElementById('haar-settings');
+            const tfliteSettings = document.getElementById('tflite-settings');
+            const roboflowSettings = document.getElementById('roboflow-settings');
+            const currentModeRow = document.getElementById('current-mode-row');
+            const tfliteStats = document.getElementById('tflite-stats');
+            const roboflowStats = document.getElementById('roboflow-stats');
+            const balloonSettings = document.getElementById('balloon-settings');
+            
+            // Hide all first
+            haarSettings.style.display = 'none';
+            tfliteSettings.style.display = 'none';
+            roboflowSettings.style.display = 'none';
+            tfliteStats.style.display = 'none';
+            roboflowStats.style.display = 'none';
+            if (balloonSettings) balloonSettings.style.display = 'none';
+            
+            if (method === 'haar') {
+                haarSettings.style.display = 'block';
+                currentModeRow.style.display = 'flex';
+                document.getElementById('detection-method-display').textContent = 'Haar Cascades';
+                showHideBalloonSettings();
+            } else if (method === 'tflite') {
+                tfliteSettings.style.display = 'block';
+                currentModeRow.style.display = 'none';
+                tfliteStats.style.display = 'block';
+                document.getElementById('detection-method-display').textContent = 'TensorFlow Lite';
+            } else if (method === 'roboflow') {
+                roboflowSettings.style.display = 'block';
+                currentModeRow.style.display = 'none';
+                roboflowStats.style.display = 'block';
+                document.getElementById('detection-method-display').textContent = 'Roboflow Inference';
+            }
+            
+            syncOverlayConfidenceFromMain();
+
+            // Switch method on server
+            fetch('/detection_method/switch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ method: method })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const methodNames = {
+                        'haar': 'Haar Cascades',
+                        'tflite': 'TensorFlow Lite',
+                        'roboflow': 'Roboflow Inference'
+                    };
+                    showStatus('object-status-message', true, 
+                        `Switched to ${methodNames[method] || method}`);
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                    // Revert on failure
+                    document.getElementById('detection-method').value = 
+                        data.detection_method || 'haar';
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to switch detection method');
+                console.error('Error switching detection method:', error);
+            });
+        }
+
+        function updateTFLiteConfidence() {
+            const value = document.getElementById('tflite-confidence').value;
+            document.getElementById('tflite-confidence-value').textContent = value;
+            tfliteLastEditTs = Date.now();
+            tfliteEditing = true;
+        }
+
+        function applyTFLiteSettings() {
+            const confidence = parseFloat(document.getElementById('tflite-confidence').value);
+            const filterClasses = document.getElementById('tflite-filter-classes').value;
+            
+            fetch('/tflite/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    confidence: confidence,
+                    filter_classes: filterClasses
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        `TFLite settings applied - Confidence: ${data.confidence.toFixed(2)}`);
+                    tfliteEditing = false;
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply TFLite settings');
+                console.error('Error applying TFLite settings:', error);
+            });
+        }
+
+        function updateRoboflowConfidence() {
+            const value = document.getElementById('roboflow-confidence').value;
+            document.getElementById('roboflow-confidence-value').textContent = value;
+            roboflowLastEditTs = Date.now();
+            roboflowEditing = true;
+        }
+
+        function applyRoboflowSettings() {
+            const serverUrl = document.getElementById('roboflow-server-url').value;
+            const modelId = document.getElementById('roboflow-model-id').value;
+            const apiKey = document.getElementById('roboflow-api-key').value;
+            const confidence = parseFloat(document.getElementById('roboflow-confidence').value);
+            const filterClasses = document.getElementById('roboflow-filter-classes').value;
+            
+            fetch('/roboflow/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    server_url: serverUrl || undefined,
+                    model_id: modelId || undefined,
+                    api_key: apiKey || undefined,
+                    confidence: confidence,
+                    filter_classes: filterClasses
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 
+                        `Roboflow settings applied - Confidence: ${data.confidence ? data.confidence.toFixed(2) : 'N/A'}`);
+                    roboflowEditing = false;
+                    // Switch to Roboflow method after applying settings
+                    fetch('/detection_method/switch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ method: 'roboflow' })
+                    })
+                    .then(r => r.json())
+                    .then(sw => {
+                        if (sw.status === 'success') {
+                            document.getElementById('detection-method').value = 'roboflow';
+                            updateObjectStatus();
+                        } else {
+                            showStatus('object-status-message', false, sw.message || 'Failed to switch to Roboflow');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error switching to Roboflow:', err);
+                    });
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply Roboflow settings');
+                console.error('Error applying Roboflow settings:', error);
+            });
+        }
+
+        function updateObjectStatus() {
+            fetch('/object_detection/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('object-status').textContent = 
+                            data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('objects-count').textContent = 
+                            data.objects_detected;
+                        
+                        // Update detection method
+                        const method = data.detection_method || 'haar';
+                        document.getElementById('detection-method').value = method;
+                        
+                        // Show/hide appropriate settings
+                        const haarSettings = document.getElementById('haar-settings');
+                        const tfliteSettings = document.getElementById('tflite-settings');
+                        const roboflowSettings = document.getElementById('roboflow-settings');
+                        const currentModeRow = document.getElementById('current-mode-row');
+                        const tfliteStats = document.getElementById('tflite-stats');
+                        const roboflowStats = document.getElementById('roboflow-stats');
+                        const balloonSettings = document.getElementById('balloon-settings');
+                        
+                        // Hide all first
+                        haarSettings.style.display = 'none';
+                        tfliteSettings.style.display = 'none';
+                        roboflowSettings.style.display = 'none';
+                        tfliteStats.style.display = 'none';
+                        roboflowStats.style.display = 'none';
+                        if (balloonSettings) balloonSettings.style.display = 'none';
+                        
+                        if (method === 'haar') {
+                            haarSettings.style.display = 'block';
+                            currentModeRow.style.display = 'flex';
+                            document.getElementById('detection-method-display').textContent = 'Haar Cascades';
+                            document.getElementById('current-mode').textContent = 
+                                data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
+                            document.getElementById('detection-mode').value = data.mode;
+                            // Sync balloon sliders from status
+                            const bs = data.balloon_settings || {};
+                            if (document.getElementById('balloon-v-threshold')) {
+                                const now = Date.now();
+                                const allowBalloonSync = !balloonEditing || (now - balloonLastEditTs > EDIT_IDLE_MS);
+                                if (allowBalloonSync) {
+                                    document.getElementById('balloon-v-threshold').value = bs.v_threshold ?? 60;
+                                    document.getElementById('balloon-v-value').textContent = bs.v_threshold ?? 60;
+                                    document.getElementById('balloon-min-area').value = bs.min_area ?? 2000;
+                                    document.getElementById('balloon-min-area-value').textContent = bs.min_area ?? 2000;
+                                    document.getElementById('balloon-circularity').value = bs.circularity_min ?? 0.55;
+                                    document.getElementById('balloon-circularity-value').textContent = (bs.circularity_min ?? 0.55).toFixed(2);
+                                    document.getElementById('balloon-fill').value = bs.fill_ratio_min ?? 0.5;
+                                    document.getElementById('balloon-fill-value').textContent = (bs.fill_ratio_min ?? 0.5).toFixed(2);
+                                    document.getElementById('balloon-ar-min').value = bs.aspect_ratio_min ?? 0.6;
+                                    document.getElementById('balloon-ar-min-value').textContent = (bs.aspect_ratio_min ?? 0.6).toFixed(2);
+                                    document.getElementById('balloon-ar-max').value = bs.aspect_ratio_max ?? 1.6;
+                                    document.getElementById('balloon-ar-max-value').textContent = (bs.aspect_ratio_max ?? 1.6).toFixed(2);
+                                    showHideBalloonSettings();
+                                }
+                            }
+                        } else if (method === 'tflite') {
+                            tfliteSettings.style.display = 'block';
+                            currentModeRow.style.display = 'none';
+                            tfliteStats.style.display = 'block';
+                            document.getElementById('detection-method-display').textContent = 'TensorFlow Lite';
+                            
+                            // Update TFLite stats if available
+                            if (data.tflite_stats) {
+                                const stats = data.tflite_stats;
+                                document.getElementById('tflite-inference-time').textContent = 
+                                    stats.avg_inference_ms.toFixed(1) + ' ms';
+                                document.getElementById('tflite-fps').textContent = 
+                                    stats.estimated_fps.toFixed(1) + ' FPS';
+                                document.getElementById('tflite-accelerator').textContent = 
+                                    stats.accelerator;
+                                
+                                if (stats.confidence_threshold !== undefined) {
+                                    const now = Date.now();
+                                    const allowTFLiteSync = !tfliteEditing || (now - tfliteLastEditTs > EDIT_IDLE_MS);
+                                    if (allowTFLiteSync) {
+                                        document.getElementById('tflite-confidence').value = stats.confidence_threshold;
+                                        document.getElementById('tflite-confidence-value').textContent = 
+                                            stats.confidence_threshold.toFixed(2);
+                                    }
+                                }
+                            }
+                        } else if (method === 'roboflow') {
+                            roboflowSettings.style.display = 'block';
+                            currentModeRow.style.display = 'none';
+                            roboflowStats.style.display = 'block';
+                            document.getElementById('detection-method-display').textContent = 'Roboflow Inference';
+                            
+                            // Update Roboflow stats if available
+                            if (data.roboflow_stats) {
+                                const stats = data.roboflow_stats;
+                                document.getElementById('roboflow-server-display').textContent = 
+                                    stats.server_url || '--';
+                                document.getElementById('roboflow-model-display').textContent = 
+                                    stats.model_id || '--';
+                                document.getElementById('roboflow-inference-time').textContent = 
+                                    stats.avg_inference_ms ? stats.avg_inference_ms.toFixed(1) + ' ms' : '--';
+                                document.getElementById('roboflow-fps').textContent = 
+                                    stats.estimated_fps ? stats.estimated_fps.toFixed(1) + ' FPS' : '--';
+                                
+                                const now = Date.now();
+                                const allowRoboflowSync = !roboflowEditing || (now - roboflowLastEditTs > EDIT_IDLE_MS);
+                                if (allowRoboflowSync) {
+                                    // Populate form fields with current settings
+                                    if (stats.server_url) {
+                                        document.getElementById('roboflow-server-url').value = stats.server_url;
+                                    }
+                                    if (stats.model_id) {
+                                        document.getElementById('roboflow-model-id').value = stats.model_id;
+                                    }
+                                    if (stats.confidence !== undefined) {
+                                        document.getElementById('roboflow-confidence').value = stats.confidence;
+                                        document.getElementById('roboflow-confidence-value').textContent = 
+                                            stats.confidence.toFixed(2);
+                                    }
+                                    if (stats.class_filter && stats.class_filter.length > 0) {
+                                        document.getElementById('roboflow-filter-classes').value = 
+                                            stats.class_filter.join(',');
+                                    }
+                                }
+                                // Reflect API key presence without exposing it
+                                const apiKeyInput = document.getElementById('roboflow-api-key');
+                                if (apiKeyInput) {
+                                    if (stats.api_key_set) {
+                                        apiKeyInput.placeholder = 'Saved (hidden)';
+                                        apiKeyInput.value = '';
+                                    } else {
+                                        apiKeyInput.placeholder = 'Leave empty for public models';
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Sync UI with server state
+                        document.getElementById('object-enabled').checked = data.enabled;
+                        document.getElementById('object-auto-track-enabled').checked = data.auto_track;
+                        document.getElementById('target-priority').value = data.priority;
+
+                        const detectBtn = document.getElementById('overlay-objects-detect');
+                        if (detectBtn) detectBtn.classList.toggle('active', !!data.enabled);
+                        const trackBtn = document.getElementById('overlay-objects-track');
+                        if (trackBtn) trackBtn.classList.toggle('active', !!data.auto_track);
+                        syncOverlayConfidenceFromMain();
+                    }
+                })
+                .catch(error => console.error('Error fetching object status:', error));
+        }
+
+        // Balloon UI helpers
+        function showHideBalloonSettings() {
+            const method = document.getElementById('detection-method').value;
+            const modeEl = document.getElementById('detection-mode');
+            const mode = modeEl ? modeEl.value : 'face';
+            const balloonSettings = document.getElementById('balloon-settings');
+            if (!balloonSettings) return;
+            if (method === 'haar' && mode === 'balloon') {
+                balloonSettings.style.display = 'block';
+            } else {
+                balloonSettings.style.display = 'none';
+            }
+        }
+
+        function updateBalloonVValue() {
+            const v = document.getElementById('balloon-v-threshold').value;
+            document.getElementById('balloon-v-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
+        }
+        function updateBalloonMinAreaValue() {
+            const v = document.getElementById('balloon-min-area').value;
+            document.getElementById('balloon-min-area-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
+        }
+        function updateBalloonCircularityValue() {
+            const v = parseFloat(document.getElementById('balloon-circularity').value).toFixed(2);
+            document.getElementById('balloon-circularity-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
+        }
+        function updateBalloonFillValue() {
+            const v = parseFloat(document.getElementById('balloon-fill').value).toFixed(2);
+            document.getElementById('balloon-fill-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
+        }
+        function updateBalloonARMinValue() {
+            const v = parseFloat(document.getElementById('balloon-ar-min').value).toFixed(2);
+            document.getElementById('balloon-ar-min-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
+        }
+        function updateBalloonARMaxValue() {
+            const v = parseFloat(document.getElementById('balloon-ar-max').value).toFixed(2);
+            document.getElementById('balloon-ar-max-value').textContent = v;
+            balloonLastEditTs = Date.now();
+            balloonEditing = true;
+        }
+
+        function applyBalloonSettings() {
+            const payload = {
+                v_threshold: parseInt(document.getElementById('balloon-v-threshold').value),
+                min_area: parseInt(document.getElementById('balloon-min-area').value),
+                circularity_min: parseFloat(document.getElementById('balloon-circularity').value),
+                fill_ratio_min: parseFloat(document.getElementById('balloon-fill').value),
+                aspect_ratio_min: parseFloat(document.getElementById('balloon-ar-min').value),
+                aspect_ratio_max: parseFloat(document.getElementById('balloon-ar-max').value)
+            };
+            fetch('/balloon/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('object-status-message', true, 'Balloon settings applied');
+                    balloonEditing = false;
+                    updateObjectStatus();
+                } else {
+                    showStatus('object-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('object-status-message', false, 'Failed to apply balloon settings');
+                console.error('Error applying balloon settings:', error);
+            });
+        }
+
+        // Motion detection controls
+        function toggleMotionDetection() {
+            const enabled = document.getElementById('motion-enabled').checked;
+            fetch('/motion_detection/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('motion-status-message', true, 
+                        enabled ? 'Motion detection enabled' : 'Motion detection disabled');
+                    updateMotionStatus();
+                } else {
+                    showStatus('motion-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('motion-status-message', false, 'Failed to toggle motion detection');
+                console.error('Error toggling motion detection:', error);
+            });
+        }
+
+        function toggleAutoTrack() {
+            const enabled = document.getElementById('auto-track-enabled').checked;
+            fetch('/motion_detection/auto_track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('motion-status-message', true, 
+                        enabled ? 'Auto-tracking enabled' : 'Auto-tracking disabled');
+                } else {
+                    showStatus('motion-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('motion-status-message', false, 'Failed to toggle auto-track');
+                console.error('Error toggling auto-track:', error);
+            });
+        }
+
+        function updateSensitivityValue() {
+            const value = document.getElementById('motion-sensitivity').value;
+            document.getElementById('sensitivity-value').textContent = value;
+        }
+
+        function updateMinAreaValue() {
+            const value = document.getElementById('motion-min-area').value;
+            document.getElementById('min-area-value').textContent = value;
+        }
+
+        function applyMotionSettings() {
+            const sensitivity = parseInt(document.getElementById('motion-sensitivity').value);
+            const minArea = parseInt(document.getElementById('motion-min-area').value);
+            
+            fetch('/motion_detection/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sensitivity: sensitivity,
+                    min_area: minArea
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('motion-status-message', true, 'Motion settings applied');
+                    syncMotionSliders(); // Sync sliders after successful apply
+                } else {
+                    showStatus('motion-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('motion-status-message', false, 'Failed to apply motion settings');
+                console.error('Error applying motion settings:', error);
+            });
+        }
+
+        function updateMotionStatus() {
+            fetch('/motion_detection/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('motion-status').textContent = 
+                            data.enabled ? 'ON' : 'OFF';
+                        document.getElementById('motion-detected').textContent = 
+                            data.motion_detected ? 'Yes' : 'No';
+                        
+                        // Sync toggles with server state
+                        document.getElementById('motion-enabled').checked = data.enabled;
+                        document.getElementById('auto-track-enabled').checked = data.auto_track;
+                        
+                        // Don't sync sliders here - let user adjust them before applying
+                        // Only sync sliders on page load or after applying settings
+                    }
+                })
+                .catch(error => console.error('Error fetching motion status:', error));
+        }
+        
+        function syncMotionSliders() {
+            // Sync motion sliders with server state (called on page load only)
+            fetch('/motion_detection/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('motion-sensitivity').value = data.sensitivity;
+                        document.getElementById('motion-min-area').value = data.min_area;
+                        updateSensitivityValue();
+                        updateMinAreaValue();
+                    }
+                })
+                .catch(error => console.error('Error fetching motion status:', error));
+        }
+        
+        function syncLaserSliders() {
+            // Sync laser sliders with server state (called on page load only)
+            fetch('/laser/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('pulse-duration').value = data.pulse_duration * 1000;
+                        document.getElementById('burst-count').value = data.burst_count;
+                        document.getElementById('burst-delay').value = data.burst_delay * 1000;
+                        document.getElementById('laser-cooldown').value = data.cooldown;
+                        if (data.power !== undefined) {
+                            document.getElementById('laser-power').value = data.power;
+                        }
+                        if (data.auto_fire_distance_threshold !== undefined) {
+                            document.getElementById('auto-fire-distance').value = data.auto_fire_distance_threshold;
+                        }
+                        updatePulseDurationValue();
+                        updateBurstCountValue();
+                        updateBurstDelayValue();
+                        updateLaserCooldownValue();
+                        updateLaserPowerValue();
+                        updateAutoFireDistanceValue();
+                    }
+                })
+                .catch(error => console.error('Error syncing laser sliders:', error));
+        }
+
+        // Update crosshair position display
+        function updateCrosshairPosition() {
+            fetch('/get_crosshair_position')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('crosshair-position').textContent = 
+                            `${data.relative_x}, ${data.relative_y}`;
+                    }
+                })
+                .catch(error => console.error('Error fetching crosshair position:', error));
+        }
+
+        // Update stats periodically
+        function updateStats() {
+            fetch('/exposure_stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('exp-time').textContent = 
+                        `${(data.exposure_time/1000).toFixed(1)} ms`;
+                    document.getElementById('gain').textContent = 
+                        `${data.analog_gain.toFixed(2)}x`;
+                });
+
+            fetch('/get_fps')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('fps').textContent = `${data.fps} FPS`;
+                });
+
+            fetch('/get_camera_settings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('digital-gain').textContent = 
+                            `${data.settings.digital_gain.toFixed(2)}x`;
+                    }
+                });
+            
+            // Update recording status if on capture tab
+            updateRecordingStatus();
+            
+            // Update laser status
+            updateLaserStatus();
+            
+            // Update object detection status
+            updateObjectStatus();
+            
+            // Update motion detection status
+            updateMotionStatus();
+            
+            // Update pattern status
+            updatePatternStatus();
+            
+            // Update crosshair position
+            updateCrosshairPosition();
+            updateCrosshairCalibration();
+        }
+
+        // Camera tracking controls
+        function setTrackingMode() {
+            const mode = document.getElementById('tracking-mode').value;
+            
+            fetch('/tracking/mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    updateTrackingModeUI(mode);
+                    showStatus('tracking-status-message', true, 
+                        mode === 'crosshair' ? 'Crosshair tracking mode active' : 'Camera tracking mode active');
+                    updateCameraTrackingStatus();
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                    // Revert to previous mode on error
+                    document.getElementById('tracking-mode').value = 
+                        mode === 'crosshair' ? 'camera' : 'crosshair';
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to set tracking mode');
+                console.error('Error setting tracking mode:', error);
+            });
+        }
+
+        function updateTrackingModeUI(mode) {
+            const cameraControls = document.getElementById('camera-tracking-controls');
+            const infoBox = document.getElementById('tracking-mode-info');
+            
+            if (mode === 'camera') {
+                cameraControls.style.display = 'block';
+                infoBox.innerHTML = '<strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.';
+                infoBox.style.background = '#fff3cd';
+                infoBox.style.color = '#856404';
+            } else {
+                cameraControls.style.display = 'none';
+                infoBox.innerHTML = '<strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.';
+                infoBox.style.background = '#e3f2fd';
+                infoBox.style.color = '#1565c0';
+            }
+        }
+
+        function toggleCameraTracking() {
+            const enabled = document.getElementById('camera-tracking-enabled').checked;
+            
+            fetch('/tracking/camera/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 
+                        enabled ? 'Camera tracking enabled' : 'Camera tracking disabled');
+                    updateCameraTrackingStatus();
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                    document.getElementById('camera-tracking-enabled').checked = !enabled;
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to toggle camera tracking');
+                console.error('Error toggling camera tracking:', error);
+                document.getElementById('camera-tracking-enabled').checked = !enabled;
+            });
+        }
+
+        function toggleRecenterOnLoss() {
+            const enabled = document.getElementById('camera-recenter-on-loss').checked;
+            fetch('/tracking/camera/recenter_on_loss', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, enabled ? 'Re-center on loss enabled' : 'Re-center on loss disabled');
+                } else {
+                    showStatus('tracking-status-message', false, data.message || 'Failed to set re-center on loss');
+                    document.getElementById('camera-recenter-on-loss').checked = !enabled;
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to set re-center on loss');
+                console.error('Error toggling re-center on loss:', error);
+                document.getElementById('camera-recenter-on-loss').checked = !enabled;
+            });
+        }
+
+        function homeCameraPosition() {
+            fetch('/tracking/camera/home', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'Homing camera to center position...');
+                    setTimeout(updateCameraTrackingStatus, 1000);
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to home camera');
+                console.error('Error homing camera:', error);
+            });
+        }
+
+        function updateCameraDeadZoneValue() {
+            const value = document.getElementById('camera-dead-zone').value;
+            document.getElementById('camera-dead-zone-value').textContent = value + 'px';
+        }
+
+        function updateCameraStepDelayValue() {
+            const sliderValue = parseFloat(document.getElementById('camera-step-delay').value);
+            // Invert slider: higher slider value = lower delay (faster)
+            const actualDelay = 0.0055 - sliderValue;
+            document.getElementById('camera-step-delay-value').textContent = (actualDelay * 1000).toFixed(1) + 'ms';
+        }
+
+        // Track whether calibration sliders have been initialized from server
+        let calibrationSlidersInitialized = false;
+
+        function updateCameraXStepsValue() {
+            const value = parseFloat(document.getElementById('camera-x-steps-per-pixel').value).toFixed(2);
+            document.getElementById('camera-x-steps-value').textContent = value;
+        }
+
+        function updateCameraYStepsValue() {
+            const value = parseFloat(document.getElementById('camera-y-steps-per-pixel').value).toFixed(2);
+            document.getElementById('camera-y-steps-value').textContent = value;
+        }
+
+        function applyCameraTrackingSettings() {
+            const deadZone = parseInt(document.getElementById('camera-dead-zone').value);
+            const sliderValue = parseFloat(document.getElementById('camera-step-delay').value);
+            // Invert slider: higher slider value = lower delay (faster)
+            const stepDelay = 0.0055 - sliderValue;
+            
+            fetch('/tracking/camera/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dead_zone_pixels: deadZone,
+                    step_delay: stepDelay
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'Camera tracking settings applied');
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to apply settings');
+                console.error('Error applying camera settings:', error);
+            });
+        }
+
+        function updatePIDLabel(kind) {
+            const el = document.getElementById(`pid-${kind}`);
+            const val = parseFloat(el.value);
+            const label = document.getElementById(`pid-${kind}-value`);
+            if (label) label.textContent = val.toFixed(2);
+            pidEditing = true;
+            pidLastEditTs = Date.now();
+        }
+
+        function applyPID() {
+            const kp = parseFloat(document.getElementById('pid-kp').value);
+            const ki = parseFloat(document.getElementById('pid-ki').value);
+            const kd = parseFloat(document.getElementById('pid-kd').value);
+            fetch('/tracking/camera/pid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kp: kp, ki: ki, kd: kd })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'PID settings applied');
+                    pidEditing = false;
+                } else {
+                    showStatus('tracking-status-message', false, data.message || 'Failed to apply PID');
+                }
+            })
+            .catch(err => {
+                console.error('Error applying PID:', err);
+                showStatus('tracking-status-message', false, 'Failed to apply PID');
+            });
+        }
+
+        function applyCameraCalibration() {
+            const xSteps = parseFloat(document.getElementById('camera-x-steps-per-pixel').value);
+            const ySteps = parseFloat(document.getElementById('camera-y-steps-per-pixel').value);
+            
+            fetch('/tracking/camera/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    x_steps_per_pixel: xSteps,
+                    y_steps_per_pixel: ySteps
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, 'Calibration saved');
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to save calibration');
+                console.error('Error saving calibration:', error);
+            });
+        }
+
+        let overlayConfidenceTimeout = null;
+
+        function toggleOverlayPanel(panelId, button) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            const isActive = panel.classList.contains('active');
+            panel.classList.toggle('active', !isActive);
+            if (button) {
+                button.classList.toggle('active', !isActive);
+            } else {
+                const key = panel.dataset.overlayKey;
+                if (key) {
+                    const toggleBtn = document.querySelector(`.toolbar-button[data-overlay-target="${key}"]`);
+                    if (toggleBtn) {
+                        toggleBtn.classList.toggle('active', panel.classList.contains('active'));
+                    }
+                }
+            }
+        }
+
+        function toggleMotorsFromToolbar() {
+            const toggle = document.getElementById('camera-tracking-enabled');
+            if (!toggle) return;
+            toggle.checked = !toggle.checked;
+            toggleCameraTracking();
+        }
+
+        function syncMotorsToolbar(enabled) {
+            const stateEl = document.getElementById('motors-state');
+            if (stateEl) {
+                stateEl.textContent = enabled ? 'ON' : 'OFF';
+            }
+            const btn = document.getElementById('motors-toggle');
+            if (btn) {
+                btn.classList.toggle('active', !!enabled);
+            }
+        }
+
+        function toggleOverlayRecenter(button) {
+            const checkbox = document.getElementById('camera-recenter-on-loss');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            button.classList.toggle('active', checkbox.checked);
+            toggleRecenterOnLoss();
+            setTimeout(() => {
+                updateCameraTrackingStatus();
+            }, 500);
+        }
+
+        function syncRecenterOverlayButton() {
+            const checkbox = document.getElementById('camera-recenter-on-loss');
+            const button = document.getElementById('recenter-toggle-btn');
+            if (checkbox && button) {
+                button.classList.toggle('active', checkbox.checked);
+            }
+        }
+
+        function toggleLaserFromOverlay() {
+            const checkbox = document.getElementById('laser-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleLaser();
+        }
+
+        function toggleAutoFireFromOverlay() {
+            const checkbox = document.getElementById('auto-fire-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleAutoFire();
+        }
+
+        function toggleMockFireFromOverlay() {
+            const checkbox = document.getElementById('mock-fire-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleMockFire();
+        }
+
+        function toggleObjectDetectionFromOverlay() {
+            const checkbox = document.getElementById('object-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleObjectDetection();
+        }
+
+        function toggleObjectAutoTrackFromOverlay() {
+            const checkbox = document.getElementById('object-auto-track-enabled');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            toggleObjectAutoTrack();
+        }
+
+        function syncLaserOverlay(status) {
+            const systemEl = document.getElementById('overlay-laser-status');
+            const readyEl = document.getElementById('overlay-laser-ready');
+            const powerEl = document.getElementById('overlay-laser-power');
+            const cooldownEl = document.getElementById('overlay-laser-cooldown');
+            const enableBtn = document.getElementById('overlay-laser-enable');
+            const autoBtn = document.getElementById('overlay-auto-fire');
+            const mockBtn = document.getElementById('overlay-mock-fire');
+
+            if (systemEl) systemEl.textContent = status.enabled ? 'ON' : 'OFF';
+            const fireReady = status.ready_to_fire && status.enabled;
+            if (readyEl) readyEl.textContent = fireReady ? 'Yes' : 'No';
+            if (powerEl && status.power !== undefined) powerEl.textContent = `${status.power}%`;
+            if (cooldownEl) {
+                if (status.cooldown_remaining > 0) {
+                    cooldownEl.textContent = `${status.cooldown_remaining.toFixed(1)}s`;
+                } else {
+                    cooldownEl.textContent = 'Ready';
+                }
+            }
+            if (enableBtn) enableBtn.classList.toggle('active', !!status.enabled);
+            if (autoBtn) autoBtn.classList.toggle('active', !!status.auto_fire);
+            if (mockBtn) mockBtn.classList.toggle('active', !!status.mock_fire_mode);
+        }
+
+        function syncOverlayConfidenceFromMain() {
+            const overlaySlider = document.getElementById('overlay-object-confidence');
+            const overlayValue = document.getElementById('overlay-object-confidence-value');
+            const hint = document.getElementById('overlay-object-hint');
+            const methodEl = document.getElementById('detection-method');
+            if (!overlaySlider || !overlayValue || !methodEl || !hint) return;
+
+            const method = methodEl.value;
+            if (method === 'haar') {
+                overlaySlider.disabled = true;
+                hint.style.display = 'block';
+                overlayValue.textContent = '--';
+                return;
+            }
+
+            hint.style.display = 'none';
+            overlaySlider.disabled = false;
+
+            let value = parseFloat(overlaySlider.value);
+            if (method === 'tflite') {
+                const slider = document.getElementById('tflite-confidence');
+                if (slider) {
+                    value = parseFloat(slider.value);
+                }
+            } else if (method === 'roboflow') {
+                const slider = document.getElementById('roboflow-confidence');
+                if (slider) {
+                    value = parseFloat(slider.value);
+                }
+            }
+
+            if (!Number.isNaN(value)) {
+                overlaySlider.value = value;
+                overlayValue.textContent = value.toFixed(2);
+            }
+        }
+
+        function handleOverlayConfidenceInput(value) {
+            const overlayValue = document.getElementById('overlay-object-confidence-value');
+            const methodEl = document.getElementById('detection-method');
+            if (overlayValue) {
+                const num = parseFloat(value);
+                if (!Number.isNaN(num)) {
+                    overlayValue.textContent = num.toFixed(2);
+                }
+            }
+            if (!methodEl) return;
+
+            const method = methodEl.value;
+            if (method === 'haar') {
+                return;
+            }
+
+            if (method === 'tflite') {
+                const slider = document.getElementById('tflite-confidence');
+                if (slider) {
+                    slider.value = value;
+                    updateTFLiteConfidence();
+                }
+            } else if (method === 'roboflow') {
+                const slider = document.getElementById('roboflow-confidence');
+                if (slider) {
+                    slider.value = value;
+                    updateRoboflowConfidence();
+                }
+            }
+
+            if (overlayConfidenceTimeout) {
+                clearTimeout(overlayConfidenceTimeout);
+            }
+            overlayConfidenceTimeout = setTimeout(() => {
+                if (method === 'tflite') {
+                    applyTFLiteSettings();
+                } else if (method === 'roboflow') {
+                    applyRoboflowSettings();
+                }
+            }, 500);
+        }
+
+        function updateManualStepSize() {
+            const value = document.getElementById('manual-step-size').value;
+            document.getElementById('manual-step-size-value').textContent = `${value} px`;
+        }
+
+        function manualMove(axis, steps) {
+            // Use the step size from slider instead of hardcoded value
+            const stepSize = parseInt(document.getElementById('manual-step-size').value);
+            const actualSteps = steps > 0 ? stepSize : -stepSize;
+            
+            fetch('/tracking/camera/manual_move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    axis: axis,
+                    steps: actualSteps
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, data.message);
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to move camera');
+                console.error('Error moving camera:', error);
+            });
+        }
+
+        function setHomePosition() {
+            if (!confirm('Set current position as home (0, 0)?')) return;
+            
+            fetch('/tracking/camera/set_home', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, data.message);
+                    updateCameraTrackingStatus();
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to set home position');
+                console.error('Error setting home position:', error);
+            });
+        }
+
+        function runAutoCalibration() {
+            if (!confirm('Run automatic calibration? This will move the camera through its full range of motion and may take several minutes. Ensure the area is clear.')) return;
+            
+            fetch('/tracking/camera/auto_calibrate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('tracking-status-message', true, data.message);
+                    // Poll status more frequently during calibration
+                    setTimeout(() => {
+                        updateCameraTrackingStatus();
+                    }, 5000);
+                } else {
+                    showStatus('tracking-status-message', false, data.message);
+                }
+            })
+            .catch(error => {
+                showStatus('tracking-status-message', false, 'Failed to start auto-calibration');
+                console.error('Error starting auto-calibration:', error);
+            });
+        }
+
+        function updateCalibrationUI(isCalibrated, timestamp) {
+            // Update calibration status display
+            if (isCalibrated) {
+                document.getElementById('camera-calibration-status').textContent = 'Calibrated ✓';
+                document.getElementById('camera-calibration-status').style.color = '#28a745';
+                document.getElementById('calibration-required-warning').style.display = 'none';
+                
+                // Enable controls
+                document.getElementById('camera-tracking-enabled').disabled = false;
+                document.getElementById('home-camera-btn').disabled = false;
+                
+                // Enable manual control buttons
+                document.querySelectorAll('[onclick^="manualMove"]').forEach(btn => {
+                    btn.disabled = false;
+                });
+                document.querySelectorAll('[onclick="setHomePosition()"]').forEach(btn => {
+                    btn.disabled = false;
+                });
+                document.querySelectorAll('[onclick="homeCameraPosition()"]').forEach(btn => {
+                    btn.disabled = false;
+                });
+            } else {
+                document.getElementById('camera-calibration-status').textContent = 'Not Calibrated';
+                document.getElementById('camera-calibration-status').style.color = '#dc3545';
+                document.getElementById('calibration-required-warning').style.display = 'block';
+                
+                // Disable controls
+                document.getElementById('camera-tracking-enabled').disabled = true;
+                document.getElementById('camera-tracking-enabled').checked = false;
+                document.getElementById('home-camera-btn').disabled = true;
+                
+                // Disable manual control buttons
+                document.querySelectorAll('[onclick^="manualMove"]').forEach(btn => {
+                    btn.disabled = true;
+                });
+                document.querySelectorAll('[onclick="setHomePosition()"]').forEach(btn => {
+                    btn.disabled = true;
+                });
+                document.querySelectorAll('[onclick="homeCameraPosition()"]').forEach(btn => {
+                    btn.disabled = true;
+                });
+            }
+        }
+
+        function updateCameraTrackingStatus() {
+            fetch('/tracking/camera/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Update tracking mode dropdown if needed
+                        if (data.mode) {
+                            document.getElementById('tracking-mode').value = data.mode;
+                            updateTrackingModeUI(data.mode);
+                        }
+                        
+                        if (data.available) {
+                            document.getElementById('camera-system-status').textContent = 'Available';
+                            document.getElementById('camera-enabled-status').textContent =
+                                data.enabled ? 'Yes' : 'No';
+                            syncMotorsToolbar(!!data.enabled);
+                            // Sync re-center on loss toggle
+                            const r = !!data.recenter_on_loss;
+                            const rEl = document.getElementById('camera-recenter-on-loss');
+                            if (rEl) rEl.checked = r;
+                            syncRecenterOverlayButton();
+                            
+                            const controller = data.controller_status;
+                            if (controller) {
+                                document.getElementById('camera-position').textContent = 
+                                    `${controller.position.x}, ${controller.position.y}`;
+                                document.getElementById('camera-moving').textContent = 
+                                    controller.moving ? 'Yes' : 'No';
+                                
+                                // Update crosshair position
+                                updateCrosshairPosition();
+                                
+                                // Initialize calibration sliders ONLY on first load
+                                // After that, preserve user's values until they save or refresh page
+                                if (controller.calibration && !calibrationSlidersInitialized) {
+                                    document.getElementById('camera-x-steps-per-pixel').value = 
+                                        controller.calibration.x_steps_per_pixel;
+                                    document.getElementById('camera-x-steps-value').textContent = 
+                                        controller.calibration.x_steps_per_pixel.toFixed(2);
+                                    
+                                    document.getElementById('camera-y-steps-per-pixel').value = 
+                                        controller.calibration.y_steps_per_pixel;
+                                    document.getElementById('camera-y-steps-value').textContent = 
+                                        controller.calibration.y_steps_per_pixel.toFixed(2);
+                                    
+                                    document.getElementById('camera-dead-zone').value = 
+                                        controller.calibration.dead_zone_pixels;
+                                    updateCameraDeadZoneValue();
+
+                                    if (typeof controller.calibration.step_delay === 'number') {
+                                        const sliderEl = document.getElementById('camera-step-delay');
+                                        if (sliderEl) {
+                                            let sliderVal = 0.0055 - controller.calibration.step_delay;
+                                            sliderVal = Math.max(0.0005, Math.min(0.005, sliderVal));
+                                            sliderEl.value = sliderVal;
+                                            updateCameraStepDelayValue();
+                                        }
+                                    }
+                                    
+                                    // Mark as initialized so we don't overwrite user changes
+                                    calibrationSlidersInitialized = true;
+                                }
+                                
+                                // Update calibration status UI
+                                if (controller.calibration) {
+                                    updateCalibrationUI(
+                                        controller.calibration.is_calibrated,
+                                        controller.calibration.calibration_timestamp
+                                    );
+                                }
+                                
+                                // Sync PID sliders with controller values
+                                fetch('/tracking/camera/pid')
+                                    .then(r => r.json())
+                                    .then(pd => {
+                                        if (pd.status === 'success' && pd.pid) {
+                                            const now = Date.now();
+                                            const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
+                                            if (allowPIDSync) {
+                                                const p = pd.pid;
+                                                const kpEl = document.getElementById('pid-kp');
+                                                const kiEl = document.getElementById('pid-ki');
+                                                const kdEl = document.getElementById('pid-kd');
+                                                const kpVal = document.getElementById('pid-kp-value');
+                                                const kiVal = document.getElementById('pid-ki-value');
+                                                const kdVal = document.getElementById('pid-kd-value');
+                                                if (kpEl && kpVal) { kpEl.value = p.kp; kpVal.textContent = parseFloat(p.kp).toFixed(2); }
+                                                if (kiEl && kiVal) { kiEl.value = p.ki; kiVal.textContent = parseFloat(p.ki).toFixed(2); }
+                                                if (kdEl && kdVal) { kdEl.value = p.kd; kdVal.textContent = parseFloat(p.kd).toFixed(2); }
+                                            }
+                                        }
+                                    })
+                                    .catch(() => {});
+                            }
+                            
+                            document.getElementById('camera-tracking-enabled').checked = data.enabled;
+                        } else {
+                            document.getElementById('camera-system-status').textContent = 'Not Available';
+                            document.getElementById('camera-enabled-status').textContent = 'N/A';
+                            syncMotorsToolbar(false);
+                            syncRecenterOverlayButton();
+                        }
+                    }
+                })
+                .catch(error => console.error('Error fetching camera tracking status:', error));
+        }
+
         // ============================================================
         // WebSocket Communication Setup
         // ============================================================
-
+        
         // Connect to Socket.IO server
         const socket = io();
-
+        
         // Handle connection events
         socket.on('connect', () => {
-            console.log('WebSocket connected');
+            console.log('✅ WebSocket connected');
         });
-
+        
         socket.on('disconnect', () => {
-            console.warn('WebSocket disconnected');
+            console.warn('❌ WebSocket disconnected');
         });
-
+        
         socket.on('connect_error', (error) => {
             console.error('WebSocket connection error:', error);
         });
-
+        
         // Helper function to safely update DOM elements
         function safeUpdateElement(id, value) {
             const el = document.getElementById(id);
@@ -1638,14 +3194,14 @@
                 el.textContent = value;
             }
         }
-
+        
         // Listen for consolidated status updates from server
         socket.on('status_update', (status) => {
             // Update FPS
             if (status.fps !== undefined) {
                 safeUpdateElement('fps', `${status.fps} FPS`);
             }
-
+            
             // Update exposure stats
             if (status.exposure) {
                 safeUpdateElement('exp-time', `${(status.exposure.exposure_time/1000).toFixed(1)} ms`);
@@ -1654,7 +3210,7 @@
                     safeUpdateElement('digital-gain', `${status.exposure.digital_gain.toFixed(2)}x`);
                 }
             }
-
+            
             // Update crosshair position
             if (status.crosshair) {
                 const relX = status.crosshair.relative_x;
@@ -1662,54 +3218,54 @@
                 safeUpdateElement('position', `(${relX >= 0 ? '+' : ''}${relX}, ${relY >= 0 ? '+' : ''}${relY})`);
                 safeUpdateElement('crosshair-position', `${status.crosshair.absolute_x}, ${status.crosshair.absolute_y}`);
             }
-
+            
             // Update crosshair calibration
             if (status.crosshair_calibration) {
                 safeUpdateElement('crosshair-offset', `${status.crosshair_calibration.x}, ${status.crosshair_calibration.y}`);
             }
-
+            
             // Update laser status
             if (status.laser) {
-                if (status.laser.enabled) {
-                    document.getElementById('laser-system-status').textContent = 'ON';
-                } else {
-                    document.getElementById('laser-system-status').textContent = 'OFF';
-                }
-                document.getElementById('laser-mock-mode').textContent =
-                    status.laser.mock_fire_mode ? 'ON (Visual Only)' : 'OFF';
-                document.getElementById('laser-ready').textContent =
-                    status.laser.ready_to_fire ? 'Yes' : 'No';
-                document.getElementById('laser-fire-count').textContent = 
-                    status.laser.fire_count;
-
-                if (status.laser.cooldown_remaining > 0) {
-                    document.getElementById('laser-cooldown-remaining').textContent = 
-                        status.laser.cooldown_remaining.toFixed(1) + 's';
-                } else {
-                    document.getElementById('laser-cooldown-remaining').textContent = 'Ready';
-                }
-
-                if (status.laser.power !== undefined) {
-                    document.getElementById('laser-power-level').textContent = status.laser.power + '%';
-                }
-                document.getElementById('laser-hardware-status').textContent = 
-                    status.laser.hardware_available ? 'Connected' : 'Simulation';
-
-                document.getElementById('laser-enabled').checked = status.laser.enabled;
-                document.getElementById('auto-fire-enabled').checked = status.laser.auto_fire;
-                document.getElementById('mock-fire-enabled').checked = status.laser.mock_fire_mode || false;
-
-                isLaserEnabled = !!status.laser.enabled;
-                isLaserReadyToFire = !!(status.laser.ready_to_fire && status.laser.enabled);
-                const fireReady = isLaserReadyToFire;
-                document.querySelectorAll('[data-fire-control]').forEach(btn => {
-                    btn.disabled = false;
-                    btn.dataset.fireReady = fireReady ? '1' : '0';
-                });
-
                 syncLaserOverlay(status.laser);
+                safeUpdateElement('laser-system-status', status.laser.enabled ? 'ON' : 'OFF');
+                safeUpdateElement('laser-mock-mode', status.laser.mock_fire_mode ? 'ON (Visual Only)' : 'OFF');
+                safeUpdateElement('laser-ready', status.laser.ready_to_fire ? 'Yes' : 'No');
+                safeUpdateElement('laser-fire-count', status.laser.fire_count);
+                
+                // Update cooldown remaining
+                if (status.laser.cooldown_remaining > 0) {
+                    safeUpdateElement('laser-cooldown-remaining', status.laser.cooldown_remaining.toFixed(1) + 's');
+                } else {
+                    safeUpdateElement('laser-cooldown-remaining', 'Ready');
+                }
+                
+                // Update power level and hardware status
+                if (status.laser.power !== undefined) {
+                    safeUpdateElement('laser-power-level', status.laser.power + '%');
+                }
+                safeUpdateElement('laser-hardware-status', status.laser.hardware_available ? 'Connected' : 'Simulation');
+                
+                // Update checkboxes
+                const laserEnabledEl = document.getElementById('laser-enabled');
+                if (laserEnabledEl) laserEnabledEl.checked = status.laser.enabled;
+                
+                const autoFireEl = document.getElementById('auto-fire-enabled');
+                if (autoFireEl) autoFireEl.checked = status.laser.auto_fire;
+                
+                const mockFireEl = document.getElementById('mock-fire-enabled');
+                if (mockFireEl) mockFireEl.checked = status.laser.mock_fire_mode || false;
+                
+                // NOTE: Laser sliders are NOT synced from WebSocket (like motion detection)
+                // They are only updated on page load and when user clicks Apply
+                // This prevents sliders from reverting while user is adjusting them
+                
+                // Update fire button state
+                const fireReady = status.laser.ready_to_fire && status.laser.enabled;
+                document.querySelectorAll('[data-fire-control]').forEach(btn => {
+                    btn.disabled = !fireReady;
+                });
             }
-
+            
             // Update object detection status
             if (status.object_detection) {
                 const objEnabled = status.object_detection.enabled;
