@@ -39,7 +39,7 @@ When camera tracking is enabled:
 ### Required Components
 
 - **Stepper Motors**: 2x NEMA 17 or similar (X and Y axes)
-- **Stepper Drivers**: 2x A4988 or DRV8825 drivers
+- **Stepper Drivers**: 2x A4988/DRV8825 (pin mode) or TMC2209 (UART)
 - **Power Supply**: 12V/24V suitable for your motors
 - **Mounting Hardware**: Pan/tilt mechanism for camera mounting
 - **GPIO Pins**: Configured in `laserturret.conf`
@@ -68,6 +68,22 @@ x_ccw_limit_pin = 21
 y_cw_limit_pin = 20
 y_ccw_limit_pin = 4
 ```
+
+#### TMC2209 (UART) Wiring & Config
+
+When using TMC2209 drivers in UART mode, MS1/MS2/MS3 pins are not required. Set UART settings under `[Motor]` and use per-axis addresses:
+
+```ini
+[Motor]
+use_uart = true
+uart_port = /dev/serial0
+uart_baud = 115200
+x_uart_address = 2
+y_uart_address = 1
+microsteps = 8
+```
+
+See `docs/TMC2209_UART.md` for wiring guidance, addressing, and runtime tuning details. In UART mode, microstepping is configured via `CHOPCONF.MRES` rather than MS pins.
 
 ## Setup and Calibration
 
@@ -209,6 +225,18 @@ curl -X POST http://localhost:5000/tracking/camera/settings \
 - When enabled, the camera gently nudges back toward home (0,0)
 - When disabled, tracking commands are zeroed and camera holds position
 - Toggle via UI or API
+
+**Motor Tab (UART)**: Live TMC2209 register viewer and on-the-fly tuning
+
+- View X/Y register values (`GCONF, GSTAT, IFCNT, IHOLD_IRUN, TPOWERDOWN, TPWMTHRS, TCOOLTHRS, CHOPCONF, DRV_STATUS, PWMCONF`)
+- Apply per-axis values for `IHOLD`, `IRUN`, `IHOLDDELAY`, and `TPOWERDOWN`
+- Use the axis selector to apply to `X`, `Y`, or `Both`
+- Requires `use_uart = true` and proper addresses in `laserturret.conf`
+
+**Motor Status Indicators** (Status tab)
+
+- Red/green dots show whether X/Y axes initialized successfully
+- Green = axis available; Red = not initialized
 
 ## Safety Features
 

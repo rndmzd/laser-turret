@@ -61,9 +61,9 @@ class StepperMotor:
         step_pin: int,
         dir_pin: int,
         enable_pin: int,
-        ms1_pin: int,
-        ms2_pin: int,
-        ms3_pin: int,
+        ms1_pin: Optional[int] = None,
+        ms2_pin: Optional[int] = None,
+        ms3_pin: Optional[int] = None,
         cw_limit_switch_pin: Optional[int] = None,
         ccw_limit_switch_pin: Optional[int] = None,
         steps_per_rev: int = 200,
@@ -132,13 +132,15 @@ class StepperMotor:
         self.gpio.setup(self.dir_pin, PinMode.OUTPUT)
         self.gpio.setup(self.enable_pin, PinMode.OUTPUT)
         for pin in self.ms_pins:
-            self.gpio.setup(pin, PinMode.OUTPUT)
+            if pin is not None:
+                self.gpio.setup(pin, PinMode.OUTPUT)
             
-        # Set microstepping configuration
-        ms1_val, ms2_val, ms3_val = MICROSTEP_CONFIG[microsteps]
-        self.gpio.output(self.ms_pins[0], ms1_val)
-        self.gpio.output(self.ms_pins[1], ms2_val)
-        self.gpio.output(self.ms_pins[2], ms3_val)
+        # Set microstepping configuration (only if MS pins are provided)
+        if all(p is not None for p in self.ms_pins):
+            ms1_val, ms2_val, ms3_val = MICROSTEP_CONFIG[microsteps]
+            self.gpio.output(self.ms_pins[0], ms1_val)
+            self.gpio.output(self.ms_pins[1], ms2_val)
+            self.gpio.output(self.ms_pins[2], ms3_val)
         
         # Disable motor initially (TMC2209: LOW = disabled)
         self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables

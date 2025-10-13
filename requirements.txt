@@ -22,3 +22,6 @@ tflite-runtime>=2.14.0
 
 # Roboflow Inference HTTP client
 inference-sdk>=0.9.37
+
+# UART driver for TMC2209 configuration
+pyserial>=3.5

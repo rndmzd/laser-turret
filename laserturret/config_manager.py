@@ -41,6 +41,14 @@ class ConfigManager:
             'y_dir_pin': 26,
             'y_step_pin': 24,
             'y_enable_pin': 6,
+            'rpi_tx_pin': 22,
+            'rpi_rx_pin': 27,
+            'not_connected': 17,
+            'use_uart': False,
+            'uart_port': '/dev/serial0',
+            'uart_baud': 115200,
+            'x_uart_address': 2,
+            'y_uart_address': 1,
             'ms1_pin': 17,
             'ms2_pin': 27,
             'ms3_pin': 22,
@@ -125,6 +133,7 @@ class ConfigManager:
     def _validate_config(self) -> None:
         """Validate configuration values"""
         # Validate GPIO pins
+        use_uart = self._get('Motor', 'use_uart', bool) if self.config.has_option('Motor', 'use_uart') or 'use_uart' in self.DEFAULTS.get('Motor', {}) else False
         gpio_pins = [
             self.get_gpio_pin('x_ccw_limit_pin'),
             self.get_gpio_pin('x_cw_limit_pin'),
@@ -136,11 +145,14 @@ class ConfigManager:
             self.get_motor_pin('y_dir_pin'),
             self.get_motor_pin('y_step_pin'),
             self.get_motor_pin('y_enable_pin'),
-            self.get_motor_pin('ms1_pin'),
-            self.get_motor_pin('ms2_pin'),
-            self.get_motor_pin('ms3_pin'),
             self.get_laser_pin(),
         ]
+        if not use_uart:
+            gpio_pins.extend([
+                self.get_motor_pin('ms1_pin'),
+                self.get_motor_pin('ms2_pin'),
+                self.get_motor_pin('ms3_pin'),
+            ])
         
         # Check for duplicate pins
         pin_usage = {}
@@ -161,6 +173,17 @@ class ConfigManager:
         microsteps = self.get_motor_microsteps()
         if microsteps not in [1, 2, 4, 8, 16]:
             raise ConfigurationError(f"Invalid microsteps value: {microsteps}. Must be 1, 2, 4, 8, or 16")
+
+        # Validate UART addresses if UART enabled
+        if use_uart:
+            try:
+                x_addr = self._get('Motor', 'x_uart_address', int)
+                y_addr = self._get('Motor', 'y_uart_address', int)
+            except Exception as e:
+                raise ConfigurationError(f"UART address missing: {e}")
+            for a in (x_addr, y_addr):
+                if a < 0 or a > 3:
+                    raise ConfigurationError(f"Invalid TMC2209 UART address: {a}")
         
         # Validate MQTT port
         port = self.get_mqtt_port()
@@ -231,6 +254,20 @@ class ConfigManager:
     def get_motor_steps_per_rev(self) -> int:
         """Get motor steps per revolution"""
         return self._get('Motor', 'steps_per_rev', int)
+
+    def get_use_uart(self) -> bool:
+        return self._get('Motor', 'use_uart', bool)
+
+    def get_uart_port(self) -> str:
+        return self._get('Motor', 'uart_port', str)
+
+    def get_uart_baud(self) -> int:
+        return self._get('Motor', 'uart_baud', int)
+
+    def get_uart_address(self, axis: str) -> int:
+        if axis not in ['x', 'y']:
+            raise ValueError("axis must be 'x' or 'y'")
+        return self._get('Motor', f"{axis}_uart_address", int)
     
     # Control Configuration
     def get_control_max_steps(self) -> int:
@@ -383,15 +420,19 @@ class ConfigManager:
         if axis not in ['x', 'y']:
             raise ValueError(f"Invalid axis: {axis}. Must be 'x' or 'y'")
         
+        use_uart = self.get_use_uart()
+        ms1 = None if use_uart else self.get_motor_pin('ms1_pin')
+        ms2 = None if use_uart else self.get_motor_pin('ms2_pin')
+        ms3 = None if use_uart else self.get_motor_pin('ms3_pin')
         return {
             'step_pin': self.get_motor_pin(f'{axis}_step_pin'),
             'dir_pin': self.get_motor_pin(f'{axis}_dir_pin'),
             'enable_pin': self.get_motor_pin(f'{axis}_enable_pin'),
             'cw_limit_pin': self.get_gpio_pin(f'{axis}_cw_limit_pin'),
             'ccw_limit_pin': self.get_gpio_pin(f'{axis}_ccw_limit_pin'),
-            'ms1_pin': self.get_motor_pin('ms1_pin'),
-            'ms2_pin': self.get_motor_pin('ms2_pin'),
-            'ms3_pin': self.get_motor_pin('ms3_pin'),
+            'ms1_pin': ms1,
+            'ms2_pin': ms2,
+            'ms3_pin': ms3,
             'steps_per_rev': self.get_motor_steps_per_rev(),
             'microsteps': self.get_motor_microsteps(),
         }

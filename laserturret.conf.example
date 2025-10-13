@@ -34,6 +34,13 @@ ms3_pin = 22
 microsteps = 8          # Microstepping resolution (1, 2, 4, 8, or 16)
 steps_per_rev = 200     # Steps per revolution (typically 200 for 1.8° motors)
 
+# UART configuration for TMC2209 (set use_uart = true to configure via UART)
+use_uart = false
+uart_port = /dev/serial0
+uart_baud = 115200
+x_uart_address = 2
+y_uart_address = 1
+
 [Control]
 # Maximum steps to move per MQTT message
 max_steps_per_update = 50
