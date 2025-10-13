@@ -1308,12 +1308,40 @@
         // Status message display
         function showStatus(elementId, success, message) {
             const statusEl = document.getElementById(elementId);
-            statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
-            statusEl.textContent = message;
-            statusEl.style.display = 'block';
+            if (statusEl) {
+                statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+                statusEl.textContent = message;
+                statusEl.style.display = 'block';
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+            }
+            showToast(success, message, 3000);
+        }
+
+        function ensureToastContainer() {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            return container;
+        }
+
+        function showToast(success, message, duration = 3000) {
+            const container = ensureToastContainer();
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (success ? 'toast-success' : 'toast-error');
+            toast.textContent = message;
+            container.appendChild(toast);
+
             setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 3000);
+                if (toast.parentNode === container) {
+                    container.removeChild(toast);
+                }
+            }, Math.max(1000, duration));
         }
 
         // Video recording controls
