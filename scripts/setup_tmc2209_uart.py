@@ -1,5 +1,7 @@
 import argparse
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from laserturret.config_manager import get_config
 from laserturret.tmc2209_uart import open_serial, TMC2209, configure_defaults, REG
