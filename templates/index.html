@@ -3175,10 +3175,21 @@
                             
                             const controller = data.controller_status;
                             if (controller) {
-                                document.getElementById('camera-position').textContent = 
-                                    `${controller.position.x}, ${controller.position.y}`;
+                                const posX = (controller.position && typeof controller.position.x === 'number')
+                                    ? controller.position.x
+                                    : (controller.calibration && typeof controller.calibration.x_position === 'number')
+                                        ? controller.calibration.x_position : 0;
+                                const posY = (controller.position && typeof controller.position.y === 'number')
+                                    ? controller.position.y
+                                    : (controller.calibration && typeof controller.calibration.y_position === 'number')
+                                        ? controller.calibration.y_position : 0;
+                                document.getElementById('camera-position').textContent = `${posX}, ${posY}`;
                                 document.getElementById('camera-moving').textContent = 
                                     controller.moving ? 'Yes' : 'No';
+                                // Motor Position widget (REST)
+                                try {
+                                    updateMotorPositionUI({x: posX, y: posY}, controller.limits || null);
+                                } catch (e) {}
                                 
                                 // Update crosshair position
                                 updateCrosshairPosition();
@@ -3305,6 +3316,42 @@
             const txt = document.getElementById(baseId + '-text');
             if (txt) {
                 txt.textContent = open ? 'Open' : 'Closed';
+            }
+        }
+        function updateMotorPositionUI(position, limits) {
+            try {
+                const x = typeof position?.x === 'number' ? position.x : 0;
+                const y = typeof position?.y === 'number' ? position.y : 0;
+                const maxX = typeof limits?.x_max_steps === 'number' && limits.x_max_steps > 0 ? limits.x_max_steps : 2000;
+                const maxY = typeof limits?.y_max_steps === 'number' && limits.y_max_steps > 0 ? limits.y_max_steps : 2000;
+
+                // Update numeric labels
+                const xVal = document.getElementById('pos-x-value');
+                if (xVal) xVal.textContent = String(x);
+                const yVal = document.getElementById('pos-y-value');
+                if (yVal) yVal.textContent = String(y);
+
+                // Update needles: map [-max, +max] to [0, trackWidth]
+                const xNeedle = document.getElementById('pos-x-needle');
+                if (xNeedle && xNeedle.parentElement) {
+                    const track = xNeedle.parentElement;
+                    const w = track.clientWidth || 0;
+                    const nw = xNeedle.offsetWidth || 0;
+                    const ratio = Math.max(0, Math.min(1, (x + maxX) / (2 * maxX)));
+                    const left = Math.round(ratio * Math.max(0, w - nw));
+                    xNeedle.style.left = left + 'px';
+                }
+                const yNeedle = document.getElementById('pos-y-needle');
+                if (yNeedle && yNeedle.parentElement) {
+                    const track = yNeedle.parentElement;
+                    const w = track.clientWidth || 0;
+                    const nw = yNeedle.offsetWidth || 0;
+                    const ratio = Math.max(0, Math.min(1, (y + maxY) / (2 * maxY)));
+                    const left = Math.round(ratio * Math.max(0, w - nw));
+                    yNeedle.style.left = left + 'px';
+                }
+            } catch (e) {
+                // no-op on UI calc failure
             }
         }
         
@@ -3452,9 +3499,18 @@
                     recenterEl.checked = !!status.tracking.recenter_on_loss;
                 }
                 
-                if (ctrl.position) {
-                    safeUpdateElement('camera-position', `${ctrl.position.x}, ${ctrl.position.y}`);
-                }
+                const posX = (ctrl.position && typeof ctrl.position.x === 'number')
+                    ? ctrl.position.x
+                    : (ctrl.calibration && typeof ctrl.calibration.x_position === 'number')
+                        ? ctrl.calibration.x_position : 0;
+                const posY = (ctrl.position && typeof ctrl.position.y === 'number')
+                    ? ctrl.position.y
+                    : (ctrl.calibration && typeof ctrl.calibration.y_position === 'number')
+                        ? ctrl.calibration.y_position : 0;
+                safeUpdateElement('camera-position', `${posX}, ${posY}`);
+
+                // Motor Position widget
+                updateMotorPositionUI({x: posX, y: posY}, ctrl.limits || null);
                 
                 safeUpdateElement('camera-moving', ctrl.moving ? 'Yes' : 'No');
                 

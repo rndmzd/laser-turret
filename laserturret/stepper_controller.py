@@ -1257,6 +1257,12 @@ class StepperController:
             pos_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
         except Exception:
             pos_y = self.calibration.y_position
+        # Keep calibration positions aligned with live axis positions when available
+        try:
+            self.calibration.x_position = int(pos_x)
+            self.calibration.y_position = int(pos_y)
+        except Exception:
+            pass
 
         return {
             'enabled': self.enabled,
