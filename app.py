@@ -49,6 +49,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 output_frame = None
 lock = threading.Lock()
 picam2 = None
+shutdown_event = threading.Event()
 
 # Camera resolution
 CAMERA_WIDTH = 1920
@@ -231,8 +232,21 @@ def initialize_stepper_controller():
         stepper_controller = None
 
 def cleanup_on_exit():
-    global stepper_controller
+    global stepper_controller, picam2
+    # Idempotent cleanup
+    if getattr(cleanup_on_exit, "_done", False):
+        return
+    setattr(cleanup_on_exit, "_done", True)
     try:
+        # signal background threads to exit
+        shutdown_event.set()
+        # Stop camera if running
+        try:
+            if picam2:
+                picam2.stop()
+                print("Cleanup: camera stopped")
+        except Exception as e:
+            print(f"Cleanup camera error: {e}")
         if stepper_controller:
             disabled_level = 0 if stepper_controller.enable_active_high else 1
             stepper_controller.gpio.output(stepper_controller.x_enable_pin, disabled_level)
@@ -2748,7 +2762,7 @@ def get_consolidated_status():
 def status_emitter_thread():
     """Background thread that emits consolidated status updates via WebSocket"""
     print("Starting WebSocket status emitter thread...")
-    while True:
+    while not shutdown_event.is_set():
         try:
             status = get_consolidated_status()
             socketio.emit('status_update', status, namespace='/')
@@ -2756,6 +2770,7 @@ def status_emitter_thread():
         except Exception as e:
             print(f"Error in status emitter: {e}")
             time.sleep(1)
+    print("Status emitter thread exiting...")
 
 if __name__ == '__main__':
     initialize_camera()
@@ -2769,15 +2784,18 @@ if __name__ == '__main__':
     
     # Start the status emitter background thread
     socketio.start_background_task(status_emitter_thread)
-    # Ensure motors are disabled on normal exit and on signals
+    # Ensure motors are disabled on normal exit; let KeyboardInterrupt stop the server naturally
     try:
         atexit.register(cleanup_on_exit)
-        signal.signal(signal.SIGINT, _handle_exit_signal)
-        signal.signal(signal.SIGTERM, _handle_exit_signal)
     except Exception:
         pass
     
     # Run with SocketIO
     print("Starting Laser Turret Control Panel with WebSocket support...")
     print("Access the control panel at http://<your-ip>:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    try:
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt received, shutting down...")
+    finally:
+        cleanup_on_exit()
