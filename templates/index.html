@@ -136,6 +136,10 @@
                             <button class="tab" data-tab="image" onclick="switchTab('image', this)">🎨 Image</button>
                             <button class="tab" data-tab="capture" onclick="switchTab('capture', this)">📸 Capture</button>
                         </div>
+                        <div class="nav-section">
+                            <span class="nav-label">Hardware</span>
+                            <button class="tab" data-tab="drivers" onclick="switchTab('drivers', this)">🧰 Motor</button>
+                        </div>
                     </nav>
 
                     <div class="tab-content-area">
@@ -184,6 +188,41 @@
                         <div class="stat-row">
                             <span class="stat-label">Digital Gain</span>
                             <span id="digital-gain" class="stat-value">--</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <h3>🛠️ Motor Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">X Motor</span>
+                            <span class="stat-value"><span id="motor-x-dot" class="status-dot status-bad" title="Not initialized"></span></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Y Motor</span>
+                            <span class="stat-value"><span id="motor-y-dot" class="status-dot status-bad" title="Not initialized"></span></span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <h3>📟 Stepper Diagnostics</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Microsteps</span>
+                            <span id="controller-microsteps" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Idle Remaining</span>
+                            <span class="stat-value"><span id="idle-seconds-remaining">--</span></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Active Moves</span>
+                            <span id="idle-active-moves" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Limit Switches</span>
+                            <span class="stat-value" style="display:flex; gap:8px; align-items:center;">
+                                <span title="X CW" id="ls-x-cw" class="status-dot status-ok"></span>
+                                <span title="X CCW" id="ls-x-ccw" class="status-dot status-ok"></span>
+                                <span title="Y CW" id="ls-y-cw" class="status-dot status-ok"></span>
+                                <span title="Y CCW" id="ls-y-ccw" class="status-dot status-ok"></span>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -1002,6 +1041,82 @@
 
                     <div id="recording-status" class="status-message"></div>
                 </div>
+
+                <!-- Drivers Tab -->
+                <div id="drivers-tab" class="tab-content">
+                    <div class="control-group">
+                        <h3>🔌 Driver Link</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">UART Link</span>
+                            <span class="stat-value"><span id="tmc-link-dot" class="status-dot status-bad" title="UART disabled"></span></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Microsteps</span>
+                            <span id="tmc-microsteps" class="stat-value">--</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <h3>⚙️ UART Tuning</h3>
+                        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end;">
+                            <div class="select-control">
+                                <label>Axis</label>
+                                <select id="tmc-axis">
+                                    <option value="x">X</option>
+                                    <option value="y">Y</option>
+                                    <option value="both">Both</option>
+                                </select>
+                            </div>
+                            <div></div>
+
+                            <div class="input-control">
+                                <label>IHOLD (0-31)</label>
+                                <input type="number" id="ihold-input" min="0" max="31" value="6" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                            </div>
+                            <div class="input-control">
+                                <label>IRUN (0-31)</label>
+                                <input type="number" id="irun-input" min="0" max="31" value="20" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                            </div>
+
+                            <div class="input-control">
+                                <label>IHOLDDELAY (0-15)</label>
+                                <input type="number" id="iholddelay-input" min="0" max="15" value="4" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                            </div>
+                            <div class="input-control">
+                                <label>TPOWERDOWN (0-255)</label>
+                                <input type="number" id="tpowerdown-input" min="0" max="255" value="20" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button class="btn-primary" onclick="applyIholdIrun()">Apply IHOLD/IRUN</button>
+                            <button class="btn-secondary" onclick="applyTpowerdown()">Apply TPOWERDOWN</button>
+                        </div>
+                        <div id="tmc-write-status" class="status-message" style="display: none;"></div>
+                    </div>
+                    <div class="control-group">
+                        <h3>🧰 TMC2209 Driver Registers</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">
+                            Live register snapshot read over UART. Requires UART mode enabled in configuration.
+                        </p>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                            <button class="btn-primary" onclick="loadTMCRegisters()">🔄 Refresh</button>
+                        </div>
+                        <div id="tmc-status" class="status-message" style="display: none;"></div>
+                        <div style="overflow: auto; max-height: 320px; border: 1px solid #e0e0e0; border-radius: 6px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                <thead>
+                                    <tr style="background: #f8f9fa;">
+                                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e0e0e0;">Register</th>
+                                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e0e0e0;">X</th>
+                                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e0e0e0;">Y</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tmc-regs-tbody">
+                                    <tr><td style="padding:8px;">GCONF</td><td style="padding:8px;">--</td><td style="padding:8px;">--</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </aside>
     </div>
@@ -1049,6 +1164,11 @@
             } else {
                 // Refresh object status to show appropriate panel for selected method
                 updateObjectStatus();
+            }
+
+            // Load TMC2209 registers when switching to Drivers tab
+            if (tabName === 'drivers') {
+                loadTMCRegisters();
             }
         }
 
@@ -1308,40 +1428,12 @@
         // Status message display
         function showStatus(elementId, success, message) {
             const statusEl = document.getElementById(elementId);
-            if (statusEl) {
-                statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
-                statusEl.textContent = message;
-                statusEl.style.display = 'block';
-                setTimeout(() => {
-                    statusEl.style.display = 'none';
-                }, 3000);
-            }
-            showToast(success, message, 3000);
-        }
-
-        function ensureToastContainer() {
-            let container = document.getElementById('toast-container');
-            if (!container) {
-                container = document.createElement('div');
-                container.id = 'toast-container';
-                container.className = 'toast-container';
-                document.body.appendChild(container);
-            }
-            return container;
-        }
-
-        function showToast(success, message, duration = 3000) {
-            const container = ensureToastContainer();
-            const toast = document.createElement('div');
-            toast.className = 'toast ' + (success ? 'toast-success' : 'toast-error');
-            toast.textContent = message;
-            container.appendChild(toast);
-
+            statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
             setTimeout(() => {
-                if (toast.parentNode === container) {
-                    container.removeChild(toast);
-                }
-            }, Math.max(1000, duration));
+                statusEl.style.display = 'none';
+            }, 3000);
         }
 
         // Video recording controls
@@ -1389,6 +1481,110 @@
             .catch(error => {
                 showStatus('recording-status', false, 'Failed to stop recording');
                 console.error('Error stopping recording:', error);
+            });
+        }
+
+        // TMC2209 UART register fetch
+        function loadTMCRegisters() {
+            const tbody = document.getElementById('tmc-regs-tbody');
+            const statusEl = document.getElementById('tmc-status');
+            if (!tbody) return;
+            if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+            fetch('/tracking/camera/tmc/registers')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || data.status !== 'success') {
+                        if (statusEl) {
+                            statusEl.className = 'status-message status-error';
+                            statusEl.textContent = (data && data.message) ? data.message : 'Failed to fetch registers';
+                            statusEl.style.display = 'block';
+                        }
+                        return;
+                    }
+                    const regs = data.registers || {};
+                    const x = regs.x || {};
+                    const y = regs.y || {};
+                    const names = new Set([...Object.keys(x), ...Object.keys(y)]);
+                    const order = ['GCONF','GSTAT','IFCNT','IHOLD_IRUN','TPOWERDOWN','TPWMTHRS','TCOOLTHRS','CHOPCONF','DRV_STATUS','PWMCONF'];
+                    const sorted = Array.from(names).sort((a,b) => {
+                        const ia = order.indexOf(a); const ib = order.indexOf(b);
+                        if (ia === -1 && ib === -1) return a.localeCompare(b);
+                        if (ia === -1) return 1; if (ib === -1) return -1; return ia - ib;
+                    });
+                    const fmt = (v) => (v === -1 || v === null || v === undefined) ? 'ERR' : ('0x' + (Number(v) >>> 0).toString(16).toUpperCase().padStart(8,'0'));
+                    tbody.innerHTML = sorted.map(name => {
+                        const xv = x.hasOwnProperty(name) ? x[name] : null;
+                        const yv = y.hasOwnProperty(name) ? y[name] : null;
+                        return `<tr>
+                            <td style="padding:8px; border-bottom:1px solid #f1f1f1;">${name}</td>
+                            <td style="padding:8px; border-bottom:1px solid #f1f1f1;">${fmt(xv)}</td>
+                            <td style="padding:8px; border-bottom:1px solid #f1f1f1;">${fmt(yv)}</td>
+                        </tr>`;
+                    }).join('');
+                })
+                .catch(err => {
+                    console.error('Error fetching TMC registers:', err);
+                    if (statusEl) {
+                        statusEl.className = 'status-message status-error';
+                        statusEl.textContent = 'Failed to fetch registers';
+                        statusEl.style.display = 'block';
+                    }
+                });
+        }
+
+        // UART write helpers
+        function showTmcWriteStatus(success, message) {
+            const el = document.getElementById('tmc-write-status');
+            if (!el) return;
+            el.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+            el.textContent = message;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 2500);
+        }
+        function applyIholdIrun() {
+            const axis = (document.getElementById('tmc-axis')?.value || 'x');
+            const ihold = parseInt(document.getElementById('ihold-input')?.value || '0', 10);
+            const irun = parseInt(document.getElementById('irun-input')?.value || '0', 10);
+            const iholddelay = parseInt(document.getElementById('iholddelay-input')?.value || '0', 10);
+            fetch('/tracking/camera/tmc/ihold_irun', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ axis, ihold, irun, iholddelay })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.status === 'success') {
+                    showTmcWriteStatus(true, 'IHOLD/IRUN applied');
+                    loadTMCRegisters();
+                } else {
+                    showTmcWriteStatus(false, (data && data.message) ? data.message : 'Failed to apply IHOLD/IRUN');
+                }
+            })
+            .catch(err => {
+                console.error('IHOLD/IRUN apply error:', err);
+                showTmcWriteStatus(false, 'Failed to apply IHOLD/IRUN');
+            });
+        }
+        function applyTpowerdown() {
+            const axis = (document.getElementById('tmc-axis')?.value || 'x');
+            const tpowerdown = parseInt(document.getElementById('tpowerdown-input')?.value || '0', 10);
+            fetch('/tracking/camera/tmc/tpowerdown', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ axis, tpowerdown })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.status === 'success') {
+                    showTmcWriteStatus(true, 'TPOWERDOWN applied');
+                    loadTMCRegisters();
+                } else {
+                    showTmcWriteStatus(false, (data && data.message) ? data.message : 'Failed to apply TPOWERDOWN');
+                }
+            })
+            .catch(err => {
+                console.error('TPOWERDOWN apply error:', err);
+                showTmcWriteStatus(false, 'Failed to apply TPOWERDOWN');
             });
         }
 
@@ -3194,6 +3390,13 @@
                 el.textContent = value;
             }
         }
+        function setStatusDot(id, ok) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('status-ok', 'status-bad');
+            el.classList.add(ok ? 'status-ok' : 'status-bad');
+            el.setAttribute('title', ok ? 'Initialized' : 'Not initialized');
+        }
         
         // Listen for consolidated status updates from server
         socket.on('status_update', (status) => {
@@ -3410,6 +3613,45 @@
                 }
                 syncMotorsToolbar(!!status.tracking.camera_enabled);
                 syncRecenterOverlayButton();
+                // Update motor init indicators
+                if (ctrl.motors) {
+                    if (ctrl.motors.x) setStatusDot('motor-x-dot', !!ctrl.motors.x.available);
+                    if (ctrl.motors.y) setStatusDot('motor-y-dot', !!ctrl.motors.y.available);
+                }
+                // Update diagnostics (microsteps, idle, limit switches)
+                if (typeof ctrl.microsteps === 'number') {
+                    safeUpdateElement('controller-microsteps', String(ctrl.microsteps));
+                    safeUpdateElement('tmc-microsteps', String(ctrl.microsteps));
+                }
+                if (ctrl.idle) {
+                    const sec = (typeof ctrl.idle.seconds_remaining === 'number') ? ctrl.idle.seconds_remaining : null;
+                    if (sec !== null) {
+                        const val = (sec > 0) ? sec.toFixed(1) + 's' : '0.0s';
+                        safeUpdateElement('idle-seconds-remaining', val);
+                    }
+                    if (typeof ctrl.idle.active_moves === 'number') {
+                        safeUpdateElement('idle-active-moves', String(ctrl.idle.active_moves));
+                    }
+                }
+                if (ctrl.limit_switches && ctrl.limit_switches.pressed) {
+                    const p = ctrl.limit_switches.pressed;
+                    // green when NOT pressed, red when pressed
+                    if (p.hasOwnProperty('x_cw')) setStatusDot('ls-x-cw', !p.x_cw);
+                    if (p.hasOwnProperty('x_ccw')) setStatusDot('ls-x-ccw', !p.x_ccw);
+                    if (p.hasOwnProperty('y_cw')) setStatusDot('ls-y-cw', !p.y_cw);
+                    if (p.hasOwnProperty('y_ccw')) setStatusDot('ls-y-ccw', !p.y_ccw);
+                }
+                // UART link badge on Motor tab
+                if (ctrl.motors && ctrl.motors.uart) {
+                    const enabled = !!ctrl.motors.uart.enabled;
+                    const linkOk = !!ctrl.motors.uart.link_ok;
+                    const dot = document.getElementById('tmc-link-dot');
+                    if (dot) {
+                        dot.classList.remove('status-ok', 'status-bad');
+                        dot.classList.add(enabled && linkOk ? 'status-ok' : 'status-bad');
+                        dot.setAttribute('title', enabled ? (linkOk ? 'UART link OK' : 'UART link error') : 'UART disabled');
+                    }
+                }
             } else if (status.tracking && !status.tracking.camera_enabled) {
                 safeUpdateElement('camera-system-status', 'Not Available');
                 safeUpdateElement('camera-enabled-status', 'N/A');
