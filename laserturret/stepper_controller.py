@@ -1249,12 +1249,21 @@ class StepperController:
             except Exception:
                 limits_pressed = None
 
+        try:
+            pos_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+        except Exception:
+            pos_x = self.calibration.x_position
+        try:
+            pos_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+        except Exception:
+            pos_y = self.calibration.y_position
+
         return {
             'enabled': self.enabled,
             'moving': self.moving,
             'position': {
-                'x': self.calibration.x_position,
-                'y': self.calibration.y_position
+                'x': pos_x,
+                'y': pos_y
             },
             'microsteps': int(getattr(self, 'microsteps', 0) or 0),
             'calibration': {
