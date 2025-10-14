@@ -24,6 +24,23 @@ class TMC2209:
     def __init__(self, ser, addr: int):
         self.ser = ser
         self.addr = addr & 0xFF
+    
+    def _read_exact(self, n: int, total_timeout: float = 0.2) -> bytes:
+        deadline = time.time() + float(total_timeout)
+        buf = bytearray()
+        while len(buf) < n:
+            if time.time() >= deadline:
+                break
+            try:
+                chunk = self.ser.read(n - len(buf))
+            except Exception:
+                time.sleep(0.002)
+                continue
+            if not chunk:
+                time.sleep(0.001)
+                continue
+            buf.extend(chunk)
+        return bytes(buf)
 
     def write_reg(self, reg: int, value32: int) -> None:
         reg_w = (reg & 0x7F) | 0x80  # set write bit (bit7=1)
@@ -43,19 +60,23 @@ class TMC2209:
         time.sleep(0.001)
 
     def read_reg(self, reg: int) -> int:
-        reg_r = reg & 0x7F  # read: bit7=0
+        reg_r = reg & 0x7F
         hdr = bytearray([0x05, self.addr, reg_r])
         hdr.append(tmc_crc8(hdr))
-        self.ser.reset_input_buffer()
-        self.ser.write(hdr)
-        self.ser.flush()
-        # expected response: 0x05, addr, reg_r, data[4], crc
-        resp = self.ser.read(8)
-        if len(resp) != 8 or resp[0] != 0x05 or resp[1] != self.addr or resp[2] != reg_r:
-            raise IOError(f"bad response: {resp.hex() if hasattr(resp, 'hex') else resp}")
-        if tmc_crc8(resp[:-1]) != resp[-1]:
-            raise IOError("crc mismatch")
-        return (resp[3] << 24) | (resp[4] << 16) | (resp[5] << 8) | resp[6]
+        for _ in range(3):
+            try:
+                self.ser.reset_input_buffer()
+            except Exception:
+                pass
+            self.ser.write(hdr)
+            self.ser.flush()
+            time.sleep(0.0015)
+            resp = self._read_exact(8, total_timeout=0.25)
+            if len(resp) == 8 and resp[0] == 0x05 and resp[1] == self.addr and resp[2] == reg_r:
+                if tmc_crc8(resp[:-1]) == resp[-1]:
+                    return (resp[3] << 24) | (resp[4] << 16) | (resp[5] << 8) | resp[6]
+            time.sleep(0.003)
+        raise IOError("bad response after retries")
 
 
 def open_serial(port: str, baud: int, timeout: float = 0.05):
