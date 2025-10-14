@@ -25,6 +25,11 @@ y_dir_pin = 26
 y_step_pin = 24
 y_enable_pin = 6
 
+# Enable pin polarity
+# When false (default for TMC2209), LOW enables torque and HIGH disables (active-low enable)
+# When true (e.g., some A4988/DRV8825 boards), HIGH enables and LOW disables (active-high enable)
+enable_active_high = false
+
 # Microstepping pins (shared between both motors)
 ms1_pin = 17
 ms2_pin = 27

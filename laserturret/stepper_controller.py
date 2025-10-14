@@ -374,7 +374,7 @@ class StepperController:
             return False
     
     def enable(self):
-        """Enable stepper motors (TMC2209: enable is ACTIVE HIGH)"""
+        """Enable stepper motors (drives enable pins to the configured active level)."""
         level = 1 if self.enable_active_high else 0
         print(f"enable(): setting enable pins to {level} (active_high={self.enable_active_high}) x={self.x_enable_pin}, y={self.y_enable_pin}", flush=True)
         self.gpio.output(self.x_enable_pin, level)
@@ -383,8 +383,9 @@ class StepperController:
         try:
             x_state = self.gpio.input(self.x_enable_pin)
             y_state = self.gpio.input(self.y_enable_pin)
-            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0)")
-        except:
+            expected = level
+            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (expected={expected} for enabled)")
+        except Exception:
             pass
         self.enabled = True
         try:
@@ -398,7 +399,7 @@ class StepperController:
     
     def disable(self, invalidate_calibration: bool = True):
         """
-        Disable stepper motors (release torque).
+        Disable stepper motors (release torque). Drives enable pins to the configured inactive level.
         
         Args:
             invalidate_calibration: If True, mark calibration as invalid.
@@ -413,7 +414,8 @@ class StepperController:
         try:
             x_state = self.gpio.input(self.x_enable_pin)
             y_state = self.gpio.input(self.y_enable_pin)
-            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0 for disabled)", flush=True)
+            expected = level
+            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (expected={expected} for disabled)", flush=True)
         except Exception as e:
             print(f"Failed to read back pin states: {e}", flush=True)
         self.enabled = False
