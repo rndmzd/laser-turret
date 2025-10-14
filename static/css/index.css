@@ -919,3 +919,37 @@
             background: #dc3545;
             box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2);
         }
+
+        /* Motor position bars */
+        .position-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+        }
+        .position-track {
+            position: relative;
+            flex: 1;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .position-center {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(0,0,0,0.15);
+        }
+        .position-needle {
+            position: absolute;
+            top: -3px;
+            width: 2px;
+            height: 14px;
+            background: #667eea;
+            border-radius: 1px;
+            transform: translateX(-50%);
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
+        }

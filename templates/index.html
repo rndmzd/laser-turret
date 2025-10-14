@@ -221,186 +221,175 @@
                             </span>
                         </div>
                     </div>
+                    <div class="control-group">
+            <h3>🎚️ Motor Position</h3>
+            <div class="position-row">
+                <span class="stat-label">X</span>
+                <div class="position-track">
+                    <div class="position-center"></div>
+                    <div id="pos-x-needle" class="position-needle"></div>
+                </div>
+                <span id="pos-x-value" class="stat-value">0</span>
+            </div>
+            <div class="position-row">
+                <span class="stat-label">Y</span>
+                <div class="position-track">
+                    <div class="position-center"></div>
+                    <div id="pos-y-needle" class="position-needle"></div>
+                </div>
+                <span id="pos-y-value" class="stat-value">0</span>
+            </div>
+        </div>
                 </div>
 
                 <!-- Camera Tracking Tab -->
                 <div id="tracking-tab" class="tab-content">
                     <div class="control-group">
-                        <h3>📹 Tracking Mode</h3>
-                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                            Choose how objects are tracked: move crosshair (software) or move camera (hardware)
-                        </p>
+                        <h3>🎮 Camera Control</h3>
                         
-                        <div class="select-control">
-                            <label>Tracking Mode</label>
-                            <select id="tracking-mode" onchange="setTrackingMode()">
-                                <option value="crosshair">Crosshair Tracking (Software)</option>
-                                <option value="camera">Camera Tracking (Stepper Motors)</option>
-                            </select>
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="camera-tracking-enabled" onchange="toggleCameraTracking()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Camera Movement</span>
                         </div>
 
-                        <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1565c0;">
-                            <strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.
-                        </div>
-                    </div>
-
-                    <div id="camera-tracking-controls" style="display: none;">
-                        <!-- Calibration Required Warning -->
-                        <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
-                            <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
-                            <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
-                            <p style="font-size: 12px; opacity: 0.9;">This only needs to be done once. Calibration data will be saved and reloaded on restart.</p>
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="camera-recenter-on-loss" onchange="toggleRecenterOnLoss()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Re-center camera slowly on target loss</span>
                         </div>
 
-                        <div class="control-group">
-                            <h3>🎮 Camera Control</h3>
-                            
-                            <div class="toggle-switch">
-                                <label class="switch">
-                                    <input type="checkbox" id="camera-tracking-enabled" onchange="toggleCameraTracking()">
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="toggle-label">Enable Camera Movement</span>
-                            </div>
+                        <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
+                            🏠 Home Camera to Center
+                        </button>
 
-                            <div class="toggle-switch">
-                                <label class="switch">
-                                    <input type="checkbox" id="camera-recenter-on-loss" onchange="toggleRecenterOnLoss()">
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="toggle-label">Re-center camera slowly on target loss</span>
-                            </div>
-
-                            <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
-                                🏠 Home Camera to Center
-                            </button>
-
-                            <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
-                                <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
-                            </div>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>⚙️ Camera Settings</h3>
-
-                            <div class="slider-control">
-                                <label>Dead Zone (pixels)</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
-                                    <span id="camera-dead-zone-value" class="slider-value">20px</span>
-                                </div>
-                            </div>
-
-                            <div class="slider-control">
-                                <label>Movement Speed</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
-                                    <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
-                                </div>
-                            </div>
-
-                            <button class="btn-primary" onclick="applyCameraTrackingSettings()">Apply Settings</button>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>🧪 PID Tuning</h3>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Adjust PID gains for camera tracking responsiveness. Lower Ki is recommended to avoid drift.
-                            </p>
-                            <div class="slider-control">
-                                <label>Kp</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="pid-kp" min="0" max="3" value="0.8" step="0.05" oninput="updatePIDLabel('kp')">
-                                    <span id="pid-kp-value" class="slider-value">0.80</span>
-                                </div>
-                            </div>
-                            <div class="slider-control">
-                                <label>Ki</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="pid-ki" min="0" max="0.5" value="0.0" step="0.005" oninput="updatePIDLabel('ki')">
-                                    <span id="pid-ki-value" class="slider-value">0.00</span>
-                                </div>
-                            </div>
-                            <div class="slider-control">
-                                <label>Kd</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="pid-kd" min="0" max="1.5" value="0.2" step="0.05" oninput="updatePIDLabel('kd')">
-                                    <span id="pid-kd-value" class="slider-value">0.20</span>
-                                </div>
-                            </div>
-                            <button class="btn-primary" onclick="applyPID()">Apply PID</button>
-                        </div>
-
-                        <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
-                            <h3>🎯 Manual Position Control</h3>
-                            <p style="font-size: 13px; color: #4338ca;">
-                                Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
-                            </p>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>🔧 Calibration</h3>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Automatically find limits and set home position, or manually calibrate steps-per-pixel
-                            </p>
-
-                            <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
-                                🤖 Auto-Calibrate & Home
-                            </button>
-
-                            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                                <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
-                            </div>
-
-                            <div class="slider-control">
-                                <label>X-Axis Steps/Pixel</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
-                                    <span id="camera-x-steps-value" class="slider-value">0.10</span>
-                                </div>
-                            </div>
-
-                            <div class="slider-control">
-                                <label>Y-Axis Steps/Pixel</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
-                                    <span id="camera-y-steps-value" class="slider-value">0.10</span>
-                                </div>
-                            </div>
-
-                            <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>📊 Camera Status</h3>
-                            <div class="stat-row">
-                                <span class="stat-label">System Status</span>
-                                <span id="camera-system-status" class="stat-value">Initializing...</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Calibration Status</span>
-                                <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Camera Movement Enabled</span>
-                                <span id="camera-enabled-status" class="stat-value">No</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Camera Position (X, Y)</span>
-                                <span id="camera-position" class="stat-value">0, 0</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Crosshair Position (X, Y)</span>
-                                <span id="crosshair-position" class="stat-value">0, 0</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Moving</span>
-                                <span id="camera-moving" class="stat-value">No</span>
-                            </div>
+                        <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
+                            <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
                         </div>
                     </div>
 
-                    <div id="tracking-status-message" class="status-message"></div>
+                    <div class="control-group">
+                        <h3>⚙️ Camera Settings</h3>
+
+                        <div class="slider-control">
+                            <label>Dead Zone (pixels)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
+                                <span id="camera-dead-zone-value" class="slider-value">20px</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Movement Speed</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
+                                <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyCameraTrackingSettings()">Apply Settings</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>🧪 PID Tuning</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Adjust PID gains for camera tracking responsiveness. Lower Ki is recommended to avoid drift.
+                        </p>
+                        <div class="slider-control">
+                            <label>Kp</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pid-kp" min="0" max="3" value="0.8" step="0.05" oninput="updatePIDLabel('kp')">
+                                <span id="pid-kp-value" class="slider-value">0.80</span>
+                            </div>
+                        </div>
+                        <div class="slider-control">
+                            <label>Ki</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pid-ki" min="0" max="0.5" value="0.0" step="0.005" oninput="updatePIDLabel('ki')">
+                                <span id="pid-ki-value" class="slider-value">0.00</span>
+                            </div>
+                        </div>
+                        <div class="slider-control">
+                            <label>Kd</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pid-kd" min="0" max="1.5" value="0.2" step="0.05" oninput="updatePIDLabel('kd')">
+                                <span id="pid-kd-value" class="slider-value">0.20</span>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="applyPID()">Apply PID</button>
+                    </div>
+
+                    <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
+                        <h3>🎯 Manual Position Control</h3>
+                        <p style="font-size: 13px; color: #4338ca;">
+                            Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
+                        </p>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>🔧 Calibration</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Automatically find limits and set home position, or manually calibrate steps-per-pixel
+                        </p>
+
+                        <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
+                            🤖 Auto-Calibrate & Home
+                        </button>
+
+                        <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
+                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
+                        </div>
+
+                        <div class="slider-control">
+                            <label>X-Axis Steps/Pixel</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
+                                <span id="camera-x-steps-value" class="slider-value">0.10</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Y-Axis Steps/Pixel</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
+                                <span id="camera-y-steps-value" class="slider-value">0.10</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>📊 Camera Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">System Status</span>
+                            <span id="camera-system-status" class="stat-value">Initializing...</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Calibration Status</span>
+                            <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Camera Movement Enabled</span>
+                            <span id="camera-enabled-status" class="stat-value">No</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Camera Position (X, Y)</span>
+                            <span id="camera-position" class="stat-value">0, 0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Crosshair Position (X, Y)</span>
+                            <span id="crosshair-position" class="stat-value">0, 0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Moving</span>
+                            <span id="camera-moving" class="stat-value">No</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Laser Control Tab -->
@@ -2637,7 +2626,7 @@
                 if (data.status === 'success') {
                     showStatus('tracking-status-message', true, enabled ? 'Re-center on loss enabled' : 'Re-center on loss disabled');
                 } else {
-                    showStatus('tracking-status-message', false, data.message || 'Failed to set re-center on loss');
+                    showStatus('tracking-status-message', false, data.message);
                     document.getElementById('camera-recenter-on-loss').checked = !enabled;
                 }
             })
