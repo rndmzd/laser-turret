@@ -286,6 +286,14 @@
                         </div>
                     </div>
 
+                    <!-- Calibration required warning should always be present (toggled by JS) -->
+                    <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
+                        <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
+                        <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
+                        <p style="font-size: 12px; opacity: 0.9;">This only needs to be done once. Calibration data will be saved and reloaded on restart.</p>
+                    </div>
+
+                    <div id="camera-tracking-controls">
                     <div class="control-group">
                         <h3>🎮 Camera Control</h3>
                         
@@ -371,6 +379,7 @@
                             Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
                         </p>
                     </div>
+                    </div> <!-- /#camera-tracking-controls -->
 
                     <div class="control-group">
                         <h3>🔧 Calibration</h3>
@@ -2616,12 +2625,12 @@
             const infoBox = document.getElementById('tracking-mode-info');
             
             if (mode === 'camera') {
-                cameraControls.style.display = 'block';
+                if (cameraControls) cameraControls.style.display = 'block';
                 infoBox.innerHTML = '<strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.';
                 infoBox.style.background = '#fff3cd';
                 infoBox.style.color = '#856404';
             } else {
-                cameraControls.style.display = 'none';
+                if (cameraControls) cameraControls.style.display = 'none';
                 infoBox.innerHTML = '<strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.';
                 infoBox.style.background = '#e3f2fd';
                 infoBox.style.color = '#1565c0';
