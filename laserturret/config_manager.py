@@ -45,6 +45,7 @@ class ConfigManager:
             'rpi_rx_pin': 15,
             'not_connected': 17,
             'use_uart': True,
+            'enable_active_high': False,
             'uart_port': '/dev/serial0',
             'uart_baud': 115200,
             'x_uart_address': 0,
@@ -254,6 +255,10 @@ class ConfigManager:
     def get_motor_steps_per_rev(self) -> int:
         """Get motor steps per revolution"""
         return self._get('Motor', 'steps_per_rev', int)
+
+    def get_enable_active_high(self) -> bool:
+        """Return True if motor enable pins are active-high (LOW = disabled)."""
+        return self._get('Motor', 'enable_active_high', bool)
 
     def get_use_uart(self) -> bool:
         return self._get('Motor', 'use_uart', bool)

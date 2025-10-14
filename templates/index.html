@@ -190,11 +190,21 @@
                         <h3>🛠️ Motor Status</h3>
                         <div class="stat-row">
                             <span class="stat-label">X Motor</span>
-                            <span class="stat-value"><span id="motor-x-dot" class="status-dot status-bad" title="Not initialized"></span></span>
+                            <span class="stat-value">
+                                <span id="motor-x-dot" class="status-dot status-bad" title="Not initialized"></span>
+                                <span id="motor-x-text" style="margin-left:8px;">Unavailable</span>
+                                <span style="margin: 0 8px; color:#999;">|</span>
+                                <span>Enabled: <span id="motor-x-enabled">No</span></span>
+                            </span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Y Motor</span>
-                            <span class="stat-value"><span id="motor-y-dot" class="status-dot status-bad" title="Not initialized"></span></span>
+                            <span class="stat-value">
+                                <span id="motor-y-dot" class="status-dot status-bad" title="Not initialized"></span>
+                                <span id="motor-y-text" style="margin-left:8px;">Unavailable</span>
+                                <span style="margin: 0 8px; color:#999;">|</span>
+                                <span>Enabled: <span id="motor-y-enabled">No</span></span>
+                            </span>
                         </div>
                     </div>
                     <div class="control-group">
@@ -213,11 +223,29 @@
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Limit Switches</span>
-                            <span class="stat-value" style="display:flex; gap:8px; align-items:center;">
-                                <span title="X CW" id="ls-x-cw" class="status-dot status-ok"></span>
-                                <span title="X CCW" id="ls-x-ccw" class="status-dot status-ok"></span>
-                                <span title="Y CW" id="ls-y-cw" class="status-dot status-ok"></span>
-                                <span title="Y CCW" id="ls-y-ccw" class="status-dot status-ok"></span>
+                            <span class="stat-value" style="flex:1;">
+                                <div class="limit-switches-grid">
+                                    <div class="ls-item">
+                                        <span class="ls-label">X CW</span>
+                                        <span id="ls-x-cw" class="status-dot status-ok" aria-label="X clockwise status"></span>
+                                        <span id="ls-x-cw-text" class="ls-text">Open</span>
+                                    </div>
+                                    <div class="ls-item">
+                                        <span class="ls-label">X CCW</span>
+                                        <span id="ls-x-ccw" class="status-dot status-ok" aria-label="X counterclockwise status"></span>
+                                        <span id="ls-x-ccw-text" class="ls-text">Open</span>
+                                    </div>
+                                    <div class="ls-item">
+                                        <span class="ls-label">Y CW</span>
+                                        <span id="ls-y-cw" class="status-dot status-ok" aria-label="Y clockwise status"></span>
+                                        <span id="ls-y-cw-text" class="ls-text">Open</span>
+                                    </div>
+                                    <div class="ls-item">
+                                        <span class="ls-label">Y CCW</span>
+                                        <span id="ls-y-ccw" class="status-dot status-ok" aria-label="Y counterclockwise status"></span>
+                                        <span id="ls-y-ccw-text" class="ls-text">Open</span>
+                                    </div>
+                                </div>
                             </span>
                         </div>
                     </div>
@@ -3241,6 +3269,18 @@
             el.classList.add(ok ? 'status-ok' : 'status-bad');
             el.setAttribute('title', ok ? 'Initialized' : 'Not initialized');
         }
+        function setSwitchState(baseId, open) {
+            const dot = document.getElementById(baseId);
+            if (dot) {
+                dot.classList.remove('status-ok', 'status-bad');
+                dot.classList.add(open ? 'status-ok' : 'status-bad');
+                dot.setAttribute('title', open ? 'Open' : 'Pressed');
+            }
+            const txt = document.getElementById(baseId + '-text');
+            if (txt) {
+                txt.textContent = open ? 'Open' : 'Pressed';
+            }
+        }
         
         // Listen for consolidated status updates from server
         socket.on('status_update', (status) => {
@@ -3457,10 +3497,24 @@
                 }
                 syncMotorsToolbar(!!status.tracking.camera_enabled);
                 syncRecenterOverlayButton();
-                // Update motor init indicators
+                // Update motor status (availability + enabled)
                 if (ctrl.motors) {
-                    if (ctrl.motors.x) setStatusDot('motor-x-dot', !!ctrl.motors.x.available);
-                    if (ctrl.motors.y) setStatusDot('motor-y-dot', !!ctrl.motors.y.available);
+                    if (ctrl.motors.x) {
+                        const availX = !!ctrl.motors.x.available;
+                        setStatusDot('motor-x-dot', availX);
+                        const xDot = document.getElementById('motor-x-dot');
+                        if (xDot) xDot.setAttribute('title', availX ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-x-text', availX ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-x-enabled', ctrl.motors.x.enabled ? 'Yes' : 'No');
+                    }
+                    if (ctrl.motors.y) {
+                        const availY = !!ctrl.motors.y.available;
+                        setStatusDot('motor-y-dot', availY);
+                        const yDot = document.getElementById('motor-y-dot');
+                        if (yDot) yDot.setAttribute('title', availY ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-y-text', availY ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-y-enabled', ctrl.motors.y.enabled ? 'Yes' : 'No');
+                    }
                 }
                 // Update diagnostics (microsteps, idle, limit switches)
                 if (typeof ctrl.microsteps === 'number') {
@@ -3478,11 +3532,11 @@
                 }
                 if (ctrl.limit_switches && ctrl.limit_switches.pressed) {
                     const p = ctrl.limit_switches.pressed;
-                    // green when NOT pressed, red when pressed
-                    if (p.hasOwnProperty('x_cw')) setStatusDot('ls-x-cw', !p.x_cw);
-                    if (p.hasOwnProperty('x_ccw')) setStatusDot('ls-x-ccw', !p.x_ccw);
-                    if (p.hasOwnProperty('y_cw')) setStatusDot('ls-y-cw', !p.y_cw);
-                    if (p.hasOwnProperty('y_ccw')) setStatusDot('ls-y-ccw', !p.y_ccw);
+                    // Open = not pressed (true = okay to move)
+                    if (p.hasOwnProperty('x_cw')) setSwitchState('ls-x-cw', !p.x_cw);
+                    if (p.hasOwnProperty('x_ccw')) setSwitchState('ls-x-ccw', !p.x_ccw);
+                    if (p.hasOwnProperty('y_cw')) setSwitchState('ls-y-cw', !p.y_cw);
+                    if (p.hasOwnProperty('y_ccw')) setSwitchState('ls-y-ccw', !p.y_ccw);
                 }
 
             } else if (status.tracking && !status.tracking.camera_enabled) {

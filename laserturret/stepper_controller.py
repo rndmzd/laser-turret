@@ -82,6 +82,11 @@ class StepperController:
         self.config = config_manager
         self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
+        # Enable polarity: True => HIGH enables, LOW disables; False => LOW enables, HIGH disables
+        try:
+            self.enable_active_high: bool = bool(self.config.get_enable_active_high())
+        except Exception:
+            self.enable_active_high = True
         # UART configuration
         self.use_uart: bool = bool(self.config.get_use_uart())
         self.uart_port: Optional[str] = self.config.get_uart_port() if self.use_uart else None
@@ -237,9 +242,10 @@ class StepperController:
         if not self.use_uart:
             self._set_microstepping(microsteps)
         
-        # Disable motors initially (TMC2209: LOW = disabled)
-        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: 0 is disabled
-        self.gpio.output(self.y_enable_pin, 0)
+        # Disable motors initially
+        disabled_level = 0 if self.enable_active_high else 1
+        self.gpio.output(self.x_enable_pin, disabled_level)
+        self.gpio.output(self.y_enable_pin, disabled_level)
         
         logger.debug("GPIO pins configured for stepper control")
     
@@ -369,8 +375,9 @@ class StepperController:
     def enable(self):
         """Enable stepper motors (TMC2209: enable is ACTIVE HIGH)"""
         print(f"enable() called: Setting enable pins HIGH for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
-        self.gpio.output(self.x_enable_pin, 1)  # TMC2209: HIGH enables
-        self.gpio.output(self.y_enable_pin, 1)
+        level = 1 if self.enable_active_high else 0
+        self.gpio.output(self.x_enable_pin, level)
+        self.gpio.output(self.y_enable_pin, level)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
@@ -397,8 +404,9 @@ class StepperController:
                                    Set to False for temporary disable (e.g., idle timeout).
         """
         print(f"disable() called: Setting enable pins LOW for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
-        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: LOW disables
-        self.gpio.output(self.y_enable_pin, 0)
+        level = 0 if self.enable_active_high else 1
+        self.gpio.output(self.x_enable_pin, level)
+        self.gpio.output(self.y_enable_pin, level)
         print(f"GPIO outputs set to 0 (LOW)", flush=True)
         # Verify the pins were actually set
         try:
