@@ -3283,11 +3283,11 @@
             if (dot) {
                 dot.classList.remove('status-ok', 'status-bad');
                 dot.classList.add(open ? 'status-ok' : 'status-bad');
-                dot.setAttribute('title', open ? 'Open' : 'Pressed');
+                dot.setAttribute('title', open ? 'Open' : 'Closed');
             }
             const txt = document.getElementById(baseId + '-text');
             if (txt) {
-                txt.textContent = open ? 'Open' : 'Pressed';
+                txt.textContent = open ? 'Open' : 'Closed';
             }
         }
         
