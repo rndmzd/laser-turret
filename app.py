@@ -12,6 +12,9 @@ from datetime import datetime
 import os
 import json
 import logging
+import atexit
+import signal
+import sys
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
@@ -226,6 +229,20 @@ def initialize_stepper_controller():
         print(f"WARNING: Failed to initialize stepper controller: {e}")
         print("Camera tracking mode will not be available.")
         stepper_controller = None
+
+def cleanup_on_exit():
+    global stepper_controller
+    try:
+        if stepper_controller:
+            disabled_level = 0 if stepper_controller.enable_active_high else 1
+            stepper_controller.gpio.output(stepper_controller.x_enable_pin, disabled_level)
+            stepper_controller.gpio.output(stepper_controller.y_enable_pin, disabled_level)
+            print(f"Cleanup: set motor enable pins to {disabled_level} (active_high={stepper_controller.enable_active_high})")
+    except Exception as e:
+        print(f"Cleanup error: {e}")
+
+def _handle_exit_signal(signum, frame):
+    cleanup_on_exit()
 
 def initialize_camera():
     """Initialize the Pi Camera with compatible auto exposure settings"""
@@ -2822,6 +2839,13 @@ if __name__ == '__main__':
     
     # Start the status emitter background thread
     socketio.start_background_task(status_emitter_thread)
+    # Ensure motors are disabled on normal exit and on signals
+    try:
+        atexit.register(cleanup_on_exit)
+        signal.signal(signal.SIGINT, _handle_exit_signal)
+        signal.signal(signal.SIGTERM, _handle_exit_signal)
+    except Exception:
+        pass
     
     # Run with SocketIO
     print("Starting Laser Turret Control Panel with WebSocket support...")

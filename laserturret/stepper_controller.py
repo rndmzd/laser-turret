@@ -246,6 +246,7 @@ class StepperController:
         disabled_level = 0 if self.enable_active_high else 1
         self.gpio.output(self.x_enable_pin, disabled_level)
         self.gpio.output(self.y_enable_pin, disabled_level)
+        logger.info(f"Startup: set enable pins to disabled level={disabled_level} (active_high={self.enable_active_high})")
         
         logger.debug("GPIO pins configured for stepper control")
     
@@ -374,8 +375,8 @@ class StepperController:
     
     def enable(self):
         """Enable stepper motors (TMC2209: enable is ACTIVE HIGH)"""
-        print(f"enable() called: Setting enable pins HIGH for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
         level = 1 if self.enable_active_high else 0
+        print(f"enable(): setting enable pins to {level} (active_high={self.enable_active_high}) x={self.x_enable_pin}, y={self.y_enable_pin}", flush=True)
         self.gpio.output(self.x_enable_pin, level)
         self.gpio.output(self.y_enable_pin, level)
         # Verify the pins were actually set
@@ -403,11 +404,11 @@ class StepperController:
             invalidate_calibration: If True, mark calibration as invalid.
                                    Set to False for temporary disable (e.g., idle timeout).
         """
-        print(f"disable() called: Setting enable pins LOW for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
         level = 0 if self.enable_active_high else 1
+        print(f"disable(): setting enable pins to {level} (active_high={self.enable_active_high}) x={self.x_enable_pin}, y={self.y_enable_pin}", flush=True)
         self.gpio.output(self.x_enable_pin, level)
         self.gpio.output(self.y_enable_pin, level)
-        print(f"GPIO outputs set to 0 (LOW)", flush=True)
+        print(f"GPIO outputs set to {level}", flush=True)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
