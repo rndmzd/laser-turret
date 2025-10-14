@@ -141,12 +141,14 @@ def configure_defaults(drv: TMC2209, microsteps: int = 16) -> None:
     """
     Apply a reasonable default configuration for camera pan/tilt steppers.
     """
-    ihold_irun = pack_IHOLD_IRUN(IHOLD=6, IRUN=20, IHOLDDELAY=4)
-    chopconf = pack_CHOPCONF(mres_bits=mres_bits_for_microsteps(microsteps), toff=3, hstrt=4, hend=2, tbl=2)
+    ihold_irun = pack_IHOLD_IRUN(IHOLD=0, IRUN=6, IHOLDDELAY=1)
+    chopconf = pack_CHOPCONF(mres_bits=mres_bits_for_microsteps(microsteps), toff=3, hstrt=4, hend=0, tbl=2)
     pwmconf = pack_PWMCONF(pwm_ofs=36, pwm_grad=14, pwm_freq=1, autoscale=True, autograd=True, pwm_lim=12)
-    tpwmthrs = 0x00000040
+    #tpwmthrs = 0x00000040
+    tpwmthrs = 0x00000000
     tcoolthrs = 0x00000000
-    tpowerdown = 0x00000014
+    #tpowerdown = 0x00000014
+    tpowerdown = 0x00000002
 
     drv.write_reg(REG['GCONF'], pack_GCONF(pdn_disable=True, mstep_reg_select=True))
     drv.write_reg(REG['IHOLD_IRUN'], ihold_irun)
