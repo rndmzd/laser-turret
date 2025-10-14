@@ -245,6 +245,20 @@
                 <!-- Camera Tracking Tab -->
                 <div id="tracking-tab" class="tab-content">
                     <div class="control-group">
+                        <h3>📹 Tracking Mode</h3>
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="tracking-mode-toggle" onchange="toggleTrackingMode()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Camera Mode (off = Crosshair Mode)</span>
+                        </div>
+                        <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1565c0;">
+                            <strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.
+                        </div>
+                    </div>
+
+                    <div class="control-group">
                         <h3>🎮 Camera Control</h3>
                         
                         <div class="toggle-switch">
@@ -2543,31 +2557,29 @@
         }
 
         // Camera tracking controls
-        function setTrackingMode() {
-            const mode = document.getElementById('tracking-mode').value;
-            
+        function toggleTrackingMode() {
+            const checkbox = document.getElementById('tracking-mode-toggle');
+            const mode = checkbox && checkbox.checked ? 'camera' : 'crosshair';
             fetch('/tracking/mode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: mode })
+                body: JSON.stringify({ mode })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
                     updateTrackingModeUI(mode);
-                    showStatus('tracking-status-message', true, 
-                        mode === 'crosshair' ? 'Crosshair tracking mode active' : 'Camera tracking mode active');
+                    showStatus('tracking-status-message', true, mode === 'camera' ? 'Camera tracking mode active' : 'Crosshair tracking mode active');
                     updateCameraTrackingStatus();
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
-                    // Revert to previous mode on error
-                    document.getElementById('tracking-mode').value = 
-                        mode === 'crosshair' ? 'camera' : 'crosshair';
+                    showStatus('tracking-status-message', false, data.message || 'Failed to set tracking mode');
+                    if (checkbox) checkbox.checked = !checkbox.checked;
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to set tracking mode');
                 console.error('Error setting tracking mode:', error);
+                showStatus('tracking-status-message', false, 'Failed to set tracking mode');
+                if (checkbox) checkbox.checked = !checkbox.checked;
             });
         }
 
@@ -3354,11 +3366,11 @@
             
             // Update tracking mode status
             if (status.tracking) {
-                const trackMode = document.getElementById('tracking-mode');
-                if (trackMode && trackMode.value !== status.tracking.mode) {
-                    trackMode.value = status.tracking.mode;
-                    updateTrackingModeUI(status.tracking.mode);
+                const modeToggle = document.getElementById('tracking-mode-toggle');
+                if (modeToggle) {
+                    modeToggle.checked = (status.tracking.mode === 'camera');
                 }
+                updateTrackingModeUI(status.tracking.mode);
             }
             
             // Update camera controller status (detailed)
