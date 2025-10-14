@@ -1179,14 +1179,14 @@
                 .then(data => {
                     if (data.status === 'success') {
                         // Visual feedback
-                        showStatus('tracking-status-message', true, 'Camera moving to recenter position...');
+                        showInlineStatus('tracking-status-message', true, 'Camera moving to recenter position...');
                     } else {
-                        showStatus('tracking-status-message', false, data.message);
+                        showInlineStatus('tracking-status-message', false, data.message);
                     }
                 })
                 .catch(error => {
                     console.error('Error moving camera to position:', error);
-                    showStatus('tracking-status-message', false, 'Failed to move camera');
+                    showInlineStatus('tracking-status-message', false, 'Failed to move camera');
                 });
             } else {
                 // Crosshair mode: update crosshair position
@@ -1394,6 +1394,18 @@
                 }, 3000);
             }
             showToast(success, message, 3000);
+        }
+
+        function showInlineStatus(elementId, success, message) {
+            const statusEl = document.getElementById(elementId);
+            if (statusEl) {
+                statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+                statusEl.textContent = message;
+                statusEl.style.display = 'block';
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+            }
         }
 
         function ensureToastContainer() {
@@ -2694,14 +2706,14 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('tracking-status-message', true, 'Homing camera to center position...');
+                    showInlineStatus('tracking-status-message', true, 'Homing camera to center position...');
                     setTimeout(updateCameraTrackingStatus, 1000);
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
+                    showInlineStatus('tracking-status-message', false, data.message);
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to home camera');
+                showInlineStatus('tracking-status-message', false, 'Failed to home camera');
                 console.error('Error homing camera:', error);
             });
         }
@@ -3035,13 +3047,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('tracking-status-message', true, data.message);
+                    showInlineStatus('tracking-status-message', true, data.message);
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
+                    showInlineStatus('tracking-status-message', false, data.message);
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to move camera');
+                showInlineStatus('tracking-status-message', false, 'Failed to move camera');
                 console.error('Error moving camera:', error);
             });
         }
@@ -3078,17 +3090,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('tracking-status-message', true, data.message);
+                    showInlineStatus('tracking-status-message', true, data.message);
                     // Poll status more frequently during calibration
                     setTimeout(() => {
                         updateCameraTrackingStatus();
                     }, 5000);
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
+                    showInlineStatus('tracking-status-message', false, data.message);
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to start auto-calibration');
+                showInlineStatus('tracking-status-message', false, 'Failed to start auto-calibration');
                 console.error('Error starting auto-calibration:', error);
             });
         }
