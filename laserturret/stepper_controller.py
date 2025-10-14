@@ -148,6 +148,7 @@ class StepperController:
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,  # Share the same GPIO backend!
+                enable_active_high=self.enable_active_high,
             )
             print(f"Creating axis_y with gpio_backend={self.gpio}, enable_pin={y_cfg['enable_pin']}", flush=True)
             self.axis_y = StepperAxis(
@@ -167,6 +168,7 @@ class StepperController:
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,  # Share the same GPIO backend!
+                enable_active_high=self.enable_active_high,
             )
             print(f"Axes created: axis_x.gpio={id(self.axis_x.gpio)}, axis_y.gpio={id(self.axis_y.gpio)}, controller.gpio={id(self.gpio)}", flush=True)
         except Exception as _:
