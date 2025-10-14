@@ -15,6 +15,7 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 - **Flexible Detection** - Haar cascades, TensorFlow Lite, or Roboflow Inference (remote)
 - **Motion Package API** - Standardized `laserturret.motion` module for stepper control
 - **Real-time PID Tuning** - Adjust tracking PID gains via UI or REST API
+- **TMC2209 UART Support (Optional)** - Motor tab with live register viewer and on-the-fly tuning (IHOLD/IRUN/IHOLDDELAY/TPOWERDOWN)
 
 ## Hardware Requirements
 
@@ -27,7 +28,7 @@ A Raspberry Pi-powered laser turret with remote control, camera streaming, and p
 ### Motor Control
 
 - 2x NEMA 17 stepper motors (or similar)
-- 2x A4988 stepper motor drivers
+- 2x stepper drivers: A4988/DRV8825 (pin mode) or TMC2209 (UART)
 - 4x Limit switches (2 per axis)
 - 12V power supply for motors
 
@@ -124,6 +125,8 @@ laser_pin = 12
 laser_max_power = 100
 ```
 
+> Note: UART features rely on `pyserial` (already included in `requirements.txt`).
+
 ### On Remote Control (CircuitPython)
 
 #### 1. Install CircuitPython Libraries
@@ -164,6 +167,10 @@ GPIO 22 (MS3)    --> MS3
                      VMOT --> 12V
                      GND --> GND
 ```
+
+### TMC2209 (UART) Setup
+
+For wiring, configuration, and on-the-fly tuning of the TMC2209 drivers, see `docs/TMC2209_UART.md`.
 
 ### Limit Switch Connections
 
@@ -241,6 +248,7 @@ Hold the joystick button during power-on to enter calibration mode. Follow the L
 - **Camera tracking controls** - Enable camera movement, home to center, manual nudge
 - **PID tuning** - Adjust Kp, Ki, Kd gains at runtime via UI sliders or REST API
 - **WebSocket updates** - Real-time status push (2Hz) replaces HTTP polling
+- **Motor tab (UART)** - Live TMC2209 register viewer and runtime tuning (IHOLD/IRUN/IHOLDDELAY/TPOWERDOWN)
 
 ## MQTT Message Format
 
@@ -412,7 +420,7 @@ The control panel uses WebSocket (Socket.IO) for real-time status updates:
 
 See `docs/WEBSOCKET_MIGRATION.md` for migration details and performance metrics.
 
-## REST API Reference
+### REST API Reference
 
 The control panel exposes a comprehensive REST API for automation and integration:
 
@@ -454,6 +462,13 @@ The control panel exposes a comprehensive REST API for automation and integratio
 - `GET /tracking/camera/pid` - Get PID values
 - `POST /tracking/camera/pid` - Set PID values (persisted)
 - `POST /tracking/camera/recenter_on_loss` - Re-center behavior
+
+### TMC2209 UART
+
+- `GET /tracking/camera/tmc/registers` - Read common registers for X/Y
+- `POST /tracking/camera/tmc/apply_defaults` - Apply safe defaults (uses configured `microsteps`)
+- `POST /tracking/camera/tmc/ihold_irun` - Set IHOLD/IRUN/IHOLDDELAY (`{"axis":"x|y|both","ihold":6,"irun":20,"iholddelay":4}`)
+- `POST /tracking/camera/tmc/tpowerdown` - Set TPOWERDOWN (`{"axis":"x|y|both","tpowerdown":20}`)
 
 ### Object Detection
 
@@ -563,6 +578,7 @@ laser-turret/
 │   ├── stepper_controller.py       # Camera tracking controller (used by app)
 │   ├── roboflow_detector.py        # Roboflow HTTP client wrapper
 │   ├── tflite_detector.py          # TensorFlow Lite object detection
+│   ├── tmc2209_uart.py             # TMC2209 UART driver helpers
 │   ├── hardware_interface.py       # GPIO abstraction (lgpio/RPi.GPIO)
 │   ├── config_manager.py           # Configuration file management
 │   └── motion/                     # Standardized motion API (recommended)
@@ -573,8 +589,9 @@ laser-turret/
 ├── templates/
 │   └── index.html                  # Web UI with Socket.IO integration
 ├── static/
-│   └── style.css                   # UI styling
+│   └── css/index.css               # UI styling
 └── scripts/                        # Test and utility scripts
+    └── setup_tmc2209_uart.py       # Configure and dump TMC2209 registers via CLI
 ```
 
 ## Contributing

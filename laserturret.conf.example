@@ -25,6 +25,11 @@ y_dir_pin = 26
 y_step_pin = 24
 y_enable_pin = 6
 
+# Enable pin polarity
+# When false (default for TMC2209), LOW enables torque and HIGH disables (active-low enable)
+# When true (e.g., some A4988/DRV8825 boards), HIGH enables and LOW disables (active-high enable)
+enable_active_high = false
+
 # Microstepping pins (shared between both motors)
 ms1_pin = 17
 ms2_pin = 27
@@ -33,6 +38,13 @@ ms3_pin = 22
 # Motor specifications
 microsteps = 8          # Microstepping resolution (1, 2, 4, 8, or 16)
 steps_per_rev = 200     # Steps per revolution (typically 200 for 1.8° motors)
+
+# UART configuration for TMC2209 (set use_uart = true to configure via UART)
+use_uart = false
+uart_port = /dev/serial0
+uart_baud = 115200
+x_uart_address = 2
+y_uart_address = 1
 
 [Control]
 # Maximum steps to move per MQTT message

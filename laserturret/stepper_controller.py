@@ -10,9 +10,24 @@ import threading
 import logging
 import json
 import os
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 from dataclasses import dataclass, asdict
 from laserturret.motion.constants import MICROSTEP_CONFIG, CLOCKWISE, COUNTER_CLOCKWISE
+
+try:
+    # Optional UART driver for TMC2209 configuration
+    from laserturret.tmc2209_uart import (
+        open_serial,
+        TMC2209,
+        configure_defaults,
+        pack_IHOLD_IRUN,
+        REG,
+    )
+except Exception:  # ImportError or pyserial missing
+    open_serial = None
+    TMC2209 = None  # type: ignore
+    configure_defaults = None  # type: ignore
+    REG = {}
 from laserturret.motion.axis import StepperAxis
 from laserturret.steppercontrol import MotorError, LimitSwitchError
 
@@ -67,6 +82,18 @@ class StepperController:
         self.config = config_manager
         self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
+        # Enable polarity: True => HIGH enables, LOW disables; False => LOW enables, HIGH disables
+        try:
+            self.enable_active_high: bool = bool(self.config.get_enable_active_high())
+        except Exception:
+            self.enable_active_high = True
+        # UART configuration
+        self.use_uart: bool = bool(self.config.get_use_uart())
+        self.uart_port: Optional[str] = self.config.get_uart_port() if self.use_uart else None
+        self.uart_baud: Optional[int] = self.config.get_uart_baud() if self.use_uart else None
+        self._serial = None
+        self._tmc_x = None
+        self._tmc_y = None
         
         # Motor pins
         self.x_step_pin = config_manager.get_motor_pin('x_step_pin')
@@ -77,10 +104,15 @@ class StepperController:
         self.y_dir_pin = config_manager.get_motor_pin('y_dir_pin')
         self.y_enable_pin = config_manager.get_motor_pin('y_enable_pin')
         
-        # Microstepping pins
-        self.ms1_pin = config_manager.get_motor_pin('ms1_pin')
-        self.ms2_pin = config_manager.get_motor_pin('ms2_pin')
-        self.ms3_pin = config_manager.get_motor_pin('ms3_pin')
+        # Microstepping pins (may be None when UART is used)
+        try:
+            self.ms1_pin = config_manager.get_motor_pin('ms1_pin') if not self.use_uart else None
+            self.ms2_pin = config_manager.get_motor_pin('ms2_pin') if not self.use_uart else None
+            self.ms3_pin = config_manager.get_motor_pin('ms3_pin') if not self.use_uart else None
+        except Exception:
+            self.ms1_pin = None
+            self.ms2_pin = None
+            self.ms3_pin = None
         
         # Limit switches (optional safety)
         try:
@@ -116,6 +148,7 @@ class StepperController:
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,  # Share the same GPIO backend!
+                enable_active_high=self.enable_active_high,
             )
             print(f"Creating axis_y with gpio_backend={self.gpio}, enable_pin={y_cfg['enable_pin']}", flush=True)
             self.axis_y = StepperAxis(
@@ -135,6 +168,7 @@ class StepperController:
                 start_thread=True,
                 deadzone=self.config.get_control_deadzone(),
                 gpio_backend=self.gpio,  # Share the same GPIO backend!
+                enable_active_high=self.enable_active_high,
             )
             print(f"Axes created: axis_x.gpio={id(self.axis_x.gpio)}, axis_y.gpio={id(self.axis_y.gpio)}, controller.gpio={id(self.gpio)}", flush=True)
         except Exception as _:
@@ -146,8 +180,10 @@ class StepperController:
         self.moving = False
         self.movement_lock = threading.Lock()
         
-        # Initialize GPIO
+        # Initialize GPIO and optionally TMC UART
         self._setup_gpio()
+        if self.use_uart:
+            self._init_tmc_uart()
         
         # PID defaults (can be overridden by calibration file)
         self.kp = 0.8
@@ -186,9 +222,14 @@ class StepperController:
         self.gpio.setup(self.y_dir_pin, PinMode.OUTPUT)
         self.gpio.setup(self.y_enable_pin, PinMode.OUTPUT)
         
-        self.gpio.setup(self.ms1_pin, PinMode.OUTPUT)
-        self.gpio.setup(self.ms2_pin, PinMode.OUTPUT)
-        self.gpio.setup(self.ms3_pin, PinMode.OUTPUT)
+        # Only set up MS pins when not using UART-based microstepping
+        if not self.use_uart:
+            if self.ms1_pin is not None:
+                self.gpio.setup(self.ms1_pin, PinMode.OUTPUT)
+            if self.ms2_pin is not None:
+                self.gpio.setup(self.ms2_pin, PinMode.OUTPUT)
+            if self.ms3_pin is not None:
+                self.gpio.setup(self.ms3_pin, PinMode.OUTPUT)
         
         # Setup limit switches if available
         if self.has_limit_switches:
@@ -197,14 +238,17 @@ class StepperController:
             self.gpio.setup(self.y_cw_limit, PinMode.INPUT, PullMode.UP)
             self.gpio.setup(self.y_ccw_limit, PinMode.INPUT, PullMode.UP)
         
-        # Set microstepping (1/8 step for smooth motion)
+        # Set microstepping via pins when not using UART
         microsteps = self.config.get_motor_microsteps()
         self.microsteps = microsteps
-        self._set_microstepping(microsteps)
+        if not self.use_uart:
+            self._set_microstepping(microsteps)
         
-        # Disable motors initially (TMC2209: LOW = disabled)
-        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: 0 is disabled
-        self.gpio.output(self.y_enable_pin, 0)
+        # Disable motors initially
+        disabled_level = 0 if self.enable_active_high else 1
+        self.gpio.output(self.x_enable_pin, disabled_level)
+        self.gpio.output(self.y_enable_pin, disabled_level)
+        logger.info(f"Startup: set enable pins to disabled level={disabled_level} (active_high={self.enable_active_high})")
         
         logger.debug("GPIO pins configured for stepper control")
     
@@ -226,18 +270,124 @@ class StepperController:
             logger.debug(f"Microstepping set to 1/{microsteps}")
         else:
             logger.error(f"Invalid microstepping value: {microsteps}")
+
+    def _init_tmc_uart(self) -> None:
+        """Initialize TMC2209 drivers over UART if enabled in config."""
+        if not self.use_uart:
+            return
+        if TMC2209 is None or open_serial is None:
+            logger.error("TMC2209 UART requested but pyserial/driver not available")
+            return
+        try:
+            # Open shared UART
+            self._serial = open_serial(self.uart_port, int(self.uart_baud or 115200), timeout=0.05)
+            x_addr = int(self.config.get_uart_address('x'))
+            y_addr = int(self.config.get_uart_address('y'))
+            self._tmc_x = TMC2209(self._serial, x_addr)
+            self._tmc_y = TMC2209(self._serial, y_addr)
+            # Apply defaults based on configured microsteps
+            if configure_defaults is not None:
+                configure_defaults(self._tmc_x, microsteps=self.microsteps)
+                configure_defaults(self._tmc_y, microsteps=self.microsteps)
+            # Touch IFCNT to verify comms
+            if REG:
+                _ = self._tmc_x.read_reg(REG.get('IFCNT', 0x02))
+                _ = self._tmc_y.read_reg(REG.get('IFCNT', 0x02))
+            logger.info("TMC2209 UART initialized on %s @ %s bps", self.uart_port, self.uart_baud)
+        except Exception as e:
+            logger.error(f"Failed to initialize TMC2209 over UART: {e}")
+
+    def get_tmc_registers(self) -> Optional[Dict[str, Dict[str, int]]]:
+        """Return a snapshot of common TMC2209 registers for X/Y if UART is active."""
+        if not self.use_uart or self._tmc_x is None or self._tmc_y is None or not REG:
+            return None
+        regs = ['GCONF', 'GSTAT', 'IFCNT', 'IHOLD_IRUN', 'TPOWERDOWN', 'TPWMTHRS', 'TCOOLTHRS', 'CHOPCONF', 'DRV_STATUS', 'PWMCONF']
+        out: Dict[str, Dict[str, int]] = {'x': {}, 'y': {}}
+        for name in regs:
+            addr = REG.get(name)
+            if addr is None:
+                continue
+            try:
+                out['x'][name] = int(self._tmc_x.read_reg(addr))
+            except Exception:
+                out['x'][name] = -1
+            try:
+                out['y'][name] = int(self._tmc_y.read_reg(addr))
+            except Exception:
+                out['y'][name] = -1
+        return out
+
+    def tmc_apply_defaults(self, microsteps: Optional[int] = None) -> bool:
+        """Re-apply default TMC2209 settings over UART for both drivers."""
+        if not self.use_uart or self._tmc_x is None or self._tmc_y is None or configure_defaults is None:
+            return False
+        try:
+            m = int(microsteps) if microsteps is not None else int(self.microsteps)
+            configure_defaults(self._tmc_x, microsteps=m)
+            configure_defaults(self._tmc_y, microsteps=m)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to apply TMC2209 defaults: {e}")
+            return False
+
+    def _get_drv_by_axis(self, axis: str):
+        axis = (axis or '').lower()
+        if axis == 'x':
+            return self._tmc_x
+        if axis == 'y':
+            return self._tmc_y
+        return None
+
+    def tmc_set_ihold_irun(self, axis: str, ihold: int, irun: int, iholddelay: int) -> bool:
+        """Set IHOLD_IRUN fields for one axis over UART."""
+        if not self.use_uart or REG is None:
+            return False
+        drv = self._get_drv_by_axis(axis)
+        if drv is None:
+            return False
+        # clamp to field widths
+        ihold = max(0, min(31, int(ihold)))
+        irun = max(0, min(31, int(irun)))
+        iholddelay = max(0, min(15, int(iholddelay)))
+        try:
+            val = pack_IHOLD_IRUN(IHOLD=ihold, IRUN=irun, IHOLDDELAY=iholddelay)
+            drv.write_reg(REG['IHOLD_IRUN'], val)
+            # bump IFCNT
+            _ = drv.read_reg(REG.get('IFCNT', 0x02))
+            return True
+        except Exception as e:
+            logger.error(f"IHOLD_IRUN write failed on axis {axis}: {e}")
+            return False
+
+    def tmc_set_tpowerdown(self, axis: str, tpowerdown: int) -> bool:
+        """Set TPOWERDOWN for one axis over UART."""
+        if not self.use_uart or REG is None:
+            return False
+        drv = self._get_drv_by_axis(axis)
+        if drv is None:
+            return False
+        tpd = max(0, min(0xFF, int(tpowerdown)))
+        try:
+            drv.write_reg(REG['TPOWERDOWN'], tpd)
+            _ = drv.read_reg(REG.get('IFCNT', 0x02))
+            return True
+        except Exception as e:
+            logger.error(f"TPOWERDOWN write failed on axis {axis}: {e}")
+            return False
     
     def enable(self):
-        """Enable stepper motors (TMC2209: enable is ACTIVE HIGH)"""
-        print(f"enable() called: Setting enable pins HIGH for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
-        self.gpio.output(self.x_enable_pin, 1)  # TMC2209: HIGH enables
-        self.gpio.output(self.y_enable_pin, 1)
+        """Enable stepper motors (drives enable pins to the configured active level)."""
+        level = 1 if self.enable_active_high else 0
+        print(f"enable(): setting enable pins to {level} (active_high={self.enable_active_high}) x={self.x_enable_pin}, y={self.y_enable_pin}", flush=True)
+        self.gpio.output(self.x_enable_pin, level)
+        self.gpio.output(self.y_enable_pin, level)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
             y_state = self.gpio.input(self.y_enable_pin)
-            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0)")
-        except:
+            expected = level
+            logger.info(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (expected={expected} for enabled)")
+        except Exception:
             pass
         self.enabled = True
         try:
@@ -251,21 +401,23 @@ class StepperController:
     
     def disable(self, invalidate_calibration: bool = True):
         """
-        Disable stepper motors (release torque).
+        Disable stepper motors (release torque). Drives enable pins to the configured inactive level.
         
         Args:
             invalidate_calibration: If True, mark calibration as invalid.
                                    Set to False for temporary disable (e.g., idle timeout).
         """
-        print(f"disable() called: Setting enable pins LOW for TMC2209 (x={self.x_enable_pin}, y={self.y_enable_pin})", flush=True)
-        self.gpio.output(self.x_enable_pin, 0)  # TMC2209: LOW disables
-        self.gpio.output(self.y_enable_pin, 0)
-        print(f"GPIO outputs set to 0 (LOW)", flush=True)
+        level = 0 if self.enable_active_high else 1
+        print(f"disable(): setting enable pins to {level} (active_high={self.enable_active_high}) x={self.x_enable_pin}, y={self.y_enable_pin}", flush=True)
+        self.gpio.output(self.x_enable_pin, level)
+        self.gpio.output(self.y_enable_pin, level)
+        print(f"GPIO outputs set to {level}", flush=True)
         # Verify the pins were actually set
         try:
             x_state = self.gpio.input(self.x_enable_pin)
             y_state = self.gpio.input(self.y_enable_pin)
-            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (should be 0 for disabled)", flush=True)
+            expected = level
+            print(f"Enable pins read back: x_enable={x_state}, y_enable={y_state} (expected={expected} for disabled)", flush=True)
         except Exception as e:
             print(f"Failed to read back pin states: {e}", flush=True)
         self.enabled = False
@@ -1075,13 +1227,51 @@ class StepperController:
     
     def get_status(self) -> dict:
         """Get current controller status"""
+        # Compute idle remaining seconds (best-effort)
+        try:
+            idle_remaining = None
+            if getattr(self, 'idle_timeout', None):
+                last = float(getattr(self, '_last_activity', time.time()))
+                idle_remaining = max(0.0, float(self.idle_timeout) - (time.time() - last))
+        except Exception:
+            idle_remaining = None
+
+        # Read limit switch pressed states (active low)
+        limits_pressed = None
+        if getattr(self, 'has_limit_switches', False):
+            try:
+                limits_pressed = {
+                    'x_cw': (self.gpio.input(self.x_cw_limit) == 0),
+                    'x_ccw': (self.gpio.input(self.x_ccw_limit) == 0),
+                    'y_cw': (self.gpio.input(self.y_cw_limit) == 0),
+                    'y_ccw': (self.gpio.input(self.y_ccw_limit) == 0),
+                }
+            except Exception:
+                limits_pressed = None
+
+        try:
+            pos_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+        except Exception:
+            pos_x = self.calibration.x_position
+        try:
+            pos_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+        except Exception:
+            pos_y = self.calibration.y_position
+        # Keep calibration positions aligned with live axis positions when available
+        try:
+            self.calibration.x_position = int(pos_x)
+            self.calibration.y_position = int(pos_y)
+        except Exception:
+            pass
+
         return {
             'enabled': self.enabled,
             'moving': self.moving,
             'position': {
-                'x': self.calibration.x_position,
-                'y': self.calibration.y_position
+                'x': pos_x,
+                'y': pos_y
             },
+            'microsteps': int(getattr(self, 'microsteps', 0) or 0),
             'calibration': {
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
@@ -1093,6 +1283,29 @@ class StepperController:
             'limits': {
                 'x_max_steps': self.calibration.x_max_steps,
                 'y_max_steps': self.calibration.y_max_steps
+            },
+            'limit_switches': {
+                'available': bool(getattr(self, 'has_limit_switches', False)),
+                'pressed': limits_pressed,
+            },
+            'idle': {
+                'timeout_sec': float(self.idle_timeout) if getattr(self, 'idle_timeout', None) else 0.0,
+                'seconds_remaining': idle_remaining,
+                'active_moves': int(getattr(self, '_active_moves', 0) or 0),
+            },
+            'motors': {
+                'x': {
+                    'available': bool(getattr(self, 'axis_x', None) is not None),
+                    'enabled': bool(getattr(getattr(self, 'axis_x', None), 'enabled', False)),
+                },
+                'y': {
+                    'available': bool(getattr(self, 'axis_y', None) is not None),
+                    'enabled': bool(getattr(getattr(self, 'axis_y', None), 'enabled', False)),
+                },
+                'uart': {
+                    'enabled': bool(getattr(self, 'use_uart', False)),
+                    'link_ok': bool(getattr(self, '_tmc_x', None) is not None and getattr(self, '_tmc_y', None) is not None),
+                }
             }
         }
 

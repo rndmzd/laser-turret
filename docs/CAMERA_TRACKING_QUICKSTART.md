@@ -9,10 +9,10 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 ### 1. Hardware Check
 
 - 2x Stepper motors (NEMA 17 recommended)
-- 2x Stepper drivers (A4988 or DRV8825)
+- 2x stepper drivers: A4988/DRV8825 (pin mode) or TMC2209 (UART)
 - 12V power supply
 - Pan/tilt mount for camera
-- All wired according to `laserturret.conf`
+- All wired according to `laserturret.conf` (see `docs/TMC2209_UART.md` for UART)
 
 ### 2. Enable Camera Tracking
 
@@ -41,6 +41,13 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 - Toggle "Re-center camera slowly on target loss" to gently return toward home when no target is detected
 - When disabled, the camera holds its current position when the target is lost
 
+#### TMC2209 UART users (optional)
+
+- Open the **Hardware → Motor** tab to view live TMC2209 register values for X/Y
+- Adjust `IHOLD`, `IRUN`, `IHOLDDELAY`, and `TPOWERDOWN` on the fly (per-axis or both)
+- Requires `use_uart = true` and correct `uart_port`, `x_uart_address`, `y_uart_address` in `laserturret.conf`
+- See `docs/TMC2209_UART.md` for wiring and details
+
 ### 4. Start Tracking
 
 1. Enable **Auto-Track Objects**
@@ -68,6 +75,8 @@ Camera tracking mode physically moves your camera using stepper motors to keep o
 - **Movement Speed**: 1.0ms (balance between speed and smoothness)
 - **Steps/Pixel**: 0.1 default (adjust during calibration)
 - **Max Steps**: 2000 (prevents over-extension)
+
+- **Motor Tab (UART)**: Quick tuning of `IHOLD`, `IRUN`, `IHOLDDELAY`, and `TPOWERDOWN` and live register viewer (requires UART mode)
 
 ## When to Use Each Mode
 

@@ -61,9 +61,9 @@ class StepperMotor:
         step_pin: int,
         dir_pin: int,
         enable_pin: int,
-        ms1_pin: int,
-        ms2_pin: int,
-        ms3_pin: int,
+        ms1_pin: Optional[int] = None,
+        ms2_pin: Optional[int] = None,
+        ms3_pin: Optional[int] = None,
         cw_limit_switch_pin: Optional[int] = None,
         ccw_limit_switch_pin: Optional[int] = None,
         steps_per_rev: int = 200,
@@ -77,7 +77,8 @@ class StepperMotor:
         deadzone: int = 10,
         interactive_test_mode: bool = False,
         start_thread: bool = True,
-        gpio_backend=None):
+        gpio_backend=None,
+        enable_active_high: bool = True):
         """
         Initialize stepper motor control using A4988 driver.
 
@@ -122,6 +123,7 @@ class StepperMotor:
         self.movement_timeout = movement_timeout
         self.deadzone = deadzone
         self.enabled = False
+        self.enable_active_high = bool(enable_active_high)
         self.suspended = False
 
         # Initialize GPIO backend
@@ -132,16 +134,19 @@ class StepperMotor:
         self.gpio.setup(self.dir_pin, PinMode.OUTPUT)
         self.gpio.setup(self.enable_pin, PinMode.OUTPUT)
         for pin in self.ms_pins:
-            self.gpio.setup(pin, PinMode.OUTPUT)
+            if pin is not None:
+                self.gpio.setup(pin, PinMode.OUTPUT)
             
-        # Set microstepping configuration
-        ms1_val, ms2_val, ms3_val = MICROSTEP_CONFIG[microsteps]
-        self.gpio.output(self.ms_pins[0], ms1_val)
-        self.gpio.output(self.ms_pins[1], ms2_val)
-        self.gpio.output(self.ms_pins[2], ms3_val)
+        # Set microstepping configuration (only if MS pins are provided)
+        if all(p is not None for p in self.ms_pins):
+            ms1_val, ms2_val, ms3_val = MICROSTEP_CONFIG[microsteps]
+            self.gpio.output(self.ms_pins[0], ms1_val)
+            self.gpio.output(self.ms_pins[1], ms2_val)
+            self.gpio.output(self.ms_pins[2], ms3_val)
         
-        # Disable motor initially (TMC2209: LOW = disabled)
-        self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables
+        # Disable motor initially according to configured polarity
+        disabled_level = 0 if self.enable_active_high else 1
+        self.gpio.output(self.enable_pin, disabled_level)
         
         # Setup limit switches with pull-ups (polling-based, not event-based)
         if cw_limit_switch_pin:
@@ -194,26 +199,28 @@ class StepperMotor:
             return False
 
     def enable(self) -> None:
-        """Enable the motor driver (TMC2209: ACTIVE HIGH)"""
+        """Enable the motor driver (drive enable pin to active level)."""
         try:
-            print(f"[{self.name}] enable() setting pin {self.enable_pin} to 1 (TMC2209) via gpio={id(self.gpio)}", flush=True)
-            self.gpio.output(self.enable_pin, 1)  # TMC2209: HIGH enables
+            level = 1 if self.enable_active_high else 0
+            print(f"[{self.name}] enable() setting pin {self.enable_pin} to {level} (active_high={self.enable_active_high}) via gpio={id(self.gpio)}", flush=True)
+            self.gpio.output(self.enable_pin, level)
             self.enabled = True
             # Read back to verify
             readback = self.gpio.input(self.enable_pin)
-            print(f"[{self.name}] enable() readback: pin {self.enable_pin} = {readback}", flush=True)
+            print(f"[{self.name}] enable() readback: pin {self.enable_pin} = {readback} (expected {level})", flush=True)
         except Exception as e:
             print(f"[{self.name}] Failed to enable motor: {e}", flush=True)
 
     def disable(self) -> None:
-        """Disable the motor driver (TMC2209: LOW disables)"""
+        """Disable the motor driver (drive enable pin to inactive level)."""
         try:
-            print(f"[{self.name}] disable() setting pin {self.enable_pin} to 0 (TMC2209) via gpio={id(self.gpio)}", flush=True)
-            self.gpio.output(self.enable_pin, 0)  # TMC2209: LOW disables
+            level = 0 if self.enable_active_high else 1
+            print(f"[{self.name}] disable() setting pin {self.enable_pin} to {level} (active_high={self.enable_active_high}) via gpio={id(self.gpio)}", flush=True)
+            self.gpio.output(self.enable_pin, level)
             self.enabled = False
             # Read back to verify
             readback = self.gpio.input(self.enable_pin)
-            print(f"[{self.name}] disable() readback: pin {self.enable_pin} = {readback}", flush=True)
+            print(f"[{self.name}] disable() readback: pin {self.enable_pin} = {readback} (expected {level})", flush=True)
         except Exception as e:
             print(f"[{self.name}] Failed to disable motor: {e}", flush=True)
 

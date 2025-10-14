@@ -186,186 +186,261 @@
                             <span id="digital-gain" class="stat-value">--</span>
                         </div>
                     </div>
+                    <div class="control-group">
+                        <h3>🛠️ Motor Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">X Motor</span>
+                            <span class="stat-value">
+                                <span id="motor-x-dot" class="status-dot status-bad" title="Not initialized"></span>
+                                <span id="motor-x-text" style="margin-left:8px;">Unavailable</span>
+                                <span style="margin: 0 8px; color:#999;">|</span>
+                                <span>Enabled: <span id="motor-x-enabled">No</span></span>
+                            </span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Y Motor</span>
+                            <span class="stat-value">
+                                <span id="motor-y-dot" class="status-dot status-bad" title="Not initialized"></span>
+                                <span id="motor-y-text" style="margin-left:8px;">Unavailable</span>
+                                <span style="margin: 0 8px; color:#999;">|</span>
+                                <span>Enabled: <span id="motor-y-enabled">No</span></span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <h3>📟 Stepper Diagnostics</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Microsteps</span>
+                            <span id="controller-microsteps" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Idle Remaining</span>
+                            <span class="stat-value"><span id="idle-seconds-remaining">--</span></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Active Moves</span>
+                            <span id="idle-active-moves" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Limit Switches</span>
+                            <span class="stat-value">
+                                <div class="limit-switches-grid">
+                                    <div class="ls-item">
+                                        <span class="ls-label">X CW</span>
+                                        <span id="ls-x-cw" class="status-dot status-ok" aria-label="X clockwise status"></span>
+                                        <span id="ls-x-cw-text" class="ls-text">Open</span>
+                                    </div>
+                                    <div class="ls-item">
+                                        <span class="ls-label">X CCW</span>
+                                        <span id="ls-x-ccw" class="status-dot status-ok" aria-label="X counterclockwise status"></span>
+                                        <span id="ls-x-ccw-text" class="ls-text">Open</span>
+                                    </div>
+                                    <div class="ls-item">
+                                        <span class="ls-label">Y CW</span>
+                                        <span id="ls-y-cw" class="status-dot status-ok" aria-label="Y clockwise status"></span>
+                                        <span id="ls-y-cw-text" class="ls-text">Open</span>
+                                    </div>
+                                    <div class="ls-item">
+                                        <span class="ls-label">Y CCW</span>
+                                        <span id="ls-y-ccw" class="status-dot status-ok" aria-label="Y counterclockwise status"></span>
+                                        <span id="ls-y-ccw-text" class="ls-text">Open</span>
+                                    </div>
+                                </div>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+            <h3>🎚️ Motor Position</h3>
+            <div class="position-row">
+                <span class="stat-label">X</span>
+                <div class="position-track">
+                    <div class="position-center"></div>
+                    <div id="pos-x-needle" class="position-needle"></div>
+                </div>
+                <span id="pos-x-value" class="stat-value">0</span>
+            </div>
+            <div class="position-row">
+                <span class="stat-label">Y</span>
+                <div class="position-track">
+                    <div class="position-center"></div>
+                    <div id="pos-y-needle" class="position-needle"></div>
+                </div>
+                <span id="pos-y-value" class="stat-value">0</span>
+            </div>
+        </div>
                 </div>
 
                 <!-- Camera Tracking Tab -->
                 <div id="tracking-tab" class="tab-content">
                     <div class="control-group">
                         <h3>📹 Tracking Mode</h3>
-                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                            Choose how objects are tracked: move crosshair (software) or move camera (hardware)
-                        </p>
-                        
-                        <div class="select-control">
-                            <label>Tracking Mode</label>
-                            <select id="tracking-mode" onchange="setTrackingMode()">
-                                <option value="crosshair">Crosshair Tracking (Software)</option>
-                                <option value="camera">Camera Tracking (Stepper Motors)</option>
-                            </select>
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="tracking-mode-toggle" onchange="toggleTrackingMode()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Camera Mode (off = Crosshair Mode)</span>
                         </div>
-
                         <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1565c0;">
                             <strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.
                         </div>
                     </div>
 
-                    <div id="camera-tracking-controls" style="display: none;">
-                        <!-- Calibration Required Warning -->
-                        <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
-                            <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
-                            <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
-                            <p style="font-size: 12px; opacity: 0.9;">This only needs to be done once. Calibration data will be saved and reloaded on restart.</p>
+                    <!-- Calibration required warning should always be present (toggled by JS) -->
+                    <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
+                        <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
+                        <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
+                        <p style="font-size: 12px; opacity: 0.9;">Calibration data will be retained as long as motors remain enabled.</p>
+                    </div>
+
+                    <div id="camera-tracking-controls">
+                    <div class="control-group">
+                        <h3>🎮 Camera Control</h3>
+                        
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="camera-tracking-enabled" onchange="toggleCameraTracking()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Camera Movement</span>
                         </div>
 
-                        <div class="control-group">
-                            <h3>🎮 Camera Control</h3>
-                            
-                            <div class="toggle-switch">
-                                <label class="switch">
-                                    <input type="checkbox" id="camera-tracking-enabled" onchange="toggleCameraTracking()">
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="toggle-label">Enable Camera Movement</span>
-                            </div>
-
-                            <div class="toggle-switch">
-                                <label class="switch">
-                                    <input type="checkbox" id="camera-recenter-on-loss" onchange="toggleRecenterOnLoss()">
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="toggle-label">Re-center camera slowly on target loss</span>
-                            </div>
-
-                            <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
-                                🏠 Home Camera to Center
-                            </button>
-
-                            <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
-                                <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
-                            </div>
+                        <div class="toggle-switch">
+                            <label class="switch">
+                                <input type="checkbox" id="camera-recenter-on-loss" onchange="toggleRecenterOnLoss()">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Re-center camera slowly on target loss</span>
                         </div>
 
-                        <div class="control-group">
-                            <h3>⚙️ Camera Settings</h3>
+                        <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
+                            🏠 Home Camera to Center
+                        </button>
 
-                            <div class="slider-control">
-                                <label>Dead Zone (pixels)</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
-                                    <span id="camera-dead-zone-value" class="slider-value">20px</span>
-                                </div>
-                            </div>
-
-                            <div class="slider-control">
-                                <label>Movement Speed</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
-                                    <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
-                                </div>
-                            </div>
-
-                            <button class="btn-primary" onclick="applyCameraTrackingSettings()">Apply Settings</button>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>🧪 PID Tuning</h3>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Adjust PID gains for camera tracking responsiveness. Lower Ki is recommended to avoid drift.
-                            </p>
-                            <div class="slider-control">
-                                <label>Kp</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="pid-kp" min="0" max="3" value="0.8" step="0.05" oninput="updatePIDLabel('kp')">
-                                    <span id="pid-kp-value" class="slider-value">0.80</span>
-                                </div>
-                            </div>
-                            <div class="slider-control">
-                                <label>Ki</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="pid-ki" min="0" max="0.5" value="0.0" step="0.005" oninput="updatePIDLabel('ki')">
-                                    <span id="pid-ki-value" class="slider-value">0.00</span>
-                                </div>
-                            </div>
-                            <div class="slider-control">
-                                <label>Kd</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="pid-kd" min="0" max="1.5" value="0.2" step="0.05" oninput="updatePIDLabel('kd')">
-                                    <span id="pid-kd-value" class="slider-value">0.20</span>
-                                </div>
-                            </div>
-                            <button class="btn-primary" onclick="applyPID()">Apply PID</button>
-                        </div>
-
-                        <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
-                            <h3>🎯 Manual Position Control</h3>
-                            <p style="font-size: 13px; color: #4338ca;">
-                                Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
-                            </p>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>🔧 Calibration</h3>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                                Automatically find limits and set home position, or manually calibrate steps-per-pixel
-                            </p>
-
-                            <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
-                                🤖 Auto-Calibrate & Home
-                            </button>
-
-                            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                                <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
-                            </div>
-
-                            <div class="slider-control">
-                                <label>X-Axis Steps/Pixel</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
-                                    <span id="camera-x-steps-value" class="slider-value">0.10</span>
-                                </div>
-                            </div>
-
-                            <div class="slider-control">
-                                <label>Y-Axis Steps/Pixel</label>
-                                <div class="slider-wrapper">
-                                    <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
-                                    <span id="camera-y-steps-value" class="slider-value">0.10</span>
-                                </div>
-                            </div>
-
-                            <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
-                        </div>
-
-                        <div class="control-group">
-                            <h3>📊 Camera Status</h3>
-                            <div class="stat-row">
-                                <span class="stat-label">System Status</span>
-                                <span id="camera-system-status" class="stat-value">Initializing...</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Calibration Status</span>
-                                <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Camera Movement Enabled</span>
-                                <span id="camera-enabled-status" class="stat-value">No</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Camera Position (X, Y)</span>
-                                <span id="camera-position" class="stat-value">0, 0</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Crosshair Position (X, Y)</span>
-                                <span id="crosshair-position" class="stat-value">0, 0</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Moving</span>
-                                <span id="camera-moving" class="stat-value">No</span>
-                            </div>
+                        <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
+                            <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
                         </div>
                     </div>
 
-                    <div id="tracking-status-message" class="status-message"></div>
+                    <div class="control-group">
+                        <h3>⚙️ Camera Settings</h3>
+
+                        <div class="slider-control">
+                            <label>Dead Zone (pixels)</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-dead-zone" min="5" max="100" value="20" step="5" oninput="updateCameraDeadZoneValue()">
+                                <span id="camera-dead-zone-value" class="slider-value">20px</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Movement Speed</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-step-delay" min="0.0005" max="0.005" value="0.0045" step="0.0005" oninput="updateCameraStepDelayValue()">
+                                <span id="camera-step-delay-value" class="slider-value">1.0ms</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyCameraTrackingSettings()">Apply Settings</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>🧪 PID Tuning</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Adjust PID gains for camera tracking responsiveness. Lower Ki is recommended to avoid drift.
+                        </p>
+                        <div class="slider-control">
+                            <label>Kp</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pid-kp" min="0" max="3" value="0.8" step="0.05" oninput="updatePIDLabel('kp')">
+                                <span id="pid-kp-value" class="slider-value">0.80</span>
+                            </div>
+                        </div>
+                        <div class="slider-control">
+                            <label>Ki</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pid-ki" min="0" max="0.5" value="0.0" step="0.005" oninput="updatePIDLabel('ki')">
+                                <span id="pid-ki-value" class="slider-value">0.00</span>
+                            </div>
+                        </div>
+                        <div class="slider-control">
+                            <label>Kd</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="pid-kd" min="0" max="1.5" value="0.2" step="0.05" oninput="updatePIDLabel('kd')">
+                                <span id="pid-kd-value" class="slider-value">0.20</span>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="applyPID()">Apply PID</button>
+                    </div>
+
+                    <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
+                        <h3>🎯 Manual Position Control</h3>
+                        <p style="font-size: 13px; color: #4338ca;">
+                            Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
+                        </p>
+                    </div>
+                    </div> <!-- /#camera-tracking-controls -->
+
+                    <div class="control-group">
+                        <h3>🔧 Calibration</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            Automatically find limits and set home position, or manually calibrate steps-per-pixel
+                        </p>
+
+                        <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
+                            🤖 Auto-Calibrate & Home
+                        </button>
+
+                        <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
+                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
+                        </div>
+
+                        <div class="slider-control">
+                            <label>X-Axis Steps/Pixel</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-x-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraXStepsValue()">
+                                <span id="camera-x-steps-value" class="slider-value">0.10</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-control">
+                            <label>Y-Axis Steps/Pixel</label>
+                            <div class="slider-wrapper">
+                                <input type="range" id="camera-y-steps-per-pixel" min="0.01" max="1.0" value="0.1" step="0.01" oninput="updateCameraYStepsValue()">
+                                <span id="camera-y-steps-value" class="slider-value">0.10</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="applyCameraCalibration()">Save Manual Calibration</button>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>📊 Camera Status</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">System Status</span>
+                            <span id="camera-system-status" class="stat-value">Initializing...</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Calibration Status</span>
+                            <span id="camera-calibration-status" class="stat-value">Not Calibrated</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Camera Movement Enabled</span>
+                            <span id="camera-enabled-status" class="stat-value">No</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Camera Position (X, Y)</span>
+                            <span id="camera-position" class="stat-value">0, 0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Crosshair Position (X, Y)</span>
+                            <span id="crosshair-position" class="stat-value">0, 0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Moving</span>
+                            <span id="camera-moving" class="stat-value">No</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Laser Control Tab -->
@@ -1002,6 +1077,7 @@
 
                     <div id="recording-status" class="status-message"></div>
                 </div>
+
             </div>
         </aside>
     </div>
@@ -1050,6 +1126,7 @@
                 // Refresh object status to show appropriate panel for selected method
                 updateObjectStatus();
             }
+
         }
 
         // Crosshair positioning with camera movement support
@@ -1087,10 +1164,11 @@
             }
 
             // Check if camera tracking is enabled and active
-            const trackingMode = document.getElementById('tracking-mode').value;
+            const modeToggleEl = document.getElementById('tracking-mode-toggle');
+            const inCameraMode = !!(modeToggleEl && modeToggleEl.checked);
             const cameraTrackingEnabled = document.getElementById('camera-tracking-enabled').checked;
             
-            if (trackingMode === 'camera' && cameraTrackingEnabled) {
+            if (inCameraMode && cameraTrackingEnabled) {
                 // Camera movement mode: move camera to recenter clicked position
                 // Crosshair stays centered, don't update position display
                 fetch('/tracking/camera/move_to_position', {
@@ -1102,14 +1180,14 @@
                 .then(data => {
                     if (data.status === 'success') {
                         // Visual feedback
-                        showStatus('tracking-status-message', true, 'Camera moving to recenter position...');
+                        showInlineStatus('tracking-status-message', true, 'Camera moving to recenter position...');
                     } else {
-                        showStatus('tracking-status-message', false, data.message);
+                        showInlineStatus('tracking-status-message', false, data.message);
                     }
                 })
                 .catch(error => {
                     console.error('Error moving camera to position:', error);
-                    showStatus('tracking-status-message', false, 'Failed to move camera');
+                    showInlineStatus('tracking-status-message', false, 'Failed to move camera');
                 });
             } else {
                 // Crosshair mode: update crosshair position
@@ -1308,12 +1386,52 @@
         // Status message display
         function showStatus(elementId, success, message) {
             const statusEl = document.getElementById(elementId);
-            statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
-            statusEl.textContent = message;
-            statusEl.style.display = 'block';
+            if (statusEl) {
+                statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+                statusEl.textContent = message;
+                statusEl.style.display = 'block';
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+            }
+            showToast(success, message, 3000);
+        }
+
+        function showInlineStatus(elementId, success, message) {
+            const statusEl = document.getElementById(elementId);
+            if (statusEl) {
+                statusEl.className = 'status-message ' + (success ? 'status-success' : 'status-error');
+                statusEl.textContent = message;
+                statusEl.style.display = 'block';
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function ensureToastContainer() {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            return container;
+        }
+
+        function showToast(success, message, duration = 3000) {
+            const container = ensureToastContainer();
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (success ? 'toast-success' : 'toast-error');
+            toast.textContent = message;
+            container.appendChild(toast);
+
             setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 3000);
+                if (toast.parentNode === container) {
+                    container.removeChild(toast);
+                }
+            }, Math.max(1000, duration));
         }
 
         // Video recording controls
@@ -1363,6 +1481,8 @@
                 console.error('Error stopping recording:', error);
             });
         }
+
+
 
         function updateRecordingStatus() {
             fetch('/recording_status')
@@ -2487,31 +2607,29 @@
         }
 
         // Camera tracking controls
-        function setTrackingMode() {
-            const mode = document.getElementById('tracking-mode').value;
-            
+        function toggleTrackingMode() {
+            const checkbox = document.getElementById('tracking-mode-toggle');
+            const mode = checkbox && checkbox.checked ? 'camera' : 'crosshair';
             fetch('/tracking/mode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: mode })
+                body: JSON.stringify({ mode })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
                     updateTrackingModeUI(mode);
-                    showStatus('tracking-status-message', true, 
-                        mode === 'crosshair' ? 'Crosshair tracking mode active' : 'Camera tracking mode active');
+                    showStatus('tracking-status-message', true, mode === 'camera' ? 'Camera tracking mode active' : 'Crosshair tracking mode active');
                     updateCameraTrackingStatus();
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
-                    // Revert to previous mode on error
-                    document.getElementById('tracking-mode').value = 
-                        mode === 'crosshair' ? 'camera' : 'crosshair';
+                    showStatus('tracking-status-message', false, data.message || 'Failed to set tracking mode');
+                    if (checkbox) checkbox.checked = !checkbox.checked;
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to set tracking mode');
                 console.error('Error setting tracking mode:', error);
+                showStatus('tracking-status-message', false, 'Failed to set tracking mode');
+                if (checkbox) checkbox.checked = !checkbox.checked;
             });
         }
 
@@ -2520,12 +2638,12 @@
             const infoBox = document.getElementById('tracking-mode-info');
             
             if (mode === 'camera') {
-                cameraControls.style.display = 'block';
+                if (cameraControls) cameraControls.style.display = 'block';
                 infoBox.innerHTML = '<strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.';
                 infoBox.style.background = '#fff3cd';
                 infoBox.style.color = '#856404';
             } else {
-                cameraControls.style.display = 'none';
+                if (cameraControls) cameraControls.style.display = 'none';
                 infoBox.innerHTML = '<strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.';
                 infoBox.style.background = '#e3f2fd';
                 infoBox.style.color = '#1565c0';
@@ -2570,7 +2688,7 @@
                 if (data.status === 'success') {
                     showStatus('tracking-status-message', true, enabled ? 'Re-center on loss enabled' : 'Re-center on loss disabled');
                 } else {
-                    showStatus('tracking-status-message', false, data.message || 'Failed to set re-center on loss');
+                    showStatus('tracking-status-message', false, data.message);
                     document.getElementById('camera-recenter-on-loss').checked = !enabled;
                 }
             })
@@ -2589,14 +2707,14 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('tracking-status-message', true, 'Homing camera to center position...');
+                    showInlineStatus('tracking-status-message', true, 'Homing camera to center position...');
                     setTimeout(updateCameraTrackingStatus, 1000);
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
+                    showInlineStatus('tracking-status-message', false, data.message);
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to home camera');
+                showInlineStatus('tracking-status-message', false, 'Failed to home camera');
                 console.error('Error homing camera:', error);
             });
         }
@@ -2930,13 +3048,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('tracking-status-message', true, data.message);
+                    showInlineStatus('tracking-status-message', true, data.message);
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
+                    showInlineStatus('tracking-status-message', false, data.message);
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to move camera');
+                showInlineStatus('tracking-status-message', false, 'Failed to move camera');
                 console.error('Error moving camera:', error);
             });
         }
@@ -2973,17 +3091,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showStatus('tracking-status-message', true, data.message);
+                    showInlineStatus('tracking-status-message', true, data.message);
                     // Poll status more frequently during calibration
                     setTimeout(() => {
                         updateCameraTrackingStatus();
                     }, 5000);
                 } else {
-                    showStatus('tracking-status-message', false, data.message);
+                    showInlineStatus('tracking-status-message', false, data.message);
                 }
             })
             .catch(error => {
-                showStatus('tracking-status-message', false, 'Failed to start auto-calibration');
+                showInlineStatus('tracking-status-message', false, 'Failed to start auto-calibration');
                 console.error('Error starting auto-calibration:', error);
             });
         }
@@ -3039,7 +3157,8 @@
                     if (data.status === 'success') {
                         // Update tracking mode dropdown if needed
                         if (data.mode) {
-                            document.getElementById('tracking-mode').value = data.mode;
+                            const modeToggle = document.getElementById('tracking-mode-toggle');
+                            if (modeToggle) modeToggle.checked = (data.mode === 'camera');
                             updateTrackingModeUI(data.mode);
                         }
                         
@@ -3056,10 +3175,21 @@
                             
                             const controller = data.controller_status;
                             if (controller) {
-                                document.getElementById('camera-position').textContent = 
-                                    `${controller.position.x}, ${controller.position.y}`;
+                                const posX = (controller.position && typeof controller.position.x === 'number')
+                                    ? controller.position.x
+                                    : (controller.calibration && typeof controller.calibration.x_position === 'number')
+                                        ? controller.calibration.x_position : 0;
+                                const posY = (controller.position && typeof controller.position.y === 'number')
+                                    ? controller.position.y
+                                    : (controller.calibration && typeof controller.calibration.y_position === 'number')
+                                        ? controller.calibration.y_position : 0;
+                                document.getElementById('camera-position').textContent = `${posX}, ${posY}`;
                                 document.getElementById('camera-moving').textContent = 
                                     controller.moving ? 'Yes' : 'No';
+                                // Motor Position widget (REST)
+                                try {
+                                    updateMotorPositionUI({x: posX, y: posY}, controller.limits || null);
+                                } catch (e) {}
                                 
                                 // Update crosshair position
                                 updateCrosshairPosition();
@@ -3067,20 +3197,23 @@
                                 // Initialize calibration sliders ONLY on first load
                                 // After that, preserve user's values until they save or refresh page
                                 if (controller.calibration && !calibrationSlidersInitialized) {
-                                    document.getElementById('camera-x-steps-per-pixel').value = 
-                                        controller.calibration.x_steps_per_pixel;
-                                    document.getElementById('camera-x-steps-value').textContent = 
-                                        controller.calibration.x_steps_per_pixel.toFixed(2);
+                                    const xEl = document.getElementById('camera-x-steps-per-pixel');
+                                    const xValEl = document.getElementById('camera-x-steps-value');
+                                    if (xEl) xEl.value = controller.calibration.x_steps_per_pixel;
+                                    if (xValEl) xValEl.textContent = controller.calibration.x_steps_per_pixel.toFixed(2);
                                     
-                                    document.getElementById('camera-y-steps-per-pixel').value = 
-                                        controller.calibration.y_steps_per_pixel;
-                                    document.getElementById('camera-y-steps-value').textContent = 
-                                        controller.calibration.y_steps_per_pixel.toFixed(2);
+                                    const yEl = document.getElementById('camera-y-steps-per-pixel');
+                                    const yValEl = document.getElementById('camera-y-steps-value');
+                                    if (yEl) yEl.value = controller.calibration.y_steps_per_pixel;
+                                    if (yValEl) yValEl.textContent = controller.calibration.y_steps_per_pixel.toFixed(2);
                                     
-                                    document.getElementById('camera-dead-zone').value = 
-                                        controller.calibration.dead_zone_pixels;
-                                    updateCameraDeadZoneValue();
-
+                                    const deadEl = document.getElementById('camera-dead-zone');
+                                    if (deadEl) {
+                                        deadEl.value = controller.calibration.dead_zone_pixels;
+                                        const dzValEl = document.getElementById('camera-dead-zone-value');
+                                        if (dzValEl) dzValEl.textContent = deadEl.value + 'px';
+                                    }
+    
                                     if (typeof controller.calibration.step_delay === 'number') {
                                         const sliderEl = document.getElementById('camera-step-delay');
                                         if (sliderEl) {
@@ -3103,28 +3236,6 @@
                                     );
                                 }
                                 
-                                // Sync PID sliders with controller values
-                                fetch('/tracking/camera/pid')
-                                    .then(r => r.json())
-                                    .then(pd => {
-                                        if (pd.status === 'success' && pd.pid) {
-                                            const now = Date.now();
-                                            const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
-                                            if (allowPIDSync) {
-                                                const p = pd.pid;
-                                                const kpEl = document.getElementById('pid-kp');
-                                                const kiEl = document.getElementById('pid-ki');
-                                                const kdEl = document.getElementById('pid-kd');
-                                                const kpVal = document.getElementById('pid-kp-value');
-                                                const kiVal = document.getElementById('pid-ki-value');
-                                                const kdVal = document.getElementById('pid-kd-value');
-                                                if (kpEl && kpVal) { kpEl.value = p.kp; kpVal.textContent = parseFloat(p.kp).toFixed(2); }
-                                                if (kiEl && kiVal) { kiEl.value = p.ki; kiVal.textContent = parseFloat(p.ki).toFixed(2); }
-                                                if (kdEl && kdVal) { kdEl.value = p.kd; kdVal.textContent = parseFloat(p.kd).toFixed(2); }
-                                            }
-                                        }
-                                    })
-                                    .catch(() => {});
                             }
                             
                             document.getElementById('camera-tracking-enabled').checked = data.enabled;
@@ -3164,6 +3275,61 @@
             const el = document.getElementById(id);
             if (el) {
                 el.textContent = value;
+            }
+        }
+        function setStatusDot(id, ok) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('status-ok', 'status-bad');
+            el.classList.add(ok ? 'status-ok' : 'status-bad');
+            el.setAttribute('title', ok ? 'Initialized' : 'Not initialized');
+        }
+        function setSwitchState(baseId, open) {
+            const dot = document.getElementById(baseId);
+            if (dot) {
+                dot.classList.remove('status-ok', 'status-bad');
+                dot.classList.add(open ? 'status-ok' : 'status-bad');
+                dot.setAttribute('title', open ? 'Open' : 'Closed');
+            }
+            const txt = document.getElementById(baseId + '-text');
+            if (txt) {
+                txt.textContent = open ? 'Open' : 'Closed';
+            }
+        }
+        function updateMotorPositionUI(position, limits) {
+            try {
+                const x = typeof position?.x === 'number' ? position.x : 0;
+                const y = typeof position?.y === 'number' ? position.y : 0;
+                const maxX = typeof limits?.x_max_steps === 'number' && limits.x_max_steps > 0 ? limits.x_max_steps : 2000;
+                const maxY = typeof limits?.y_max_steps === 'number' && limits.y_max_steps > 0 ? limits.y_max_steps : 2000;
+
+                // Update numeric labels
+                const xVal = document.getElementById('pos-x-value');
+                if (xVal) xVal.textContent = String(x);
+                const yVal = document.getElementById('pos-y-value');
+                if (yVal) yVal.textContent = String(y);
+
+                // Update needles: map [-max, +max] to [0, trackWidth]
+                const xNeedle = document.getElementById('pos-x-needle');
+                if (xNeedle && xNeedle.parentElement) {
+                    const track = xNeedle.parentElement;
+                    const w = track.clientWidth || 0;
+                    const nw = xNeedle.offsetWidth || 0;
+                    const ratio = Math.max(0, Math.min(1, (x + maxX) / (2 * maxX)));
+                    const left = Math.round(ratio * Math.max(0, w - nw));
+                    xNeedle.style.left = left + 'px';
+                }
+                const yNeedle = document.getElementById('pos-y-needle');
+                if (yNeedle && yNeedle.parentElement) {
+                    const track = yNeedle.parentElement;
+                    const w = track.clientWidth || 0;
+                    const nw = yNeedle.offsetWidth || 0;
+                    const ratio = Math.max(0, Math.min(1, (y + maxY) / (2 * maxY)));
+                    const left = Math.round(ratio * Math.max(0, w - nw));
+                    yNeedle.style.left = left + 'px';
+                }
+            } catch (e) {
+                // no-op on UI calc failure
             }
         }
         
@@ -3291,11 +3457,11 @@
             
             // Update tracking mode status
             if (status.tracking) {
-                const trackMode = document.getElementById('tracking-mode');
-                if (trackMode && trackMode.value !== status.tracking.mode) {
-                    trackMode.value = status.tracking.mode;
-                    updateTrackingModeUI(status.tracking.mode);
+                const modeToggle = document.getElementById('tracking-mode-toggle');
+                if (modeToggle) {
+                    modeToggle.checked = (status.tracking.mode === 'camera');
                 }
+                updateTrackingModeUI(status.tracking.mode);
             }
             
             // Update camera controller status (detailed)
@@ -3311,9 +3477,18 @@
                     recenterEl.checked = !!status.tracking.recenter_on_loss;
                 }
                 
-                if (ctrl.position) {
-                    safeUpdateElement('camera-position', `${ctrl.position.x}, ${ctrl.position.y}`);
-                }
+                const posX = (ctrl.position && typeof ctrl.position.x === 'number')
+                    ? ctrl.position.x
+                    : (ctrl.calibration && typeof ctrl.calibration.x_position === 'number')
+                        ? ctrl.calibration.x_position : 0;
+                const posY = (ctrl.position && typeof ctrl.position.y === 'number')
+                    ? ctrl.position.y
+                    : (ctrl.calibration && typeof ctrl.calibration.y_position === 'number')
+                        ? ctrl.calibration.y_position : 0;
+                safeUpdateElement('camera-position', `${posX}, ${posY}`);
+
+                // Motor Position widget
+                updateMotorPositionUI({x: posX, y: posY}, ctrl.limits || null);
                 
                 safeUpdateElement('camera-moving', ctrl.moving ? 'Yes' : 'No');
                 
@@ -3382,6 +3557,48 @@
                 }
                 syncMotorsToolbar(!!status.tracking.camera_enabled);
                 syncRecenterOverlayButton();
+                // Update motor status (availability + enabled)
+                if (ctrl.motors) {
+                    if (ctrl.motors.x) {
+                        const availX = !!ctrl.motors.x.available;
+                        setStatusDot('motor-x-dot', availX);
+                        const xDot = document.getElementById('motor-x-dot');
+                        if (xDot) xDot.setAttribute('title', availX ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-x-text', availX ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-x-enabled', ctrl.motors.x.enabled ? 'Yes' : 'No');
+                    }
+                    if (ctrl.motors.y) {
+                        const availY = !!ctrl.motors.y.available;
+                        setStatusDot('motor-y-dot', availY);
+                        const yDot = document.getElementById('motor-y-dot');
+                        if (yDot) yDot.setAttribute('title', availY ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-y-text', availY ? 'Available' : 'Unavailable');
+                        safeUpdateElement('motor-y-enabled', ctrl.motors.y.enabled ? 'Yes' : 'No');
+                    }
+                }
+                // Update diagnostics (microsteps, idle, limit switches)
+                if (typeof ctrl.microsteps === 'number') {
+                    safeUpdateElement('controller-microsteps', String(ctrl.microsteps));
+                }
+                if (ctrl.idle) {
+                    const sec = (typeof ctrl.idle.seconds_remaining === 'number') ? ctrl.idle.seconds_remaining : null;
+                    if (sec !== null) {
+                        const val = (sec > 0) ? sec.toFixed(1) + 's' : '0.0s';
+                        safeUpdateElement('idle-seconds-remaining', val);
+                    }
+                    if (typeof ctrl.idle.active_moves === 'number') {
+                        safeUpdateElement('idle-active-moves', String(ctrl.idle.active_moves));
+                    }
+                }
+                if (ctrl.limit_switches && ctrl.limit_switches.pressed) {
+                    const p = ctrl.limit_switches.pressed;
+                    // Open = not pressed (true = okay to move)
+                    if (p.hasOwnProperty('x_cw')) setSwitchState('ls-x-cw', !p.x_cw);
+                    if (p.hasOwnProperty('x_ccw')) setSwitchState('ls-x-ccw', !p.x_ccw);
+                    if (p.hasOwnProperty('y_cw')) setSwitchState('ls-y-cw', !p.y_cw);
+                    if (p.hasOwnProperty('y_ccw')) setSwitchState('ls-y-ccw', !p.y_ccw);
+                }
+
             } else if (status.tracking && !status.tracking.camera_enabled) {
                 safeUpdateElement('camera-system-status', 'Not Available');
                 safeUpdateElement('camera-enabled-status', 'N/A');
