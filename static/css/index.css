@@ -609,6 +609,7 @@
             border-radius: 3px;
             background: #ddd;
             outline: none;
+            appearance: none;
             -webkit-appearance: none;
             appearance: none;
         }
@@ -765,6 +766,41 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10000;
+            pointer-events: none;
+        }
+
+        .toast {
+            pointer-events: auto;
+            min-width: 240px;
+            max-width: 420px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+            border: 1px solid transparent;
+        }
+
+        .toast-success {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+
+        .toast-error {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
         }
 
         .select-control {
