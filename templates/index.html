@@ -1164,10 +1164,11 @@
             }
 
             // Check if camera tracking is enabled and active
-            const trackingMode = document.getElementById('tracking-mode').value;
+            const modeToggleEl = document.getElementById('tracking-mode-toggle');
+            const inCameraMode = !!(modeToggleEl && modeToggleEl.checked);
             const cameraTrackingEnabled = document.getElementById('camera-tracking-enabled').checked;
             
-            if (trackingMode === 'camera' && cameraTrackingEnabled) {
+            if (inCameraMode && cameraTrackingEnabled) {
                 // Camera movement mode: move camera to recenter clicked position
                 // Crosshair stays centered, don't update position display
                 fetch('/tracking/camera/move_to_position', {
@@ -3156,7 +3157,8 @@
                     if (data.status === 'success') {
                         // Update tracking mode dropdown if needed
                         if (data.mode) {
-                            document.getElementById('tracking-mode').value = data.mode;
+                            const modeToggle = document.getElementById('tracking-mode-toggle');
+                            if (modeToggle) modeToggle.checked = (data.mode === 'camera');
                             updateTrackingModeUI(data.mode);
                         }
                         
@@ -3184,20 +3186,23 @@
                                 // Initialize calibration sliders ONLY on first load
                                 // After that, preserve user's values until they save or refresh page
                                 if (controller.calibration && !calibrationSlidersInitialized) {
-                                    document.getElementById('camera-x-steps-per-pixel').value = 
-                                        controller.calibration.x_steps_per_pixel;
-                                    document.getElementById('camera-x-steps-value').textContent = 
-                                        controller.calibration.x_steps_per_pixel.toFixed(2);
+                                    const xEl = document.getElementById('camera-x-steps-per-pixel');
+                                    const xValEl = document.getElementById('camera-x-steps-value');
+                                    if (xEl) xEl.value = controller.calibration.x_steps_per_pixel;
+                                    if (xValEl) xValEl.textContent = controller.calibration.x_steps_per_pixel.toFixed(2);
                                     
-                                    document.getElementById('camera-y-steps-per-pixel').value = 
-                                        controller.calibration.y_steps_per_pixel;
-                                    document.getElementById('camera-y-steps-value').textContent = 
-                                        controller.calibration.y_steps_per_pixel.toFixed(2);
+                                    const yEl = document.getElementById('camera-y-steps-per-pixel');
+                                    const yValEl = document.getElementById('camera-y-steps-value');
+                                    if (yEl) yEl.value = controller.calibration.y_steps_per_pixel;
+                                    if (yValEl) yValEl.textContent = controller.calibration.y_steps_per_pixel.toFixed(2);
                                     
-                                    document.getElementById('camera-dead-zone').value = 
-                                        controller.calibration.dead_zone_pixels;
-                                    updateCameraDeadZoneValue();
-
+                                    const deadEl = document.getElementById('camera-dead-zone');
+                                    if (deadEl) {
+                                        deadEl.value = controller.calibration.dead_zone_pixels;
+                                        const dzValEl = document.getElementById('camera-dead-zone-value');
+                                        if (dzValEl) dzValEl.textContent = deadEl.value + 'px';
+                                    }
+    
                                     if (typeof controller.calibration.step_delay === 'number') {
                                         const sliderEl = document.getElementById('camera-step-delay');
                                         if (sliderEl) {
