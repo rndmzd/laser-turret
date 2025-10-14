@@ -3236,28 +3236,6 @@
                                     );
                                 }
                                 
-                                // Sync PID sliders with controller values
-                                fetch('/tracking/camera/pid')
-                                    .then(r => r.json())
-                                    .then(pd => {
-                                        if (pd.status === 'success' && pd.pid) {
-                                            const now = Date.now();
-                                            const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
-                                            if (allowPIDSync) {
-                                                const p = pd.pid;
-                                                const kpEl = document.getElementById('pid-kp');
-                                                const kiEl = document.getElementById('pid-ki');
-                                                const kdEl = document.getElementById('pid-kd');
-                                                const kpVal = document.getElementById('pid-kp-value');
-                                                const kiVal = document.getElementById('pid-ki-value');
-                                                const kdVal = document.getElementById('pid-kd-value');
-                                                if (kpEl && kpVal) { kpEl.value = p.kp; kpVal.textContent = parseFloat(p.kp).toFixed(2); }
-                                                if (kiEl && kiVal) { kiEl.value = p.ki; kiVal.textContent = parseFloat(p.ki).toFixed(2); }
-                                                if (kdEl && kdVal) { kdEl.value = p.kd; kdVal.textContent = parseFloat(p.kd).toFixed(2); }
-                                            }
-                                        }
-                                    })
-                                    .catch(() => {});
                             }
                             
                             document.getElementById('camera-tracking-enabled').checked = data.enabled;
