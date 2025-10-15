@@ -2374,10 +2374,14 @@ def update_camera_tracking_settings():
         
         if 'step_delay' in data:
             stepper_controller.calibration.step_delay = float(data['step_delay'])
-        
+            try:
+                stepper_controller.apply_speed_limits_from_calibration(force=True)
+            except Exception as exc:
+                logger.warning(f"Failed to apply new speed limits: {exc}")
+
         if 'x_max_steps' in data:
             stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])
-        
+
         if 'y_max_steps' in data:
             stepper_controller.calibration.y_max_steps = int(data['y_max_steps'])
         

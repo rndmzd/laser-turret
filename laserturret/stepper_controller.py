@@ -174,12 +174,13 @@ class StepperController:
         except Exception as _:
             self.axis_x = None
             self.axis_y = None
-        
+
         # State
         self.enabled = False
         self.moving = False
         self.movement_lock = threading.Lock()
-        
+        self._last_speed_limit_delay: Optional[float] = None
+
         # Initialize GPIO and optionally TMC UART
         self._setup_gpio()
         if self.use_uart:
@@ -191,6 +192,7 @@ class StepperController:
         self.kd = 0.2
         # Load calibration if available (may override PID)
         self.load_calibration()
+        self.apply_speed_limits_from_calibration(force=True)
         self._ix = 0.0
         self._iy = 0.0
         self._last_pid_time = None
@@ -588,10 +590,11 @@ class StepperController:
         self._mark_activity()
         # Don't force enable here - respect user's enable/disable state
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
-    
+
     def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
         if not self.enabled:
             return
+        self.apply_speed_limits_from_calibration()
         self._mark_activity()
         now = time.time()
         if getattr(self, '_last_pid_time', None) is None:
@@ -662,6 +665,29 @@ class StepperController:
             self._cmd_x_last = cmd_x
             self._cmd_y_last = cmd_y
             self._mark_activity()
+
+    def apply_speed_limits_from_calibration(self, force: bool = False) -> None:
+        """Propagate the configured step delay to axis command speed limits."""
+        try:
+            target_delay = float(getattr(self.calibration, 'step_delay', 0.001))
+        except Exception:
+            target_delay = 0.001
+        if not force and self._last_speed_limit_delay is not None:
+            if abs(self._last_speed_limit_delay - target_delay) < 1e-6:
+                return
+        min_floor = getattr(StepperAxis, 'DEFAULT_MIN_DELAY', 0.0002)
+        max_default = getattr(StepperAxis, 'DEFAULT_MAX_DELAY', 0.02)
+        min_delay = max(min_floor, target_delay)
+        for axis in (getattr(self, 'axis_x', None), getattr(self, 'axis_y', None)):
+            setter = getattr(axis, 'set_speed_limits', None)
+            if callable(setter):
+                try:
+                    axis_max = float(getattr(axis, 'max_delay', max_default))
+                    max_delay = max(min_delay, axis_max, max_default)
+                    setter(min_delay=min_delay, max_delay=max_delay)
+                except Exception:
+                    continue
+        self._last_speed_limit_delay = target_delay
     
     def stop_motion(self) -> None:
         """Immediately zero axis commands and reset PID state without disabling motors."""
@@ -1207,7 +1233,8 @@ class StepperController:
                         self.kd = float(pid.get('kd', self.kd))
                 except Exception:
                     pass
-                
+
+                self.apply_speed_limits_from_calibration(force=True)
                 logger.info(f"Calibration loaded from {self.calibration_file}")
                 if self.calibration.is_calibrated:
                     logger.info(f"System is calibrated (timestamp: {self.calibration.calibration_timestamp})")

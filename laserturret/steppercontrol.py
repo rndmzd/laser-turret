@@ -12,6 +12,13 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
+# Tunable delay bounds for velocity commands issued via process_command.
+# These defaults may be overridden at runtime (e.g., by calibration/UIS sliders)
+# using StepperMotor.set_speed_limits.
+DEFAULT_MIN_STEP_DELAY = 0.0002
+DEFAULT_MAX_STEP_DELAY = 0.02
+
 # Microstep resolution truth table
 # MS1 MS2 MS3 Resolution
 #  0   0   0   Full step (1)
@@ -56,6 +63,9 @@ class MotorState:
     error_message: Optional[str] = None
 
 class StepperMotor:
+    DEFAULT_MIN_DELAY = DEFAULT_MIN_STEP_DELAY
+    DEFAULT_MAX_DELAY = DEFAULT_MAX_STEP_DELAY
+
     def __init__(
         self,
         step_pin: int,
@@ -125,6 +135,13 @@ class StepperMotor:
         self.enabled = False
         self.enable_active_high = bool(enable_active_high)
         self.suspended = False
+
+        # Speed limits for command-based stepping. They are updated when the UI
+        # changes the movement speed (step delay) so that closed-loop tracking
+        # respects the configured limits instead of always running at the
+        # hardware maximum.
+        self.min_delay = self.DEFAULT_MIN_DELAY
+        self.max_delay = self.DEFAULT_MAX_DELAY
 
         # Initialize GPIO backend
         self.gpio = gpio_backend if gpio_backend is not None else get_gpio_backend()
@@ -343,9 +360,9 @@ class StepperMotor:
     def _calculate_step_delay(self, command_value: float) -> Optional[float]:
         """Calculate step delay based on command value magnitude"""
         # Tuned delay bounds (in seconds)
-        MIN_DELAY = 0.0002
-        MAX_DELAY = 0.02
-        
+        MIN_DELAY = max(self.DEFAULT_MIN_DELAY, float(self.min_delay))
+        MAX_DELAY = max(MIN_DELAY, float(self.max_delay))
+
         # Check deadzone
         abs_value = abs(command_value)
         if abs_value < self.deadzone:
@@ -355,9 +372,19 @@ class StepperMotor:
         command_range = 100 - self.deadzone
         normalized_command = (abs_value - self.deadzone) / command_range
         speed_multiplier = pow(normalized_command, 2)
-        
+
         delay = MAX_DELAY - (speed_multiplier * (MAX_DELAY - MIN_DELAY))
         return max(MIN_DELAY, min(MAX_DELAY, delay))
+
+    def set_speed_limits(self, min_delay: Optional[float] = None, max_delay: Optional[float] = None) -> None:
+        """Update the min/max delays used for velocity commands."""
+        with self.lock:
+            new_min = self.min_delay if min_delay is None else max(self.DEFAULT_MIN_DELAY, float(min_delay))
+            new_max = self.max_delay if max_delay is None else float(max_delay)
+            if new_max < new_min:
+                new_max = new_min
+            self.min_delay = new_min
+            self.max_delay = max(self.DEFAULT_MIN_DELAY, new_max)
 
     def _process_command_queue(self):
         """Process movement commands in separate thread"""
