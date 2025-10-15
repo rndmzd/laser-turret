@@ -44,6 +44,8 @@ class StepperCalibration:
     # Current position in steps (relative to home/center)
     x_position: int = 0
     y_position: int = 0
+    x_origin_offset: int = 0
+    y_origin_offset: int = 0
     
     # Movement limits in steps from center
     x_max_steps: int = 2000
@@ -765,16 +767,8 @@ class StepperController:
         if not self.enabled:
             return
         try:
-            cur_x = 0
-            cur_y = 0
-            try:
-                cur_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
-            except Exception:
-                cur_x = self.calibration.x_position
-            try:
-                cur_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
-            except Exception:
-                cur_y = self.calibration.y_position
+            cur_x = self._get_live_axis_position_logical('x')
+            cur_y = self._get_live_axis_position_logical('y')
             # Determine command directions toward zero
             cmd_x = 0.0
             cmd_y = 0.0
@@ -1018,8 +1012,19 @@ class StepperController:
             logger.error("Cannot set home position - calibration required")
             return False
         
-        logger.info(f"Setting current position "
-                   f"({self.calibration.x_position}, {self.calibration.y_position}) as home")
+        try:
+            live_x = int(getattr(self.axis_x.state, 'position', 0)) if getattr(self, 'axis_x', None) else 0
+        except Exception:
+            live_x = 0
+        try:
+            live_y = int(getattr(self.axis_y.state, 'position', 0)) if getattr(self, 'axis_y', None) else 0
+        except Exception:
+            live_y = 0
+
+        self.calibration.x_origin_offset = live_x
+        self.calibration.y_origin_offset = live_y
+
+        logger.info(f"Setting current position as home. Origin offsets set to X={live_x}, Y={live_y}")
         self.calibration.x_position = 0
         self.calibration.y_position = 0
         logger.info("Home position updated")
@@ -1155,8 +1160,8 @@ class StepperController:
             if motor and getattr(motor, 'state', None):
                 pos = int(getattr(motor.state, 'position', 0))
                 if axis == 'y':
-                    return -pos
-                return pos
+                    return -(pos - int(getattr(self.calibration, 'y_origin_offset', 0)))
+                return pos - int(getattr(self.calibration, 'x_origin_offset', 0))
         except Exception:
             pass
         return int(getattr(self.calibration, f'{axis}_position'))
@@ -1316,6 +1321,15 @@ class StepperController:
                 self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
                 self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
                 self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
+                # Load origin offsets if present (support Set Home persistence)
+                try:
+                    self.calibration.x_origin_offset = int(cal_data.get('x_origin_offset', 0) or 0)
+                except Exception:
+                    self.calibration.x_origin_offset = 0
+                try:
+                    self.calibration.y_origin_offset = int(cal_data.get('y_origin_offset', 0) or 0)
+                except Exception:
+                    self.calibration.y_origin_offset = 0
                 # Load PID if present
                 try:
                     pid = cal_data.get('pid', None)
@@ -1369,20 +1383,13 @@ class StepperController:
                 limits_pressed = None
 
         try:
-            pos_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+            pos_x = int(self._get_live_axis_position_logical('x'))
         except Exception:
-            pos_x = self.calibration.x_position
+            pos_x = int(getattr(self.calibration, 'x_position', 0) or 0)
         try:
-            pos_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+            pos_y = int(self._get_live_axis_position_logical('y'))
         except Exception:
-            pos_y = self.calibration.y_position
-        # Keep calibration positions aligned with live axis positions when available
-        try:
-            self.calibration.x_position = int(pos_x)
-            # Align logical Y with controller's coordinate system (invert live motor sign)
-            self.calibration.y_position = int(-pos_y)
-        except Exception:
-            pass
+            pos_y = int(getattr(self.calibration, 'y_position', 0) or 0)
 
         return {
             'enabled': self.enabled,
