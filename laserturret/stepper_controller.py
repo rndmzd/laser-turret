@@ -198,6 +198,46 @@ class StepperController:
         self._ey_n_last = 0.0
         self._cmd_x_last = 0.0
         self._cmd_y_last = 0.0
+        # Ensure the axes respect the currently configured step delay.
+        self._apply_step_delay_to_axes()
+
+    def _apply_step_delay_to_axes(self) -> None:
+        """Propagate the configured step delay to the axis drivers."""
+        delay = getattr(self.calibration, 'step_delay', 0.001) or 0.001
+
+        try:
+            delay = float(delay)
+        except (TypeError, ValueError):
+            logger.debug(f"Invalid step delay value on calibration: {delay}")
+            delay = 0.001
+
+        # Keep the delay within sane limits so the worker threads remain responsive.
+        delay = max(0.0002, min(0.1, delay))
+
+        for axis_name in ('axis_x', 'axis_y'):
+            axis = getattr(self, axis_name, None)
+            if axis is None or not hasattr(axis, 'set_minimum_step_delay'):
+                continue
+            try:
+                axis.set_minimum_step_delay(delay)
+            except Exception as exc:
+                logger.debug(f"Failed to update minimum step delay on %s: %s", axis_name, exc)
+
+    def set_step_delay(self, step_delay: float) -> None:
+        """Update the configured step delay and propagate it to the axes."""
+        try:
+            step_delay = float(step_delay)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid step delay value: {step_delay}") from None
+
+        if step_delay <= 0:
+            raise ValueError("Step delay must be positive")
+
+        # Clamp to safe limits.
+        step_delay = max(0.0002, min(0.1, step_delay))
+
+        self.calibration.step_delay = step_delay
+        self._apply_step_delay_to_axes()
         
         # Idle timeout watchdog
         self.idle_timeout = self.config.get_control_idle_timeout()
@@ -1213,6 +1253,7 @@ class StepperController:
                     logger.info(f"System is calibrated (timestamp: {self.calibration.calibration_timestamp})")
                 else:
                     logger.warning("Calibration file exists but system not marked as calibrated")
+                self._apply_step_delay_to_axes()
                 return True
             else:
                 logger.info("No calibration file found - calibration required")

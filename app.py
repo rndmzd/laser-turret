@@ -2373,7 +2373,10 @@ def update_camera_tracking_settings():
             stepper_controller.calibration.dead_zone_pixels = int(data['dead_zone_pixels'])
         
         if 'step_delay' in data:
-            stepper_controller.calibration.step_delay = float(data['step_delay'])
+            try:
+                stepper_controller.set_step_delay(data['step_delay'])
+            except ValueError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
         
         if 'x_max_steps' in data:
             stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])

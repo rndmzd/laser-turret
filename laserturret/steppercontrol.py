@@ -125,6 +125,10 @@ class StepperMotor:
         self.enabled = False
         self.enable_active_high = bool(enable_active_high)
         self.suspended = False
+        # Fastest delay we are allowed to use for automatic command-driven motion.
+        # Default matches the calibration default so that behaviour is predictable
+        # until a user provided value is applied.
+        self.minimum_step_delay: float = 0.001
 
         # Initialize GPIO backend
         self.gpio = gpio_backend if gpio_backend is not None else get_gpio_backend()
@@ -355,9 +359,20 @@ class StepperMotor:
         command_range = 100 - self.deadzone
         normalized_command = (abs_value - self.deadzone) / command_range
         speed_multiplier = pow(normalized_command, 2)
-        
+
         delay = MAX_DELAY - (speed_multiplier * (MAX_DELAY - MIN_DELAY))
-        return max(MIN_DELAY, min(MAX_DELAY, delay))
+        delay = max(MIN_DELAY, min(MAX_DELAY, delay))
+
+        # Respect the configured minimum (fastest) delay from the controller.
+        try:
+            user_min_delay = float(self.minimum_step_delay)
+        except Exception:
+            user_min_delay = MIN_DELAY
+
+        if user_min_delay > 0:
+            delay = max(delay, user_min_delay)
+
+        return delay
 
     def _process_command_queue(self):
         """Process movement commands in separate thread"""
@@ -428,6 +443,22 @@ class StepperMotor:
             self.command_queue.put(command_value)
         except Exception as e:
             logger.error(f"[{self.name}] Error queueing command: {str(e)}")
+
+    def set_minimum_step_delay(self, delay: float) -> None:
+        """Set the minimum delay (fastest speed) allowed for command-based motion."""
+        try:
+            delay = float(delay)
+        except (TypeError, ValueError):
+            logger.debug(f"[{self.name}] Invalid delay value provided: {delay}")
+            return
+
+        if delay <= 0:
+            logger.debug(f"[{self.name}] Ignoring non-positive delay value: {delay}")
+            return
+
+        # Clamp to sane bounds so the worker thread keeps functioning.
+        delay = max(0.0002, min(0.1, delay))
+        self.minimum_step_delay = delay
     
     def release(self) -> None:
         """Release the motor and reset state"""
