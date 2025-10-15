@@ -247,16 +247,39 @@ def cleanup_on_exit():
                 print("Cleanup: camera stopped")
         except Exception as e:
             print(f"Cleanup camera error: {e}")
+        invalidate_calibration = getattr(
+            cleanup_on_exit, "_invalidate_calibration", False
+        )
         if stepper_controller:
-            disabled_level = 0 if stepper_controller.enable_active_high else 1
-            stepper_controller.gpio.output(stepper_controller.x_enable_pin, disabled_level)
-            stepper_controller.gpio.output(stepper_controller.y_enable_pin, disabled_level)
-            print(f"Cleanup: set motor enable pins to {disabled_level} (active_high={stepper_controller.enable_active_high})")
+            try:
+                stepper_controller.disable(
+                    invalidate_calibration=invalidate_calibration
+                )
+            except Exception as e:
+                print(f"Cleanup motor disable error: {e}")
+                try:
+                    disabled_level = 0 if stepper_controller.enable_active_high else 1
+                    stepper_controller.gpio.output(
+                        stepper_controller.x_enable_pin, disabled_level
+                    )
+                    stepper_controller.gpio.output(
+                        stepper_controller.y_enable_pin, disabled_level
+                    )
+                    print(
+                        "Cleanup fallback: set motor enable pins to "
+                        f"{disabled_level} (active_high={stepper_controller.enable_active_high})"
+                    )
+                except Exception as fallback_error:
+                    print(f"Cleanup fallback error: {fallback_error}")
     except Exception as e:
         print(f"Cleanup error: {e}")
 
 def _handle_exit_signal(signum, frame):
-    cleanup_on_exit()
+    setattr(cleanup_on_exit, "_invalidate_calibration", True)
+    signal.default_int_handler(signum, frame)
+
+
+setattr(cleanup_on_exit, "_invalidate_calibration", False)
 
 def initialize_camera():
     """Initialize the Pi Camera with compatible auto exposure settings"""
@@ -2778,6 +2801,7 @@ def status_emitter_thread():
     print("Status emitter thread exiting...")
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, _handle_exit_signal)
     initialize_camera()
     initialize_laser_control()  # Initialize laser control with PWM
     initialize_stepper_controller()  # Initialize stepper controller
@@ -2801,6 +2825,7 @@ if __name__ == '__main__':
     try:
         socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
+        setattr(cleanup_on_exit, "_invalidate_calibration", True)
         print("KeyboardInterrupt received, shutting down...")
     finally:
         cleanup_on_exit()
