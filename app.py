@@ -477,12 +477,19 @@ def move_camera_to_absolute_position(abs_x, abs_y, background=False):
         if not tracking_active or controller is None:
             return False
 
-        with crosshair_lock:
-            adj_x = int(abs_x) - int(crosshair_offset['x'])
-            adj_y = int(abs_y) - int(crosshair_offset['y'])
+        # Preset coordinates are stored using absolute image positions. Avoid
+        # adjusting by the crosshair calibration offset here so the controller
+        # recenters the exact pixel that was saved.
+        target_x = int(abs_x)
+        target_y = int(abs_y)
 
         def move():
-            moved_local = controller.move_to_center_object(adj_x, adj_y, CAMERA_WIDTH, CAMERA_HEIGHT)
+            moved_local = controller.move_to_center_object(
+                target_x,
+                target_y,
+                CAMERA_WIDTH,
+                CAMERA_HEIGHT
+            )
             if moved_local:
                 print(f"Camera moved to preset position ({abs_x}, {abs_y})")
             else:
