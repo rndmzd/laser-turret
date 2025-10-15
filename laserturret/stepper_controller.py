@@ -82,6 +82,13 @@ class StepperController:
         self.config = config_manager
         self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
+        try:
+            self.calibration.acceleration_steps = int(
+                self.config.get_control_acceleration_steps()
+            )
+        except Exception:
+            # Fallback to dataclass default if config missing/malformed
+            pass
         # Enable polarity: True => HIGH enables, LOW disables; False => LOW enables, HIGH disables
         try:
             self.enable_active_high: bool = bool(self.config.get_enable_active_high())
@@ -1276,6 +1283,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': self.calibration.acceleration_steps,
                 'step_delay': self.calibration.step_delay,
                 'is_calibrated': self.calibration.is_calibrated,
                 'calibration_timestamp': self.calibration.calibration_timestamp
@@ -1339,6 +1347,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': self.calibration.acceleration_steps,
                 'is_calibrated': self.calibration.is_calibrated,
                 'timestamp': self.calibration.calibration_timestamp,
             },

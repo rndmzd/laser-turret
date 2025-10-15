@@ -54,6 +54,7 @@ max_steps_per_update = 50
 deadzone = 5
 speed_scaling = 0.10
 step_delay = 0.0005
+acceleration_steps = 50
 
 [Laser]
 laser_pin = 12
@@ -161,10 +162,12 @@ x_motor = config.get_motor_config('x')
 | `get_control_deadzone()` | `int` | Input deadzone |
 | `get_control_speed_scaling()` | `float` | Speed scaling factor |
 | `get_control_step_delay()` | `float` | Delay between steps |
+| `get_control_acceleration_steps()` | `int` | Steps used for acceleration profile |
 
 ```python
 deadzone = config.get_control_deadzone()
 delay = config.get_control_step_delay()
+accel = config.get_control_acceleration_steps()
 ```
 
 ### MQTT Configuration
@@ -339,6 +342,7 @@ DEFAULTS = {
         'deadzone': 5,
         'speed_scaling': 0.10,
         'step_delay': 0.0005,
+        'acceleration_steps': 50,
     },
     'Laser': {
         'laser_pin': 12,

@@ -61,6 +61,7 @@ class ConfigManager:
             'deadzone': 5,
             'speed_scaling': 0.10,
             'step_delay': 0.0005,
+            'acceleration_steps': 50,
             'idle_timeout_sec': 600.0,
         },
         'Laser': {
@@ -290,7 +291,11 @@ class ConfigManager:
     def get_control_step_delay(self) -> float:
         """Get step delay in seconds"""
         return self._get('Control', 'step_delay', float)
-    
+
+    def get_control_acceleration_steps(self) -> int:
+        """Get number of steps used for acceleration/deceleration"""
+        return self._get('Control', 'acceleration_steps', int)
+
     def get_control_idle_timeout(self) -> float:
         """Get motor idle timeout in seconds"""
         return self._get('Control', 'idle_timeout_sec', float)

@@ -2374,7 +2374,14 @@ def update_camera_tracking_settings():
         
         if 'step_delay' in data:
             stepper_controller.calibration.step_delay = float(data['step_delay'])
-        
+
+        if 'acceleration_steps' in data:
+            try:
+                accel_steps = int(data['acceleration_steps'])
+            except (TypeError, ValueError):
+                return jsonify({'status': 'error', 'message': 'Invalid acceleration value'}), 400
+            stepper_controller.calibration.acceleration_steps = max(0, accel_steps)
+
         if 'x_max_steps' in data:
             stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])
         
