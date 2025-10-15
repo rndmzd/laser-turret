@@ -847,10 +847,12 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                     x, y, w, h = obj['rect']
                     # Draw rectangle
                     cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 255, 0), 2)
-                    # Draw label
-                    label = obj['type'].capitalize()
-                    cv2.putText(overlay, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                               0.7, (255, 255, 0), 2, cv2.LINE_AA)
+                    # Draw label showing only the confidence value when available
+                    confidence = obj.get('confidence')
+                    if isinstance(confidence, (float, int)):
+                        label = f"{confidence * 100:.1f}%"
+                        cv2.putText(overlay, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.7, (255, 255, 0), 2, cv2.LINE_AA)
                 
                 # Auto-track: select priority target
                 if object_auto_track and objects:
@@ -2396,7 +2398,10 @@ def update_camera_tracking_settings():
             stepper_controller.calibration.dead_zone_pixels = int(data['dead_zone_pixels'])
         
         if 'step_delay' in data:
-            stepper_controller.calibration.step_delay = float(data['step_delay'])
+            try:
+                stepper_controller.set_step_delay(data['step_delay'])
+            except ValueError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
         
         if 'x_max_steps' in data:
             stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])
