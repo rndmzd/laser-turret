@@ -121,6 +121,8 @@ pattern_thread = None
 pattern_sequence = []
 pattern_delay = 1.0  # seconds between positions
 pattern_loop = False
+pattern_paused_for_object = False
+pattern_loop = False
 
 # Laser fire control
 laser_enabled = False
@@ -454,13 +456,47 @@ def check_auto_fire():
 
 def run_pattern_sequence():
     """Execute a pattern sequence in a separate thread"""
-    global pattern_running, pattern_thread
+    global pattern_running, pattern_thread, pattern_paused_for_object
 
     homed_for_steps = False
+    restart_after_home = False
 
     while pattern_running:
         for slot in pattern_sequence:
             if not pattern_running:
+                break
+
+            # If object detection + auto-track engaged and object in frame, pause pattern
+            with object_lock:
+                obj_present = (object_detection_enabled and object_auto_track and len(detected_objects) > 0)
+            if obj_present:
+                if not pattern_paused_for_object:
+                    pattern_paused_for_object = True
+                    print("Pattern: Paused due to detected object - yielding control to auto-tracking")
+                # Wait until object leaves frame or pattern is stopped
+                while pattern_running:
+                    time.sleep(0.05)
+                    with object_lock:
+                        still_present = (object_detection_enabled and object_auto_track and len(detected_objects) > 0)
+                    if not still_present:
+                        break
+                if not pattern_running:
+                    break
+                # Object left frame: stop any motion, home, and restart pattern from first slot
+                try:
+                    if stepper_controller is not None:
+                        if not stepper_controller.enabled:
+                            stepper_controller.enable()
+                        try:
+                            stepper_controller.stop_motion()
+                        except Exception:
+                            pass
+                        stepper_controller.home()
+                        print("Pattern: Object lost - homed and restarting sequence from beginning")
+                except Exception as e:
+                    print(f"Pattern: Homing after object loss failed: {e}")
+                pattern_paused_for_object = False
+                restart_after_home = True
                 break
 
             with preset_lock:
@@ -505,6 +541,10 @@ def run_pattern_sequence():
                 move_camera_to_absolute_position(pos['x'], pos['y'])
 
             time.sleep(pattern_delay)
+
+        if restart_after_home:
+            restart_after_home = False
+            continue
 
         # If not looping, stop after one cycle
         if not pattern_running:
@@ -2060,7 +2100,7 @@ def list_presets():
 @app.route('/presets/pattern/start', methods=['POST'])
 def start_pattern():
     """Start executing a pattern sequence"""
-    global pattern_running, pattern_thread, pattern_sequence, pattern_delay, pattern_loop
+    global pattern_running, pattern_thread, pattern_sequence, pattern_delay, pattern_loop, pattern_paused_for_object
     
     try:
         data = request.get_json()
@@ -2108,6 +2148,7 @@ def start_pattern():
         pattern_delay = max(0.0, min(10.0, delay))
         pattern_loop = loop
         pattern_running = True
+        pattern_paused_for_object = False
 
         # Start pattern thread
         pattern_thread = threading.Thread(target=run_pattern_sequence, daemon=True)
@@ -2125,10 +2166,11 @@ def start_pattern():
 @app.route('/presets/pattern/stop', methods=['POST'])
 def stop_pattern():
     """Stop the running pattern sequence"""
-    global pattern_running, pattern_loop
+    global pattern_running, pattern_loop, pattern_paused_for_object
 
     pattern_running = False
     pattern_loop = False
+    pattern_paused_for_object = False
 
     return jsonify({
         'status': 'success',
