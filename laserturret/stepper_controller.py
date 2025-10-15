@@ -1006,41 +1006,49 @@ class StepperController:
             try:
                 results = {}
                 
-                # Track starting positions before calibration
-                x_start_position = self.calibration.x_position
-                y_start_position = self.calibration.y_position
-                
                 # Calibrate X axis
                 report('info', 'Calibrating X axis - finding limits')
                 x_range = self._find_axis_limits('x', report)
                 results['x_range'] = x_range
-                
+
                 # Calibrate Y axis
                 report('info', 'Calibrating Y axis - finding limits')
                 y_range = self._find_axis_limits('y', report)
                 results['y_range'] = y_range
-                
-                # Calculate center positions (offsets from where each axis started)
-                x_center_offset = (x_range['min'] + x_range['max']) // 2
-                y_center_offset = (y_range['min'] + y_range['max']) // 2
-                
-                # Convert to absolute positions
-                x_center_absolute = x_start_position + x_center_offset
-                y_center_absolute = y_start_position + y_center_offset
-                
-                report('info', f'Moving to center position: X={x_center_absolute}, Y={y_center_absolute}')
-                
-                # Move to center (bypass limits since we're still calibrating) using default step delay
-                self.step('x', x_center_absolute - self.calibration.x_position, bypass_limits=True)
-                self.step('y', y_center_absolute - self.calibration.y_position, bypass_limits=True)
+
+                # Calculate total travel range discovered during calibration
+                x_total_range = x_range['max'] - x_range['min']
+                y_total_range = y_range['max'] - y_range['min']
+
+                if x_total_range <= 0 or y_total_range <= 0:
+                    raise ValueError('Unable to determine axis travel (invalid range discovered)')
+
+                if x_total_range % 2:
+                    report('warning',
+                           'X axis travel range is not even - centering will favor the negative side by one step')
+                if y_total_range % 2:
+                    report('warning',
+                           'Y axis travel range is not even - centering will favor the negative side by one step')
+
+                # After _find_axis_limits both axes are resting at the minimum limit (negative range)
+                # Move forward by half the discovered range to reach the center point
+                x_steps_to_center = x_total_range // 2
+                y_steps_to_center = y_total_range // 2
+
+                report('info',
+                       f'Moving to center position from negative limits: X=+{x_steps_to_center} steps, '
+                       f'Y=+{y_steps_to_center} steps')
+
+                self.step('x', x_steps_to_center, bypass_limits=True)
+                self.step('y', y_steps_to_center, bypass_limits=True)
                 
                 # Set this as home (0, 0)
                 self.calibration.x_position = 0
                 self.calibration.y_position = 0
                 
                 # Update max limits based on discovered range
-                x_half_range = (x_range['max'] - x_range['min']) // 2
-                y_half_range = (y_range['max'] - y_range['min']) // 2
+                x_half_range = x_total_range // 2
+                y_half_range = y_total_range // 2
                 
                 self.calibration.x_max_steps = x_half_range
                 self.calibration.y_max_steps = y_half_range
