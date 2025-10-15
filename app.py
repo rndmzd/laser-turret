@@ -2645,7 +2645,7 @@ def auto_calibrate_camera():
         
         return jsonify({
             'status': 'success',
-            'message': 'Auto-calibration started. This may take several minutes.'
+            'message': 'Auto-calibration started.'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400

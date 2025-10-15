@@ -396,7 +396,7 @@
                         </p>
 
                         <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
+                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position.
                         </div>
 
                         <div class="slider-control">
@@ -3084,7 +3084,7 @@
         }
 
         function runAutoCalibration() {
-            if (!confirm('Run automatic calibration? This will move the camera through its full range of motion and may take several minutes. Ensure the area is clear.')) return;
+            if (!confirm('Run automatic calibration? This will move the camera through its full range of motion. Ensure the area is clear.')) return;
             
             fetch('/tracking/camera/auto_calibrate', {
                 method: 'POST',
