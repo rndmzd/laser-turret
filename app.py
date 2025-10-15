@@ -824,8 +824,12 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                     x, y, w, h = obj['rect']
                     # Draw rectangle
                     cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 255, 0), 2)
-                    # Draw label
+                    # Draw label with optional confidence when available
                     label = obj['type'].capitalize()
+                    confidence = obj.get('confidence')
+                    if isinstance(confidence, (float, int)):
+                        # Confidence scores are typically 0.0-1.0; format as percentage
+                        label = f"{label} {confidence * 100:.1f}%"
                     cv2.putText(overlay, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
                                0.7, (255, 255, 0), 2, cv2.LINE_AA)
                 
