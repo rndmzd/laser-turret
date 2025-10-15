@@ -1000,7 +1000,41 @@ class StepperController:
                 callback(status, message)
         
         report('info', 'Starting automatic calibration...')
-        
+
+        sequence_tracker = None
+        if self.has_limit_switches:
+            class _CalibrationSequence:
+                def __init__(self):
+                    self.expected = [
+                        'x_positive',
+                        'x_negative',
+                        'y_positive',
+                        'y_negative',
+                    ]
+                    self.index = 0
+
+                def record(self, axis: str, direction: str) -> None:
+                    event = f"{axis}_{direction}"
+                    if self.index >= len(self.expected):
+                        raise RuntimeError(
+                            f"Unexpected limit switch trigger order during calibration: {event}"
+                        )
+                    expected = self.expected[self.index]
+                    if event != expected:
+                        raise RuntimeError(
+                            "Limit switches triggered out of order during calibration: "
+                            f"expected {expected.replace('_', ' ')}, got {event.replace('_', ' ')}"
+                        )
+                    self.index += 1
+
+                def completed(self) -> bool:
+                    return self.index == len(self.expected)
+
+                def remaining(self):
+                    return self.expected[self.index:]
+
+            sequence_tracker = _CalibrationSequence()
+
         with self.movement_lock:
             self.moving = True
             try:
@@ -1012,13 +1046,20 @@ class StepperController:
                 
                 # Calibrate X axis
                 report('info', 'Calibrating X axis - finding limits')
-                x_range = self._find_axis_limits('x', report)
+                x_range = self._find_axis_limits('x', report, sequence_tracker)
                 results['x_range'] = x_range
-                
+
                 # Calibrate Y axis
                 report('info', 'Calibrating Y axis - finding limits')
-                y_range = self._find_axis_limits('y', report)
+                y_range = self._find_axis_limits('y', report, sequence_tracker)
                 results['y_range'] = y_range
+
+                if sequence_tracker and not sequence_tracker.completed():
+                    remaining = ', '.join(sequence_tracker.remaining()) or 'unknown'
+                    raise RuntimeError(
+                        'Calibration failed: not all limit switches were triggered '
+                        f'in the expected order (missing {remaining})'
+                    )
                 
                 # Calculate center positions (offsets from where each axis started)
                 x_center_offset = (x_range['min'] + x_range['max']) // 2
@@ -1071,7 +1112,7 @@ class StepperController:
             finally:
                 self.moving = False
     
-    def _find_axis_limits(self, axis: str, report) -> dict:
+    def _find_axis_limits(self, axis: str, report, sequence_tracker=None) -> dict:
         """
         Find the limits of movement for an axis.
         
@@ -1081,58 +1122,74 @@ class StepperController:
         max_search_steps = 5000  # Maximum steps to search in each direction
         search_speed = 0.001  # Step delay during calibration
         
-        # Save current position
-        if axis == 'x':
-            start_pos = self.calibration.x_position
-        else:
-            start_pos = self.calibration.y_position
-        
         # Find positive limit
         report('info', f'{axis.upper()} axis: searching positive direction')
         steps_moved = 0
         
+        positive_triggered = False
         for i in range(max_search_steps):
             if self.has_limit_switches and self.check_limit_switch(axis, 1):
                 report('info', f'{axis.upper()} axis: positive limit switch found')
+                positive_triggered = True
+                if sequence_tracker:
+                    sequence_tracker.record(axis, 'positive')
                 break
-            
+
             self.step(axis, 1, delay=search_speed, bypass_limits=True)
             steps_moved += 1
-            
+
             # Report progress every 500 steps
             if steps_moved % 500 == 0:
                 report('info', f'{axis.upper()} axis: {steps_moved} steps positive')
         else:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
-        
+
+        if self.has_limit_switches and not positive_triggered:
+            if steps_moved:
+                self.step(axis, -steps_moved, delay=search_speed, bypass_limits=True)
+            raise RuntimeError(
+                f'{axis.upper()} axis: positive limit switch not triggered during calibration'
+            )
+
         positive_limit = steps_moved
-        
+
         # Return to start
         report('info', f'{axis.upper()} axis: returning to start position')
         self.step(axis, -steps_moved, delay=search_speed, bypass_limits=True)
-        
+
         # Find negative limit
         report('info', f'{axis.upper()} axis: searching negative direction')
         steps_moved = 0
-        
+
+        negative_triggered = False
         for i in range(max_search_steps):
             if self.has_limit_switches and self.check_limit_switch(axis, -1):
                 report('info', f'{axis.upper()} axis: negative limit switch found')
+                negative_triggered = True
+                if sequence_tracker:
+                    sequence_tracker.record(axis, 'negative')
                 break
-            
+
             self.step(axis, -1, delay=search_speed, bypass_limits=True)
             steps_moved += 1
-            
+
             # Report progress every 500 steps
             if steps_moved % 500 == 0:
                 report('info', f'{axis.upper()} axis: {steps_moved} steps negative')
         else:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
-        
+
+        if self.has_limit_switches and not negative_triggered:
+            if steps_moved:
+                self.step(axis, steps_moved, delay=search_speed, bypass_limits=True)
+            raise RuntimeError(
+                f'{axis.upper()} axis: negative limit switch not triggered during calibration'
+            )
+
         negative_limit = -steps_moved
-        
+
         report('info', f'{axis.upper()} axis range: {negative_limit} to {positive_limit} steps')
-        
+
         return {
             'min': negative_limit,
             'max': positive_limit
