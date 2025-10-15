@@ -494,7 +494,8 @@ def run_pattern_sequence():
                 except Exception:
                     pass
                 print(f"Pattern: Moving (steps) to preset {slot} - {pos['label']}")
-                move_camera_to_steps_position(pos['x'], pos['y'])
+                tx, ty = _steps_target_to_motor(pos)
+                move_camera_to_steps_position(tx, ty)
             else:
                 with crosshair_lock:
                     crosshair_pos['x'] = pos['x']
@@ -560,7 +561,7 @@ def move_camera_to_steps_position(target_x_steps, target_y_steps, background=Fal
         cur_x = int(cur.get('x', 0)) if isinstance(cur, dict) else 0
         cur_y = int(cur.get('y', 0)) if isinstance(cur, dict) else 0
         dx = int(target_x_steps) - cur_x
-        dy = int(target_y_steps) - cur_y
+        dy = -(int(target_y_steps) - cur_y)
 
         def move():
             try:
@@ -1955,6 +1956,7 @@ def save_preset():
                 'y': y,
                 'label': label,
                 'type': ptype,
+                'steps_sign': 'ms' if ptype == 'steps' else None,
             }
         return jsonify({
             'status': 'success',
@@ -1981,6 +1983,17 @@ def _get_preset_type(preset):
         pass
     return 'pixel'
 
+def _steps_target_to_motor(preset):
+    try:
+        x = int(preset.get('x', 0))
+        y = int(preset.get('y', 0))
+    except Exception:
+        return 0, 0
+    sign_mode = preset.get('steps_sign')
+    if sign_mode == 'ms':
+        return x, y
+    return x, -y
+
 @app.route('/presets/load/<int:slot>', methods=['POST'])
 def load_preset(slot):
     try:
@@ -1992,7 +2005,8 @@ def load_preset(slot):
             preset = preset_positions[slot]
         ptype = _get_preset_type(preset)
         if ptype == 'steps':
-            move_started = move_camera_to_steps_position(preset['x'], preset['y'], background=True)
+            tx, ty = _steps_target_to_motor(preset)
+            move_started = move_camera_to_steps_position(tx, ty, background=True)
         else:
             with crosshair_lock:
                 crosshair_pos['x'] = preset['x']
