@@ -29,7 +29,7 @@ except Exception:  # ImportError or pyserial missing
     configure_defaults = None  # type: ignore
     REG = {}
 from laserturret.motion.axis import StepperAxis
-from laserturret.steppercontrol import MotorError, LimitSwitchError
+from laserturret.steppercontrol import MotorError, LimitSwitchError, CalibrationError
 
 logger = logging.getLogger(__name__)
 
@@ -198,16 +198,60 @@ class StepperController:
         self._ey_n_last = 0.0
         self._cmd_x_last = 0.0
         self._cmd_y_last = 0.0
-        
+        # Ensure the axes respect the currently configured step delay.
+        self._apply_step_delay_to_axes()
+
         # Idle timeout watchdog
         self.idle_timeout = self.config.get_control_idle_timeout()
         self._idle_stop = threading.Event()
         self._active_moves = 0
         self._last_activity = time.time()
-        self._idle_thread = threading.Thread(target=self._idle_watchdog, name="idle_watchdog", daemon=True)
+        self._idle_thread = threading.Thread(
+            target=self._idle_watchdog,
+            name="idle_watchdog",
+            daemon=True,
+        )
         self._idle_thread.start()
 
         logger.info("StepperController initialized")
+
+    def _apply_step_delay_to_axes(self) -> None:
+        """Propagate the configured step delay to the axis drivers."""
+        delay = getattr(self.calibration, 'step_delay', 0.001) or 0.001
+
+        try:
+            delay = float(delay)
+        except (TypeError, ValueError):
+            logger.debug(f"Invalid step delay value on calibration: {delay}")
+            delay = 0.001
+
+        # Keep the delay within sane limits so the worker threads remain responsive.
+        delay = max(0.0002, min(0.1, delay))
+
+        for axis_name in ('axis_x', 'axis_y'):
+            axis = getattr(self, axis_name, None)
+            if axis is None or not hasattr(axis, 'set_minimum_step_delay'):
+                continue
+            try:
+                axis.set_minimum_step_delay(delay)
+            except Exception as exc:
+                logger.debug(f"Failed to update minimum step delay on %s: %s", axis_name, exc)
+
+    def set_step_delay(self, step_delay: float) -> None:
+        """Update the configured step delay and propagate it to the axes."""
+        try:
+            step_delay = float(step_delay)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid step delay value: {step_delay}") from None
+
+        if step_delay <= 0:
+            raise ValueError("Step delay must be positive")
+
+        # Clamp to safe limits.
+        step_delay = max(0.0002, min(0.1, step_delay))
+
+        self.calibration.step_delay = step_delay
+        self._apply_step_delay_to_axes()
     
     def _setup_gpio(self):
         """Configure GPIO pins for stepper motors"""
@@ -1008,7 +1052,7 @@ class StepperController:
     def auto_calibrate(self, callback=None) -> dict:
         """
         Automatically calibrate camera by finding limits and centering.
-        
+
         This will:
         1. Find limit switches or max range in each direction for both axes
         2. Calculate the center position
@@ -1040,29 +1084,24 @@ class StepperController:
                 x_start_position = self.calibration.x_position
                 y_start_position = self.calibration.y_position
                 
-                # Calibrate X axis
-                report('info', 'Calibrating X axis - finding limits')
-                x_range = self._find_axis_limits('x', report)
+                # Calibrate axes and determine their ranges
+                report('info', 'Calibrating X axis - determining travel range')
+                x_range, x_center_absolute = self._calibrate_axis('x', x_start_position, report)
                 results['x_range'] = x_range
-                
-                # Calibrate Y axis
-                report('info', 'Calibrating Y axis - finding limits')
-                y_range = self._find_axis_limits('y', report)
+
+                report('info', 'Calibrating Y axis - determining travel range')
+                y_range, y_center_absolute = self._calibrate_axis('y', y_start_position, report)
                 results['y_range'] = y_range
-                
-                # Calculate center positions (offsets from where each axis started)
-                x_center_offset = (x_range['min'] + x_range['max']) // 2
-                y_center_offset = (y_range['min'] + y_range['max']) // 2
-                
-                # Convert to absolute positions
-                x_center_absolute = x_start_position + x_center_offset
-                y_center_absolute = y_start_position + y_center_offset
-                
+
                 report('info', f'Moving to center position: X={x_center_absolute}, Y={y_center_absolute}')
-                
+
+                # Use live axis state when available so we always move from actual position
+                current_x = self._get_live_axis_position('x')
+                current_y = self._get_live_axis_position('y')
+
                 # Move to center (bypass limits since we're still calibrating) using default step delay
-                self.step('x', x_center_absolute - self.calibration.x_position, bypass_limits=True)
-                self.step('y', y_center_absolute - self.calibration.y_position, bypass_limits=True)
+                self.step('x', x_center_absolute - current_x, bypass_limits=True)
+                self.step('y', y_center_absolute - current_y, bypass_limits=True)
                 
                 # Set this as home (0, 0)
                 self.calibration.x_position = 0
@@ -1100,11 +1139,49 @@ class StepperController:
             
             finally:
                 self.moving = False
-    
+
+    def _get_live_axis_position(self, axis: str) -> int:
+        """Return the most up-to-date position for an axis."""
+        try:
+            motor = self.axis_x if axis == 'x' else self.axis_y
+            if motor and getattr(motor, 'state', None):
+                return int(getattr(motor.state, 'position', 0))
+        except Exception:
+            pass
+        return int(getattr(self.calibration, f'{axis}_position'))
+
+    def _calibrate_axis(self, axis: str, start_position: int, report):
+        """Calibrate a single axis and return its travel range and center position."""
+        motor = self.axis_x if axis == 'x' else self.axis_y
+
+        if motor and hasattr(motor, 'calibrate'):
+            try:
+                report('info', f'{axis.upper()} axis: running motor-level calibration')
+                motor.calibrate()
+                total_steps = int(getattr(motor, 'total_travel_steps', 0) or 0)
+                if total_steps > 0:
+                    half_range = total_steps // 2
+                    return ({'min': -half_range, 'max': half_range}, self._get_live_axis_position(axis))
+                report('warning', f'{axis.upper()} axis: motor did not report travel distance, falling back')
+            except CalibrationError as exc:
+                report(
+                    'warning',
+                    f"{axis.upper()} axis: motor calibration failed ({exc}), falling back to search",
+                )
+            except Exception as exc:
+                report(
+                    'warning',
+                    f"{axis.upper()} axis: motor calibration error ({exc}), falling back to search",
+                )
+
+        range_info = self._find_axis_limits(axis, report)
+        center_offset = (range_info['min'] + range_info['max']) // 2
+        return range_info, start_position + center_offset
+
     def _find_axis_limits(self, axis: str, report) -> dict:
         """
         Find the limits of movement for an axis.
-        
+
         Returns:
             dict with 'min' and 'max' step positions
         """
@@ -1243,6 +1320,7 @@ class StepperController:
                     logger.info(f"System is calibrated (timestamp: {self.calibration.calibration_timestamp})")
                 else:
                     logger.warning("Calibration file exists but system not marked as calibrated")
+                self._apply_step_delay_to_axes()
                 return True
             else:
                 logger.info("No calibration file found - calibration required")

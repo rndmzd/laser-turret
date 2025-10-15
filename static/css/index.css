@@ -161,6 +161,44 @@
             width: auto;
         }
 
+        #auto-calibration-banner {
+            display: none;
+            background: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 214, 102, 0.5);
+            border-radius: 14px;
+            padding: 14px 16px;
+            color: #ffe082;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            align-items: stretch;
+        }
+
+        #auto-calibration-banner .calibration-title {
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.02em;
+        }
+
+        #auto-calibration-banner .auto-calibration-button {
+            appearance: none;
+            border: none;
+            border-radius: 12px;
+            padding: 10px 16px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
+            color: #2b1900;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 6px 20px rgba(255, 179, 71, 0.45);
+        }
+
+        #auto-calibration-banner .auto-calibration-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(255, 179, 71, 0.55);
+        }
+
         .laser-overlay {
             right: 18px;
             bottom: 18px;
