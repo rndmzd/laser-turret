@@ -1004,7 +1004,7 @@ class StepperController:
                 cur_y = self.calibration.y_position
             # Move back to zero position
             self.step('x', -cur_x)
-            self.step('y', -cur_y)
+            self.step('y', cur_y)
         
         logger.info("Camera homed to center position")
         # Don't force enable - respect user's enable/disable state
