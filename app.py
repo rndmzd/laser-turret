@@ -157,6 +157,11 @@ motion_bg_history = 500
 motion_learning_rate = 0.01
 motion_kernel_size = 5
 
+# Auto-track jitter control
+object_track_jitter_base = 4  # Minimum pixels required before treating movement as real
+object_track_jitter_ratio = 0.04  # Portion of target size tolerated as jitter
+object_track_jitter_alpha = 0.05  # Slow follow rate while target is considered stationary
+
 balloon_v_threshold = 60
 balloon_min_area = 2000
 balloon_circularity_min = 0.55
@@ -859,11 +864,22 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                                     else:
                                         object_last_switch_time = time.time()
 
+                        alpha = tracking_smoothing_alpha
+                        jitter_px = max(
+                            object_track_jitter_base,
+                            int(max(w, h) * object_track_jitter_ratio)
+                        )
+                        if object_track_smooth_center is not None:
+                            dx = use_cx - object_track_smooth_center[0]
+                            dy = use_cy - object_track_smooth_center[1]
+                            if (dx * dx + dy * dy) ** 0.5 <= jitter_px:
+                                alpha = min(alpha, object_track_jitter_alpha)
+
                         if object_track_smooth_center is None:
                             object_track_smooth_center = (float(use_cx), float(use_cy))
                         else:
-                            sx = object_track_smooth_center[0] + tracking_smoothing_alpha * (use_cx - object_track_smooth_center[0])
-                            sy = object_track_smooth_center[1] + tracking_smoothing_alpha * (use_cy - object_track_smooth_center[1])
+                            sx = object_track_smooth_center[0] + alpha * (use_cx - object_track_smooth_center[0])
+                            sy = object_track_smooth_center[1] + alpha * (use_cy - object_track_smooth_center[1])
                             object_track_smooth_center = (sx, sy)
 
                         sx_i = int(object_track_smooth_center[0])
