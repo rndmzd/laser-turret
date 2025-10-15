@@ -993,15 +993,14 @@ class StepperController:
                    f"({self.calibration.x_position}, {self.calibration.y_position})")
         
         with self.movement_lock:
-            # Determine current positions from live axis state if available
             try:
-                cur_x = int(getattr(self.axis_x.state, 'position', self.calibration.x_position)) if getattr(self, 'axis_x', None) else self.calibration.x_position
+                cur_x = self._get_live_axis_position_logical('x')
             except Exception:
-                cur_x = self.calibration.x_position
+                cur_x = int(getattr(self.calibration, 'x_position'))
             try:
-                cur_y = int(getattr(self.axis_y.state, 'position', self.calibration.y_position)) if getattr(self, 'axis_y', None) else self.calibration.y_position
+                cur_y = self._get_live_axis_position_logical('y')
             except Exception:
-                cur_y = self.calibration.y_position
+                cur_y = int(getattr(self.calibration, 'y_position'))
             # Move back to zero position
             self.step('x', -cur_x)
             self.step('y', -cur_y)
@@ -1146,6 +1145,18 @@ class StepperController:
             motor = self.axis_x if axis == 'x' else self.axis_y
             if motor and getattr(motor, 'state', None):
                 return int(getattr(motor.state, 'position', 0))
+        except Exception:
+            pass
+        return int(getattr(self.calibration, f'{axis}_position'))
+
+    def _get_live_axis_position_logical(self, axis: str) -> int:
+        try:
+            motor = self.axis_x if axis == 'x' else self.axis_y
+            if motor and getattr(motor, 'state', None):
+                pos = int(getattr(motor.state, 'position', 0))
+                if axis == 'y':
+                    return -pos
+                return pos
         except Exception:
             pass
         return int(getattr(self.calibration, f'{axis}_position'))
@@ -1368,7 +1379,8 @@ class StepperController:
         # Keep calibration positions aligned with live axis positions when available
         try:
             self.calibration.x_position = int(pos_x)
-            self.calibration.y_position = int(pos_y)
+            # Align logical Y with controller's coordinate system (invert live motor sign)
+            self.calibration.y_position = int(-pos_y)
         except Exception:
             pass
 
