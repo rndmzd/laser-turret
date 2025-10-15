@@ -114,7 +114,7 @@ roboflow_detector = None
 roboflow_filter_classes = []  # Empty = detect all classes
 
 # Preset positions
-preset_positions = {}  # {slot: {'x': int, 'y': int, 'label': str}}
+preset_positions = {}  # {slot: {'x': int, 'y': int, 'label': str, 'steps': Optional[dict]}}
 preset_lock = threading.Lock()
 pattern_running = False
 pattern_thread = None
@@ -452,7 +452,11 @@ def run_pattern_sequence():
             print(f"Pattern: Moving to preset {slot} - {pos['label']}")
 
             # Move physical camera if tracking is enabled
-            move_camera_to_absolute_position(pos['x'], pos['y'])
+            move_camera_to_absolute_position(
+                pos['x'],
+                pos['y'],
+                step_target=pos.get('steps') if isinstance(pos, dict) else None,
+            )
 
             time.sleep(pattern_delay)
 
@@ -467,7 +471,99 @@ def run_pattern_sequence():
     pattern_thread = None
 
 
-def move_camera_to_absolute_position(abs_x, abs_y, background=False):
+def _compute_camera_alignment_snapshot():
+    """Return the current camera alignment as image coordinates and motor steps."""
+    with tracking_mode_lock:
+        camera_mode_active = (
+            tracking_mode == 'camera'
+            and camera_tracking_enabled
+            and stepper_controller is not None
+        )
+
+    if not camera_mode_active:
+        with crosshair_lock:
+            return {
+                'absolute': {
+                    'x': crosshair_pos['x'],
+                    'y': crosshair_pos['y'],
+                },
+                'steps': None,
+            }
+
+    controller = stepper_controller
+    if controller is None:
+        with crosshair_lock:
+            return {
+                'absolute': {
+                    'x': crosshair_pos['x'],
+                    'y': crosshair_pos['y'],
+                },
+                'steps': None,
+            }
+
+    status = None
+    try:
+        status = controller.get_status()
+    except Exception as exc:  # pragma: no cover - hardware specific
+        print(f"Warning: failed to query stepper status for preset snapshot: {exc}")
+
+    def _extract_step_value(container, axis, fallback):
+        try:
+            return int(container.get('position', {}).get(axis, fallback))
+        except Exception:
+            return fallback
+
+    def _extract_steps_per_pixel(container, axis, fallback):
+        try:
+            value = float(container.get('calibration', {}).get(axis, fallback))
+            if abs(value) < 1e-6:
+                return fallback
+            return value
+        except Exception:
+            return fallback
+
+    cal = getattr(controller, 'calibration', None)
+    default_steps_x = int(getattr(cal, 'x_position', 0)) if cal else 0
+    default_steps_y = int(getattr(cal, 'y_position', 0)) if cal else 0
+    default_ratio_x = float(getattr(cal, 'x_steps_per_pixel', 0.0) or 0.0) if cal else 0.0
+    default_ratio_y = float(getattr(cal, 'y_steps_per_pixel', 0.0) or 0.0) if cal else 0.0
+
+    steps_x = _extract_step_value(status or {}, 'x', default_steps_x)
+    steps_y = _extract_step_value(status or {}, 'y', default_steps_y)
+    ratio_x = _extract_steps_per_pixel(status or {}, 'x_steps_per_pixel', default_ratio_x)
+    ratio_y = _extract_steps_per_pixel(status or {}, 'y_steps_per_pixel', default_ratio_y)
+
+    with crosshair_lock:
+        base_x = (CAMERA_WIDTH // 2) + int(crosshair_offset['x'])
+        base_y = (CAMERA_HEIGHT // 2) + int(crosshair_offset['y'])
+
+    try:
+        offset_x = steps_x / ratio_x if abs(ratio_x) > 1e-6 else 0.0
+    except Exception:
+        offset_x = 0.0
+    try:
+        offset_y = steps_y / ratio_y if abs(ratio_y) > 1e-6 else 0.0
+    except Exception:
+        offset_y = 0.0
+
+    abs_x = int(round(base_x + offset_x))
+    abs_y = int(round(base_y + offset_y))
+    abs_x = max(0, min(CAMERA_WIDTH - 1, abs_x))
+    abs_y = max(0, min(CAMERA_HEIGHT - 1, abs_y))
+
+    return {
+        'absolute': {
+            'x': abs_x,
+            'y': abs_y,
+        },
+        'steps': {
+            'x': steps_x,
+            'y': steps_y,
+        },
+    }
+
+
+def move_camera_to_absolute_position(abs_x, abs_y, background=False, step_target=None):
     """Move the physical camera so the provided absolute coordinate is centered"""
     try:
         with tracking_mode_lock:
@@ -477,17 +573,58 @@ def move_camera_to_absolute_position(abs_x, abs_y, background=False):
         if not tracking_active or controller is None:
             return False
 
-        with crosshair_lock:
-            adj_x = int(abs_x) - int(crosshair_offset['x'])
-            adj_y = int(abs_y) - int(crosshair_offset['y'])
+        # Preset coordinates are stored using absolute image positions. Avoid
+        # adjusting by the crosshair calibration offset here so the controller
+        # recenters the exact pixel that was saved.
+        target_x = int(abs_x)
+        target_y = int(abs_y)
 
         def move():
-            moved_local = controller.move_to_center_object(adj_x, adj_y, CAMERA_WIDTH, CAMERA_HEIGHT)
-            if moved_local:
-                print(f"Camera moved to preset position ({abs_x}, {abs_y})")
-            else:
-                print(f"Preset ({abs_x}, {abs_y}) within dead zone, no camera movement")
-            return moved_local
+            try:
+                if step_target is not None:
+                    status = None
+                    try:
+                        status = controller.get_status()
+                    except Exception as exc:  # pragma: no cover - hardware specific
+                        print(f"Warning: failed to read stepper status before preset move: {exc}")
+
+                    def _current_axis_steps(axis_name, fallback):
+                        try:
+                            return int(status.get('position', {}).get(axis_name, fallback))
+                        except Exception:
+                            return fallback
+
+                    cal = getattr(controller, 'calibration', None)
+                    cur_x = _current_axis_steps('x', int(getattr(cal, 'x_position', 0)) if cal else 0)
+                    cur_y = _current_axis_steps('y', int(getattr(cal, 'y_position', 0)) if cal else 0)
+                    target_steps_x = int(step_target.get('x', cur_x))
+                    target_steps_y = int(step_target.get('y', cur_y))
+                    delta_x = target_steps_x - cur_x
+                    delta_y = target_steps_y - cur_y
+                    if delta_x == 0 and delta_y == 0:
+                        print(f"Preset steps already achieved ({target_steps_x}, {target_steps_y})")
+                        return False
+                    controller.move_linear(delta_x, delta_y)
+                    print(
+                        "Camera moved to preset step target "
+                        f"({target_steps_x}, {target_steps_y}) via delta ({delta_x}, {delta_y})"
+                    )
+                    return True
+
+                moved_local = controller.move_to_center_object(
+                    target_x,
+                    target_y,
+                    CAMERA_WIDTH,
+                    CAMERA_HEIGHT
+                )
+                if moved_local:
+                    print(f"Camera moved to preset position ({abs_x}, {abs_y})")
+                else:
+                    print(f"Preset ({abs_x}, {abs_y}) within dead zone, no camera movement")
+                return moved_local
+            except Exception as exc:
+                print(f"Error executing preset move: {exc}")
+                return False
 
         if background:
             threading.Thread(target=move, daemon=True).start()
@@ -1850,17 +1987,24 @@ def save_preset():
         if slot < 1 or slot > 10:
             return jsonify({'status': 'error', 'message': 'Slot must be between 1 and 10'}), 400
         
-        with crosshair_lock:
-            x = crosshair_pos['x']
-            y = crosshair_pos['y']
-        
+        snapshot = _compute_camera_alignment_snapshot()
+        absolute = snapshot['absolute']
+        x = absolute['x']
+        y = absolute['y']
+        step_data = snapshot['steps']
+
         with preset_lock:
             preset_positions[slot] = {
                 'x': x,
                 'y': y,
                 'label': label
             }
-        
+            if step_data is not None:
+                preset_positions[slot]['steps'] = {
+                    'x': int(step_data.get('x', 0)),
+                    'y': int(step_data.get('y', 0))
+                }
+
         return jsonify({
             'status': 'success',
             'slot': slot,
@@ -1887,7 +2031,12 @@ def load_preset(slot):
             crosshair_pos['x'] = preset['x']
             crosshair_pos['y'] = preset['y']
 
-        move_started = move_camera_to_absolute_position(preset['x'], preset['y'], background=True)
+        move_started = move_camera_to_absolute_position(
+            preset['x'],
+            preset['y'],
+            background=True,
+            step_target=preset.get('steps') if isinstance(preset, dict) else None,
+        )
 
         return jsonify({
             'status': 'success',
