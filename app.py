@@ -468,14 +468,18 @@ def run_pattern_sequence():
                 print(f"Pattern: Slot {slot} missing, skipping")
                 continue
 
-            with crosshair_lock:
-                crosshair_pos['x'] = pos['x']
-                crosshair_pos['y'] = pos['y']
+            ptype = pos.get('type', 'pixel')
 
-            print(f"Pattern: Moving to preset {slot} - {pos['label']}")
-
-            # Move physical camera if tracking is enabled
-            move_camera_to_absolute_position(pos['x'], pos['y'])
+            if ptype == 'steps':
+                print(f"Pattern: Moving (steps) to preset {slot} - {pos['label']}")
+                move_camera_to_steps_position(pos['x'], pos['y'])
+            else:
+                with crosshair_lock:
+                    crosshair_pos['x'] = pos['x']
+                    crosshair_pos['y'] = pos['y']
+                print(f"Pattern: Moving (pixel) to preset {slot} - {pos['label']}")
+                # Move physical camera if tracking is enabled
+                move_camera_to_absolute_position(pos['x'], pos['y'])
 
             time.sleep(pattern_delay)
 
@@ -519,6 +523,38 @@ def move_camera_to_absolute_position(abs_x, abs_y, background=False):
         return move()
     except Exception as e:
         print(f"Error moving camera to preset position: {e}")
+        return False
+
+
+def move_camera_to_steps_position(target_x_steps, target_y_steps, background=False):
+    try:
+        controller = stepper_controller
+        with tracking_mode_lock:
+            tracking_active = tracking_mode == 'camera' and camera_tracking_enabled
+        if controller is None or not tracking_active:
+            return False
+        status = controller.get_status()
+        cur = status.get('position') if status else None
+        cur_x = int(cur.get('x', 0)) if isinstance(cur, dict) else 0
+        cur_y = int(cur.get('y', 0)) if isinstance(cur, dict) else 0
+        dx = int(target_x_steps) - cur_x
+        dy = int(target_y_steps) - cur_y
+
+        def move():
+            try:
+                controller.move_linear(dx, dy)
+                print(f"Camera moved to steps position ({target_x_steps}, {target_y_steps})")
+                return True
+            except Exception as e:
+                print(f"Error moving to steps position: {e}")
+                return False
+
+        if background:
+            threading.Thread(target=move, daemon=True).start()
+            return True
+        return move()
+    except Exception as e:
+        print(f"Error preparing move to steps position: {e}")
         return False
 
 
@@ -1866,59 +1902,71 @@ def update_roboflow_settings():
 
 @app.route('/presets/save', methods=['POST'])
 def save_preset():
-    """Save current crosshair position to a preset slot"""
     try:
         data = request.get_json()
         slot = int(data.get('slot'))
         label = data.get('label', f'Preset {slot}')
-        
         if slot < 1 or slot > 10:
             return jsonify({'status': 'error', 'message': 'Slot must be between 1 and 10'}), 400
-        
-        with crosshair_lock:
-            x = crosshair_pos['x']
-            y = crosshair_pos['y']
-        
+        with tracking_mode_lock:
+            cam_active = (tracking_mode == 'camera' and camera_tracking_enabled and stepper_controller is not None)
+        if cam_active:
+            try:
+                status = stepper_controller.get_status()
+                pos = status.get('position') if status else None
+                x = int(pos.get('x', 0)) if isinstance(pos, dict) else 0
+                y = int(pos.get('y', 0)) if isinstance(pos, dict) else 0
+                ptype = 'steps'
+            except Exception:
+                with crosshair_lock:
+                    x = crosshair_pos['x']
+                    y = crosshair_pos['y']
+                ptype = 'pixel'
+        else:
+            with crosshair_lock:
+                x = crosshair_pos['x']
+                y = crosshair_pos['y']
+            ptype = 'pixel'
         with preset_lock:
             preset_positions[slot] = {
                 'x': x,
                 'y': y,
-                'label': label
+                'label': label,
+                'type': ptype,
             }
-        
         return jsonify({
             'status': 'success',
             'slot': slot,
             'position': {'x': x, 'y': y},
-            'label': label
+            'label': label,
+            'type': ptype,
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/presets/load/<int:slot>', methods=['POST'])
 def load_preset(slot):
-    """Load a preset position to the crosshair"""
     try:
         if slot < 1 or slot > 10:
             return jsonify({'status': 'error', 'message': 'Slot must be between 1 and 10'}), 400
-        
         with preset_lock:
             if slot not in preset_positions:
                 return jsonify({'status': 'error', 'message': f'No preset saved in slot {slot}'}), 404
-            
             preset = preset_positions[slot]
-        
-        with crosshair_lock:
-            crosshair_pos['x'] = preset['x']
-            crosshair_pos['y'] = preset['y']
-
-        move_started = move_camera_to_absolute_position(preset['x'], preset['y'], background=True)
-
+        ptype = preset.get('type', 'pixel')
+        if ptype == 'steps':
+            move_started = move_camera_to_steps_position(preset['x'], preset['y'], background=True)
+        else:
+            with crosshair_lock:
+                crosshair_pos['x'] = preset['x']
+                crosshair_pos['y'] = preset['y']
+            move_started = move_camera_to_absolute_position(preset['x'], preset['y'], background=True)
         return jsonify({
             'status': 'success',
             'slot': slot,
             'position': {'x': preset['x'], 'y': preset['y']},
             'label': preset['label'],
+            'type': ptype,
             'camera_move_started': move_started
         })
     except Exception as e:
@@ -1948,7 +1996,8 @@ def list_presets():
             slot: {
                 'x': pos['x'],
                 'y': pos['y'],
-                'label': pos['label']
+                'label': pos['label'],
+                'type': pos.get('type', 'pixel')
             }
             for slot, pos in preset_positions.items()
         }
