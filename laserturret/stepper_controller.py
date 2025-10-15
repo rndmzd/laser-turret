@@ -647,18 +647,42 @@ class StepperController:
         cy = frame_height // 2
         ex = float(target_x - cx)
         ey = float(target_y - cy)
+        dead_zone_px = float(getattr(self.calibration, 'dead_zone_pixels', 0) or 0)
+        if dead_zone_px < 0:
+            dead_zone_px = 0.0
+        in_deadband_x = abs(ex) <= dead_zone_px
+        in_deadband_y = abs(ey) <= dead_zone_px
         # Normalize and clamp error to [-1, 1] to avoid runaway far from center
-        ex_n = ex / max(1.0, (frame_width / 2.0))
-        ey_n = ey / max(1.0, (frame_height / 2.0))
-        ex_n = max(-1.0, min(1.0, ex_n))
-        ey_n = max(-1.0, min(1.0, ey_n))
-        self._ix += ex_n * dt
-        self._iy += ey_n * dt
+        ex_n_raw = ex / max(1.0, (frame_width / 2.0))
+        ey_n_raw = ey / max(1.0, (frame_height / 2.0))
+        ex_n_raw = max(-1.0, min(1.0, ex_n_raw))
+        ey_n_raw = max(-1.0, min(1.0, ey_n_raw))
+        ex_n = 0.0 if in_deadband_x else ex_n_raw
+        ey_n = 0.0 if in_deadband_y else ey_n_raw
+        leak = min(1.0, dt * 3.0) if dt > 0 else 0.0
+        if in_deadband_x:
+            if leak > 0.0:
+                self._ix *= (1.0 - leak)
+            else:
+                self._ix *= 0.5
+        else:
+            self._ix += ex_n * dt
+        if in_deadband_y:
+            if leak > 0.0:
+                self._iy *= (1.0 - leak)
+            else:
+                self._iy *= 0.5
+        else:
+            self._iy += ey_n * dt
         self._ix = max(-10.0, min(10.0, self._ix))
         self._iy = max(-10.0, min(10.0, self._iy))
         # Derivative with cap to reduce spikes on large jumps
         dex_n = ((ex_n - self._ex_n_last) / dt) if dt > 0 else 0.0
         dey_n = ((ey_n - self._ey_n_last) / dt) if dt > 0 else 0.0
+        if in_deadband_x:
+            dex_n = 0.0
+        if in_deadband_y:
+            dey_n = 0.0
         dmax = 5.0
         dex_n = max(-dmax, min(dmax, dex_n))
         dey_n = max(-dmax, min(dmax, dey_n))
@@ -676,10 +700,16 @@ class StepperController:
         cmd_y = -uy * 120.0
         cmd_x = max(-100.0, min(100.0, cmd_x))
         cmd_y = max(-100.0, min(100.0, cmd_y))
-        # Output slew rate limiting
-        if dt > 0:
+        if in_deadband_x:
+            cmd_x = 0.0
+        if in_deadband_y:
+            cmd_y = 0.0
+        # Output slew rate limiting (skip when forcing zero for deadband)
+        if not in_deadband_x and dt > 0:
             max_delta = 300.0 * dt
             cmd_x = max(self._cmd_x_last - max_delta, min(self._cmd_x_last + max_delta, cmd_x))
+        if not in_deadband_y and dt > 0:
+            max_delta = 300.0 * dt
             cmd_y = max(self._cmd_y_last - max_delta, min(self._cmd_y_last + max_delta, cmd_y))
         min_cmd = 0.0
         try:
@@ -690,9 +720,9 @@ class StepperController:
         except Exception:
             pass
         min_cmd = min_cmd + 1.5 if min_cmd > 0 else 0.0
-        if abs(cmd_x) > 0 and abs(cmd_x) < min_cmd:
+        if not in_deadband_x and abs(cmd_x) > 0 and abs(cmd_x) < min_cmd:
             cmd_x = min_cmd if cmd_x >= 0 else -min_cmd
-        if abs(cmd_y) > 0 and abs(cmd_y) < min_cmd:
+        if not in_deadband_y and abs(cmd_y) > 0 and abs(cmd_y) < min_cmd:
             cmd_y = min_cmd if cmd_y >= 0 else -min_cmd
         try:
             if getattr(self, 'axis_x', None):
