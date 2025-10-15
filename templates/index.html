@@ -1097,7 +1097,6 @@
         let balloonEditing = false;
         let balloonLastEditTs = 0;
         let pidEditing = false;
-        let pidLastEditTs = 0;
 
         // Tab switching
         function switchTab(tabName, buttonEl) {
@@ -2778,7 +2777,6 @@
             const label = document.getElementById(`pid-${kind}-value`);
             if (label) label.textContent = val.toFixed(2);
             pidEditing = true;
-            pidLastEditTs = Date.now();
         }
 
         function applyPID() {
@@ -3536,8 +3534,7 @@
                 
                 // Sync PID sliders with controller values (with edit protection)
                 if (ctrl.pid) {
-                    const now = Date.now();
-                    const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
+                    const allowPIDSync = !pidEditing;
                     if (allowPIDSync) {
                         const kpEl = document.getElementById('pid-kp');
                         const kiEl = document.getElementById('pid-ki');
