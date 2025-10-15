@@ -30,6 +30,12 @@
                     </div>
 
                     <div class="overlay-panel floating-controls movement-overlay active" id="movement-overlay" data-overlay-key="movement">
+                        <div id="auto-calibration-banner" role="alert">
+                            <span class="calibration-title">⚠️ Auto calibration required</span>
+                            <button type="button" class="auto-calibration-button" onclick="runAutoCalibration()">
+                                Start Auto Calibration
+                            </button>
+                        </div>
                         <div class="direction-pad">
                             <span class="spacer"></span>
                             <button class="pad-button" onclick="manualMove('y', -1)" aria-label="Nudge up" title="Nudge up">▲</button>
@@ -515,7 +521,7 @@
                         <div class="slider-control">
                             <label>💡 Laser Power (%)</label>
                             <div class="slider-wrapper">
-                                <input type="range" id="laser-power" min="0" max="100" value="100" step="5" oninput="updateLaserPowerValue()">
+                                <input type="range" id="laser-power" min="0" max="100" value="100" step="1" oninput="updateLaserPowerValue()">
                                 <span id="laser-power-value" class="slider-value">100%</span>
                             </div>
                         </div>
@@ -3105,6 +3111,11 @@
         }
 
         function updateCalibrationUI(isCalibrated, timestamp) {
+            const overlayBanner = document.getElementById('auto-calibration-banner');
+            if (overlayBanner) {
+                overlayBanner.style.display = isCalibrated ? 'none' : 'flex';
+            }
+
             // Update calibration status display
             if (isCalibrated) {
                 document.getElementById('camera-calibration-status').textContent = 'Calibrated ✓';
