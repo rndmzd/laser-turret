@@ -247,16 +247,39 @@ def cleanup_on_exit():
                 print("Cleanup: camera stopped")
         except Exception as e:
             print(f"Cleanup camera error: {e}")
+        invalidate_calibration = getattr(
+            cleanup_on_exit, "_invalidate_calibration", False
+        )
         if stepper_controller:
-            disabled_level = 0 if stepper_controller.enable_active_high else 1
-            stepper_controller.gpio.output(stepper_controller.x_enable_pin, disabled_level)
-            stepper_controller.gpio.output(stepper_controller.y_enable_pin, disabled_level)
-            print(f"Cleanup: set motor enable pins to {disabled_level} (active_high={stepper_controller.enable_active_high})")
+            try:
+                stepper_controller.disable(
+                    invalidate_calibration=invalidate_calibration
+                )
+            except Exception as e:
+                print(f"Cleanup motor disable error: {e}")
+                try:
+                    disabled_level = 0 if stepper_controller.enable_active_high else 1
+                    stepper_controller.gpio.output(
+                        stepper_controller.x_enable_pin, disabled_level
+                    )
+                    stepper_controller.gpio.output(
+                        stepper_controller.y_enable_pin, disabled_level
+                    )
+                    print(
+                        "Cleanup fallback: set motor enable pins to "
+                        f"{disabled_level} (active_high={stepper_controller.enable_active_high})"
+                    )
+                except Exception as fallback_error:
+                    print(f"Cleanup fallback error: {fallback_error}")
     except Exception as e:
         print(f"Cleanup error: {e}")
 
 def _handle_exit_signal(signum, frame):
-    cleanup_on_exit()
+    setattr(cleanup_on_exit, "_invalidate_calibration", True)
+    signal.default_int_handler(signum, frame)
+
+
+setattr(cleanup_on_exit, "_invalidate_calibration", False)
 
 def initialize_camera():
     """Initialize the Pi Camera with compatible auto exposure settings"""
@@ -961,10 +984,12 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                     x, y, w, h = obj['rect']
                     # Draw rectangle
                     cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 255, 0), 2)
-                    # Draw label
-                    label = obj['type'].capitalize()
-                    cv2.putText(overlay, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                               0.7, (255, 255, 0), 2, cv2.LINE_AA)
+                    # Draw label showing only the confidence value when available
+                    confidence = obj.get('confidence')
+                    if isinstance(confidence, (float, int)):
+                        label = f"{confidence * 100:.1f}%"
+                        cv2.putText(overlay, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.7, (255, 255, 0), 2, cv2.LINE_AA)
                 
                 # Auto-track: select priority target
                 if object_auto_track and objects:
@@ -2522,7 +2547,10 @@ def update_camera_tracking_settings():
             stepper_controller.calibration.dead_zone_pixels = int(data['dead_zone_pixels'])
         
         if 'step_delay' in data:
-            stepper_controller.calibration.step_delay = float(data['step_delay'])
+            try:
+                stepper_controller.set_step_delay(data['step_delay'])
+            except ValueError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
         
         if 'x_max_steps' in data:
             stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])
@@ -2766,7 +2794,7 @@ def auto_calibrate_camera():
         
         return jsonify({
             'status': 'success',
-            'message': 'Auto-calibration started. This may take several minutes.'
+            'message': 'Auto-calibration started.'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -2922,6 +2950,7 @@ def status_emitter_thread():
     print("Status emitter thread exiting...")
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, _handle_exit_signal)
     initialize_camera()
     initialize_laser_control()  # Initialize laser control with PWM
     initialize_stepper_controller()  # Initialize stepper controller
@@ -2945,6 +2974,7 @@ if __name__ == '__main__':
     try:
         socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
+        setattr(cleanup_on_exit, "_invalidate_calibration", True)
         print("KeyboardInterrupt received, shutting down...")
     finally:
         cleanup_on_exit()
