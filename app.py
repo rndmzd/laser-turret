@@ -456,6 +456,8 @@ def run_pattern_sequence():
     """Execute a pattern sequence in a separate thread"""
     global pattern_running, pattern_thread
 
+    homed_for_steps = False
+
     while pattern_running:
         for slot in pattern_sequence:
             if not pattern_running:
@@ -468,9 +470,29 @@ def run_pattern_sequence():
                 print(f"Pattern: Slot {slot} missing, skipping")
                 continue
 
-            ptype = pos.get('type', 'pixel')
+            ptype = _get_preset_type(pos)
 
             if ptype == 'steps':
+                if not homed_for_steps and stepper_controller is not None:
+                    try:
+                        if not stepper_controller.enabled:
+                            stepper_controller.enable()
+                        stepper_controller.home()
+                        homed_for_steps = True
+                        print("Pattern: Homed camera before executing step-based sequence")
+                    except Exception as e:
+                        print(f"Pattern: Homing failed or skipped: {e}")
+                try:
+                    if stepper_controller is not None:
+                        if not stepper_controller.enabled:
+                            stepper_controller.enable()
+                        if not stepper_controller.is_calibrated():
+                            stepper_controller.home()
+                        with tracking_mode_lock:
+                            globals()['tracking_mode'] = 'camera'
+                            globals()['camera_tracking_enabled'] = True
+                except Exception:
+                    pass
                 print(f"Pattern: Moving (steps) to preset {slot} - {pos['label']}")
                 move_camera_to_steps_position(pos['x'], pos['y'])
             else:
@@ -1944,6 +1966,21 @@ def save_preset():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+def _get_preset_type(preset):
+    t = preset.get('type')
+    if t in ('pixel', 'steps'):
+        return t
+    try:
+        x = int(preset.get('x', 0))
+        y = int(preset.get('y', 0))
+        if x < 0 or y < 0:
+            return 'steps'
+        if x >= CAMERA_WIDTH or y >= CAMERA_HEIGHT:
+            return 'steps'
+    except Exception:
+        pass
+    return 'pixel'
+
 @app.route('/presets/load/<int:slot>', methods=['POST'])
 def load_preset(slot):
     try:
@@ -1953,7 +1990,7 @@ def load_preset(slot):
             if slot not in preset_positions:
                 return jsonify({'status': 'error', 'message': f'No preset saved in slot {slot}'}), 404
             preset = preset_positions[slot]
-        ptype = preset.get('type', 'pixel')
+        ptype = _get_preset_type(preset)
         if ptype == 'steps':
             move_started = move_camera_to_steps_position(preset['x'], preset['y'], background=True)
         else:
@@ -1992,15 +2029,14 @@ def delete_preset(slot):
 def list_presets():
     """Get all saved presets"""
     with preset_lock:
-        presets = {
-            slot: {
+        presets = {}
+        for slot, pos in preset_positions.items():
+            presets[slot] = {
                 'x': pos['x'],
                 'y': pos['y'],
                 'label': pos['label'],
-                'type': pos.get('type', 'pixel')
+                'type': pos.get('type', _get_preset_type(pos))
             }
-            for slot, pos in preset_positions.items()
-        }
     
     return jsonify({
         'status': 'success',
@@ -2029,6 +2065,24 @@ def start_pattern():
                 if slot not in preset_positions:
                     return jsonify({'status': 'error', 'message': f'No preset in slot {slot}'}), 404
         
+        # If any preset in the sequence is step-based, enforce calibration and home to a known origin
+        with preset_lock:
+            steps_based = any(_get_preset_type(preset_positions[s]) == 'steps' for s in sequence if s in preset_positions)
+        if steps_based:
+            if stepper_controller is None:
+                return jsonify({'status': 'error', 'message': 'Stepper controller not available'}), 503
+            if not stepper_controller.is_calibrated():
+                return jsonify({'status': 'error', 'message': 'Calibration required before running step-based pattern. Please run Auto-Calibrate first.'}), 400
+            try:
+                if not stepper_controller.enabled:
+                    stepper_controller.enable()
+                stepper_controller.home()
+                with tracking_mode_lock:
+                    globals()['tracking_mode'] = 'camera'
+                    globals()['camera_tracking_enabled'] = True
+            except Exception as e:
+                return jsonify({'status': 'error', 'message': f'Failed to home before pattern: {e}'}), 400
+        
         # Stop existing pattern if running
         if pattern_running:
             pattern_running = False
@@ -2037,7 +2091,7 @@ def start_pattern():
             pattern_thread = None
 
         pattern_sequence = sequence
-        pattern_delay = delay
+        pattern_delay = max(0.0, min(10.0, delay))
         pattern_loop = loop
         pattern_running = True
 
