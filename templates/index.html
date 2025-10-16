@@ -171,6 +171,16 @@
                             🔄 Reset Calibration
                         </button>
                         <div id="crosshair-calibration-status" class="status-message"></div>
+                        <div class="testing-toggle">
+                            <div class="toggle-switch">
+                                <label class="switch">
+                                    <input type="checkbox" id="crosshair-mode-testing-toggle" onchange="toggleTrackingMode()">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-label">Testing: Use Crosshair Tracking Mode</span>
+                            </div>
+                            <p class="testing-note">Crosshair mode keeps the camera fixed and only moves the on-screen reticle. Turn this off to return to camera tracking.</p>
+                        </div>
                     </div>
 
                     <div class="control-group">
@@ -288,20 +298,11 @@
                                 🏠 Home Camera to Center
                             </button>
                         </div>
-                    </div>
-
-                    <div class="control-group">
-                        <h3>📹 Tracking Mode</h3>
-                        <div class="toggle-switch">
-                            <label class="switch">
-                                <input type="checkbox" id="tracking-mode-toggle" onchange="toggleTrackingMode()">
-                                <span class="slider"></span>
-                            </label>
-                            <span class="toggle-label">Camera Mode (off = Crosshair Mode)</span>
-                        </div>
-                        <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1565c0;">
-                            <strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.
-                        </div>
+                      <h3>📹 Camera Tracking</h3>
+                        <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
+                            <strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.
+                            <span class="tracking-mode-note">Use the testing toggle in the Status tab to experiment with crosshair-only tracking if needed.</span>
+                      </div>
                     </div>
 
                     <!-- Calibration required warning should always be present (toggled by JS) -->
@@ -1175,8 +1176,8 @@
             }
 
             // Check if camera tracking is enabled and active
-            const modeToggleEl = document.getElementById('tracking-mode-toggle');
-            const inCameraMode = !!(modeToggleEl && modeToggleEl.checked);
+            const testingToggleEl = document.getElementById('crosshair-mode-testing-toggle');
+            const inCameraMode = !(testingToggleEl && testingToggleEl.checked);
             const cameraTrackingEnabled = document.getElementById('camera-tracking-enabled').checked;
             
             if (inCameraMode && cameraTrackingEnabled) {
@@ -2623,8 +2624,8 @@
 
         // Camera tracking controls
         function toggleTrackingMode() {
-            const checkbox = document.getElementById('tracking-mode-toggle');
-            const mode = checkbox && checkbox.checked ? 'camera' : 'crosshair';
+            const testingToggle = document.getElementById('crosshair-mode-testing-toggle');
+            const mode = testingToggle && testingToggle.checked ? 'crosshair' : 'camera';
             fetch('/tracking/mode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2638,28 +2639,31 @@
                     updateCameraTrackingStatus();
                 } else {
                     showStatus('tracking-status-message', false, data.message || 'Failed to set tracking mode');
-                    if (checkbox) checkbox.checked = !checkbox.checked;
+                    if (testingToggle) testingToggle.checked = !testingToggle.checked;
                 }
             })
             .catch(error => {
                 console.error('Error setting tracking mode:', error);
                 showStatus('tracking-status-message', false, 'Failed to set tracking mode');
-                if (checkbox) checkbox.checked = !checkbox.checked;
+                if (testingToggle) testingToggle.checked = !testingToggle.checked;
             });
         }
 
         function updateTrackingModeUI(mode) {
             const cameraControls = document.getElementById('camera-tracking-controls');
             const infoBox = document.getElementById('tracking-mode-info');
-            
+            const testingToggle = document.getElementById('crosshair-mode-testing-toggle');
+
             if (mode === 'camera') {
                 if (cameraControls) cameraControls.style.display = 'block';
-                infoBox.innerHTML = '<strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.';
+                if (testingToggle) testingToggle.checked = false;
+                infoBox.innerHTML = '<strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.<span class="tracking-mode-note">Use the testing toggle in the Status tab to experiment with crosshair-only tracking if needed.</span>';
                 infoBox.style.background = '#fff3cd';
                 infoBox.style.color = '#856404';
             } else {
                 if (cameraControls) cameraControls.style.display = 'none';
-                infoBox.innerHTML = '<strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.';
+                if (testingToggle) testingToggle.checked = true;
+                infoBox.innerHTML = '<strong>Crosshair Mode:</strong> Tracks objects by moving the crosshair on screen. Camera stays fixed.<span class="tracking-mode-note">Disable the testing toggle in the Status tab to return to motorized camera tracking.</span>';
                 infoBox.style.background = '#e3f2fd';
                 infoBox.style.color = '#1565c0';
             }
@@ -3193,8 +3197,6 @@
                     if (data.status === 'success') {
                         // Update tracking mode dropdown if needed
                         if (data.mode) {
-                            const modeToggle = document.getElementById('tracking-mode-toggle');
-                            if (modeToggle) modeToggle.checked = (data.mode === 'camera');
                             updateTrackingModeUI(data.mode);
                         }
                         
@@ -3502,10 +3504,6 @@
             
             // Update tracking mode status
             if (status.tracking) {
-                const modeToggle = document.getElementById('tracking-mode-toggle');
-                if (modeToggle) {
-                    modeToggle.checked = (status.tracking.mode === 'camera');
-                }
                 updateTrackingModeUI(status.tracking.mode);
             }
             

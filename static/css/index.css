@@ -744,6 +744,38 @@
             font-size: 13px;
         }
 
+        .testing-toggle {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px dashed #d1d5db;
+            background: #f9fafb;
+        }
+
+        .testing-toggle .toggle-switch {
+            margin-bottom: 6px;
+        }
+
+        .testing-toggle .toggle-label {
+            font-size: 12px;
+            color: #4b5563;
+        }
+
+        .testing-note {
+            margin: 0;
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .tracking-mode-note {
+            display: block;
+            margin-top: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0.85;
+        }
+
         button {
             padding: 12px 20px;
             border: none;
