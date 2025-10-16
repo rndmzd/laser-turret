@@ -192,6 +192,13 @@ class ConfigManager:
         if not 1 <= port <= 65535:
             raise ConfigurationError(f"Invalid MQTT port: {port}")
         
+        # Validate control tuning values
+        accel_steps = self.get_control_acceleration_steps()
+        if accel_steps < 0:
+            raise ConfigurationError(
+                "Control.acceleration_steps must be zero or greater"
+            )
+
         logger.info("Configuration validation passed")
     
     def _get(self, section: str, key: str, value_type: type = str, default: Any = None) -> Any:
@@ -294,7 +301,15 @@ class ConfigManager:
 
     def get_control_acceleration_steps(self) -> int:
         """Get number of steps used for acceleration/deceleration"""
-        return self._get('Control', 'acceleration_steps', int)
+        value = self._get('Control', 'acceleration_steps', int)
+        if value < 0:
+            logger.warning(
+                "Control.acceleration_steps was negative (%s); clamping to 0",
+                value,
+            )
+            value = 0
+            self._cache['Control.acceleration_steps'] = value
+        return value
 
     def get_control_idle_timeout(self) -> float:
         """Get motor idle timeout in seconds"""

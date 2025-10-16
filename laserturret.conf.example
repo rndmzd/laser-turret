@@ -59,7 +59,7 @@ speed_scaling = 0.10
 # Delay between steps in seconds (lower = faster, but may skip steps)
 step_delay = 0.0005
 
-# Number of steps used to ramp up/down speed for smoother starts/stops
+# Number of steps used to ramp up/down speed for smoother starts/stops (set to 0 to disable ramping)
 acceleration_steps = 50
 
 # Idle timeout in seconds before motors auto-disable to cool down (invalidates calibration)

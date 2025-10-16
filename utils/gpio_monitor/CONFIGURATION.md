@@ -54,6 +54,7 @@ max_steps_per_update = 50
 deadzone = 5
 speed_scaling = 0.10
 step_delay = 0.0005
+# Ramp distance in steps for acceleration/deceleration (0 disables ramping)
 acceleration_steps = 50
 
 [Laser]
@@ -162,12 +163,13 @@ x_motor = config.get_motor_config('x')
 | `get_control_deadzone()` | `int` | Input deadzone |
 | `get_control_speed_scaling()` | `float` | Speed scaling factor |
 | `get_control_step_delay()` | `float` | Delay between steps |
-| `get_control_acceleration_steps()` | `int` | Steps used for acceleration profile |
+| `get_control_acceleration_steps()` | `int` | Steps used for acceleration profile (>= 0) |
 
 ```python
 deadzone = config.get_control_deadzone()
 delay = config.get_control_step_delay()
 accel = config.get_control_acceleration_steps()
+# Value is clamped to zero or greater; UI controls expose 0-1000 steps
 ```
 
 ### MQTT Configuration

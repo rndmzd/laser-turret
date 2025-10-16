@@ -304,7 +304,7 @@ See `laserturret/motion/__init__.py` for available exports including `MotorStatu
 - **microsteps**: Microstepping resolution (1, 2, 4, 8, or 16)
 - **deadzone**: Input values below this are ignored (reduce jitter)
 - **step_delay**: Delay between steps (lower = faster, but may skip)
-- **acceleration_steps**: Steps spent ramping speed up/down (higher = smoother)
+- **acceleration_steps**: Steps spent ramping speed up/down (higher = smoother, `0` disables the ramp). The UI slider covers 0-1000 steps.
 
 ### Control Tuning
 
