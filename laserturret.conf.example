@@ -82,6 +82,11 @@ format = RGB888
 # Number of camera buffers
 buffer_count = 2
 
+[Media]
+# Storage paths for captures and recordings (relative paths resolve from this file's directory)
+capture_path = media/captures
+recording_path = media/recordings
+
 [Detection]
 # Object detection method: 'haar', 'tflite', or 'roboflow'
 # haar: Fast, simple, works for faces/bodies (legacy, lower accuracy)

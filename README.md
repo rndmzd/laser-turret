@@ -348,6 +348,19 @@ balloon_aspect_ratio_min = 0.6
 balloon_aspect_ratio_max = 1.6
 ```
 
+### Media Storage
+
+Control where snapshots and recordings are written:
+
+```ini
+[Media]
+capture_path = media/captures      # still images
+recording_path = media/recordings  # video files
+```
+
+Relative paths are resolved from the directory that contains `laserturret.conf`, so you can point to mounted USB drives or NAS
+shares by using absolute paths such as `/mnt/storage/turret/recordings`.
+
 **Detection Method Comparison:**
 
 | Method | Speed | Accuracy | Hardware | Best For |

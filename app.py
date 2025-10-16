@@ -1465,17 +1465,21 @@ def capture_image():
     """Capture and save a still image"""
     if picam2 is None:
         return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
-    
+
     try:
+        config = get_config()
+        capture_dir = config.get_media_capture_path()
+        capture_dir.mkdir(parents=True, exist_ok=True)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"capture_{timestamp}.jpg"
-        
+        filename = capture_dir / f"capture_{timestamp}.jpg"
+
         # Capture high quality image
-        picam2.capture_file(filename)
-        
+        picam2.capture_file(str(filename))
+
         return jsonify({
             'status': 'success',
-            'filename': filename,
+            'filename': str(filename),
             'message': f'Image saved as {filename}'
         })
     except Exception as e:
@@ -1517,15 +1521,18 @@ def start_recording():
         try:
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            recording_filename = f"video_{timestamp}.mp4"
-            
+            config = get_config()
+            recording_dir = config.get_media_recording_path()
+            recording_dir.mkdir(parents=True, exist_ok=True)
+            recording_filename = str(recording_dir / f"video_{timestamp}.mp4")
+
             # Initialize video writer
             # Using mp4v codec for MP4 container
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            
+
             # Get actual FPS or use default
             actual_fps = fps_value if fps_value > 0 else 30.0
-            
+
             video_writer = cv2.VideoWriter(
                 recording_filename,
                 fourcc,

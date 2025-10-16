@@ -90,6 +90,10 @@ class ConfigManager:
             'roboflow_api_key': '',
             'roboflow_confidence': 0.5,
             'roboflow_class_filter': '',
+        },
+        'Media': {
+            'capture_path': 'media/captures',
+            'recording_path': 'media/recordings',
         }
     }
     
@@ -333,7 +337,25 @@ class ConfigManager:
     def get_camera_buffer_count(self) -> int:
         """Get camera buffer count"""
         return self._get('Camera', 'buffer_count', int)
-    
+
+    # Media storage configuration
+    def _get_media_path(self, key: str) -> Path:
+        """Resolve and normalize media storage paths relative to the config file."""
+        raw_path = self._get('Media', key, str)
+        path = Path(raw_path).expanduser()
+        if not path.is_absolute():
+            base = Path(self.config_file).resolve().parent
+            path = base / path
+        return path
+
+    def get_media_capture_path(self) -> Path:
+        """Directory path used for captured still images."""
+        return self._get_media_path('capture_path')
+
+    def get_media_recording_path(self) -> Path:
+        """Directory path used for recorded videos."""
+        return self._get_media_path('recording_path')
+
     # Detection Configuration
     def get_detection_method(self) -> str:
         """Get detection method ('haar', 'tflite', or 'roboflow')"""
