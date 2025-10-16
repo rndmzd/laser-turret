@@ -140,7 +140,7 @@ fire_count = 0  # Track total fires
 laser_control = None  # LaserControl instance
 
 # Camera tracking mode (stepper motor control)
-tracking_mode = 'crosshair'  # 'crosshair' or 'camera'
+tracking_mode = 'camera'  # 'crosshair' or 'camera'
 camera_tracking_enabled = False
 stepper_controller = None
 tracking_mode_lock = threading.Lock()
