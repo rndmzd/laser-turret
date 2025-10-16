@@ -30,6 +30,12 @@
                     </div>
 
                     <div class="overlay-panel floating-controls movement-overlay active" id="movement-overlay" data-overlay-key="movement">
+                        <div id="auto-calibration-banner" role="alert">
+                            <span class="calibration-title">⚠️ Auto calibration required</span>
+                            <button type="button" class="auto-calibration-button" onclick="runAutoCalibration()">
+                                Start Auto Calibration
+                            </button>
+                        </div>
                         <div class="direction-pad">
                             <span class="spacer"></span>
                             <button class="pad-button" onclick="manualMove('y', -1)" aria-label="Nudge up" title="Nudge up">▲</button>
@@ -273,6 +279,18 @@
                 <!-- Camera Tracking Tab -->
                 <div id="tracking-tab" class="tab-content">
                     <div class="control-group">
+                        <h3>🚀 Quick Actions</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <button class="btn-success" onclick="runAutoCalibration()" style="flex: 1 1 200px;">
+                                🤖 Auto-Calibrate & Home
+                            </button>
+                            <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="flex: 1 1 200px;">
+                                🏠 Home Camera to Center
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
                         <h3>📹 Tracking Mode</h3>
                         <div class="toggle-switch">
                             <label class="switch">
@@ -289,7 +307,7 @@
                     <!-- Calibration required warning should always be present (toggled by JS) -->
                     <div id="calibration-required-warning" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px; color: #721c24;">
                         <h3 style="margin-bottom: 10px;">⚠️ Calibration Required</h3>
-                        <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence below.</p>
+                        <p style="margin-bottom: 10px;">Camera tracking must be calibrated before use. Please run the Auto-Calibration sequence above.</p>
                         <p style="font-size: 12px; opacity: 0.9;">Calibration data will be retained as long as motors remain enabled.</p>
                     </div>
 
@@ -312,10 +330,6 @@
                             </label>
                             <span class="toggle-label">Re-center camera slowly on target loss</span>
                         </div>
-
-                        <button class="btn-primary" id="home-camera-btn" onclick="homeCameraPosition()" style="margin-top: 10px;">
-                            🏠 Home Camera to Center
-                        </button>
 
                         <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
                             <strong>⚠️ Important:</strong> Ensure stepper motors are properly connected before enabling camera tracking.
@@ -381,12 +395,6 @@
                         <button class="btn-primary" onclick="applyPID()">Apply PID</button>
                     </div>
 
-                    <div class="control-group" style="background: #eef2ff; border: 1px dashed #c7d2fe; color: #4338ca;">
-                        <h3>🎯 Manual Position Control</h3>
-                        <p style="font-size: 13px; color: #4338ca;">
-                            Manual aim controls now live on top of the live video so you can make adjustments while watching the feed. Use the arrow pad overlay to nudge the turret, tweak the step size slider, or jump home without losing sight of the target.
-                        </p>
-                    </div>
                     </div> <!-- /#camera-tracking-controls -->
 
                     <div class="control-group">
@@ -395,12 +403,8 @@
                             Automatically find limits and set home position, or manually calibrate steps-per-pixel
                         </p>
 
-                        <button class="btn-success" onclick="runAutoCalibration()" style="margin-bottom: 15px;">
-                            🤖 Auto-Calibrate & Home
-                        </button>
-
                         <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position. May take several minutes.
+                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position.
                         </div>
 
                         <div class="slider-control">
@@ -523,7 +527,7 @@
                         <div class="slider-control">
                             <label>💡 Laser Power (%)</label>
                             <div class="slider-wrapper">
-                                <input type="range" id="laser-power" min="0" max="100" value="100" step="5" oninput="updateLaserPowerValue()">
+                                <input type="range" id="laser-power" min="0" max="100" value="100" step="1" oninput="updateLaserPowerValue()">
                                 <span id="laser-power-value" class="slider-value">100%</span>
                             </div>
                         </div>
@@ -618,7 +622,7 @@
                         <div class="slider-control">
                             <label>Delay Between Positions (seconds)</label>
                             <div class="slider-wrapper">
-                                <input type="range" id="pattern-delay" min="0.5" max="5" value="1" step="0.5" oninput="updatePatternDelayValue()">
+                                <input type="range" id="pattern-delay" min="0.5" max="10" value="1" step="0.5" oninput="updatePatternDelayValue()">
                                 <span id="pattern-delay-value" class="slider-value">1.0s</span>
                             </div>
                         </div>
@@ -1105,7 +1109,6 @@
         let balloonEditing = false;
         let balloonLastEditTs = 0;
         let pidEditing = false;
-        let pidLastEditTs = 0;
 
         // Tab switching
         function switchTab(tabName, buttonEl) {
@@ -1761,6 +1764,10 @@
                 if (data.status === 'success') {
                     showStatus('preset-status', true, `Saved to slot ${slot}`);
                     document.getElementById('preset-label').value = '';
+                    // Auto-increment slot input after save
+                    const slotEl = document.getElementById('save-slot');
+                    const next = Math.min(10, (parseInt(slotEl.value) || 1) + 1);
+                    slotEl.value = String(next);
                     loadPresetList();
                 } else {
                     showStatus('preset-status', false, data.message);
@@ -2803,7 +2810,6 @@
             const label = document.getElementById(`pid-${kind}-value`);
             if (label) label.textContent = val.toFixed(2);
             pidEditing = true;
-            pidLastEditTs = Date.now();
         }
 
         function applyPID() {
@@ -3107,7 +3113,7 @@
         }
 
         function runAutoCalibration() {
-            if (!confirm('Run automatic calibration? This will move the camera through its full range of motion and may take several minutes. Ensure the area is clear.')) return;
+            if (!confirm('Run automatic calibration? This will move the camera through its full range of motion. Ensure the area is clear.')) return;
             
             fetch('/tracking/camera/auto_calibrate', {
                 method: 'POST',
@@ -3132,6 +3138,11 @@
         }
 
         function updateCalibrationUI(isCalibrated, timestamp) {
+            const overlayBanner = document.getElementById('auto-calibration-banner');
+            if (overlayBanner) {
+                overlayBanner.style.display = isCalibrated ? 'none' : 'flex';
+            }
+
             // Update calibration status display
             if (isCalibrated) {
                 document.getElementById('camera-calibration-status').textContent = 'Calibrated ✓';
@@ -3577,8 +3588,7 @@
                 
                 // Sync PID sliders with controller values (with edit protection)
                 if (ctrl.pid) {
-                    const now = Date.now();
-                    const allowPIDSync = !pidEditing || (now - pidLastEditTs > EDIT_IDLE_MS);
+                    const allowPIDSync = !pidEditing;
                     if (allowPIDSync) {
                         const kpEl = document.getElementById('pid-kp');
                         const kiEl = document.getElementById('pid-ki');
