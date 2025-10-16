@@ -614,7 +614,7 @@
                         <div class="slider-control">
                             <label>Delay Between Positions (seconds)</label>
                             <div class="slider-wrapper">
-                                <input type="range" id="pattern-delay" min="0.5" max="5" value="1" step="0.5" oninput="updatePatternDelayValue()">
+                                <input type="range" id="pattern-delay" min="0.5" max="10" value="1" step="0.5" oninput="updatePatternDelayValue()">
                                 <span id="pattern-delay-value" class="slider-value">1.0s</span>
                             </div>
                         </div>
@@ -1756,6 +1756,10 @@
                 if (data.status === 'success') {
                     showStatus('preset-status', true, `Saved to slot ${slot}`);
                     document.getElementById('preset-label').value = '';
+                    // Auto-increment slot input after save
+                    const slotEl = document.getElementById('save-slot');
+                    const next = Math.min(10, (parseInt(slotEl.value) || 1) + 1);
+                    slotEl.value = String(next);
                     loadPresetList();
                 } else {
                     showStatus('preset-status', false, data.message);
