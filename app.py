@@ -1220,13 +1220,11 @@ def generate_frames():
             # Add crosshair and overlays in RGB space
             frame_rgb = create_crosshair(frame_rgb, opacity=0.5)
 
-            # Convert once to BGR for OpenCV encoders
-            frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-
-            # Write frame to video file if recording
+            # Write frame to video file if recording (convert to BGR for OpenCV)
             with recording_lock:
                 if is_recording and video_writer is not None:
                     try:
+                        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
                         video_writer.write(frame_bgr)
                     except Exception as e:
                         print(f"Error writing video frame: {e}")
@@ -1234,7 +1232,7 @@ def generate_frames():
             # Encode with high quality
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 95]
             with lock:
-                _, encoded_frame = cv2.imencode('.jpg', frame_bgr, encode_param)
+                _, encoded_frame = cv2.imencode('.jpg', frame_rgb, encode_param)
                 output_frame = encoded_frame.tobytes()
             
             yield (b'--frame\r\n'
