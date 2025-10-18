@@ -84,6 +84,12 @@ class StepperController:
         self.config = config_manager
         self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
+        try:
+            accel = int(self.config.get_control_acceleration_steps())
+            self.calibration.acceleration_steps = max(0, accel)
+        except Exception:
+            # Fallback to dataclass default if config missing/malformed
+            pass
         # Enable polarity: True => HIGH enables, LOW disables; False => LOW enables, HIGH disables
         try:
             self.enable_active_high: bool = bool(self.config.get_enable_active_high())
@@ -1093,9 +1099,37 @@ class StepperController:
                 x_range, x_center_absolute = self._calibrate_axis('x', x_start_position, report)
                 results['x_range'] = x_range
 
-                report('info', 'Calibrating Y axis - determining travel range')
-                y_range, y_center_absolute = self._calibrate_axis('y', y_start_position, report)
-                results['y_range'] = y_range
+                x_motor_disabled = False
+                x_motor = getattr(self, 'axis_x', None)
+                y_motor = getattr(self, 'axis_y', None)
+                if x_motor and hasattr(x_motor, 'disable'):
+                    try:
+                        if getattr(x_motor, 'enabled', True):
+                            report('info', 'Disabling X axis motor before calibrating Y axis')
+                            x_motor.disable()
+                            x_motor_disabled = True
+                    except Exception as exc:
+                        report('warning', f'Failed to disable X axis motor before Y calibration: {exc}')
+
+                try:
+                    report('info', 'Calibrating Y axis - determining travel range')
+                    y_range, y_center_absolute = self._calibrate_axis('y', y_start_position, report)
+                    results['y_range'] = y_range
+                finally:
+                    # Ensure motors remain enabled once calibration has begun
+                    for axis_name, motor, was_disabled in (
+                        ('X', x_motor, x_motor_disabled),
+                        ('Y', y_motor, False),
+                    ):
+                        if not motor or not hasattr(motor, 'enable'):
+                            continue
+                        should_enable = was_disabled or not getattr(motor, 'enabled', True)
+                        if should_enable:
+                            try:
+                                report('info', f'Ensuring {axis_name} axis motor is enabled after calibration step')
+                                motor.enable()
+                            except Exception as exc:
+                                report('warning', f'Failed to re-enable {axis_name} axis motor: {exc}')
 
                 report('info', f'Moving to center position: X={x_center_absolute}, Y={y_center_absolute}')
 
@@ -1317,7 +1351,12 @@ class StepperController:
                 self.calibration.x_max_steps = cal_data.get('x_max_steps', 2000)
                 self.calibration.y_max_steps = cal_data.get('y_max_steps', 2000)
                 self.calibration.step_delay = cal_data.get('step_delay', 0.001)
-                self.calibration.acceleration_steps = cal_data.get('acceleration_steps', 50)
+                accel_steps = cal_data.get('acceleration_steps', 50)
+                try:
+                    accel_steps = int(accel_steps)
+                except Exception:
+                    accel_steps = 50
+                self.calibration.acceleration_steps = max(0, accel_steps)
                 self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
                 self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
                 self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
@@ -1403,6 +1442,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': int(max(0, self.calibration.acceleration_steps)),
                 'step_delay': self.calibration.step_delay,
                 'is_calibrated': self.calibration.is_calibrated,
                 'calibration_timestamp': self.calibration.calibration_timestamp
@@ -1466,6 +1506,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': int(max(0, self.calibration.acceleration_steps)),
                 'is_calibrated': self.calibration.is_calibrated,
                 'timestamp': self.calibration.calibration_timestamp,
             },

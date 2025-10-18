@@ -2663,7 +2663,16 @@ def update_camera_tracking_settings():
                 stepper_controller.set_step_delay(data['step_delay'])
             except ValueError as exc:
                 return jsonify({'status': 'error', 'message': str(exc)}), 400
-        
+
+        if 'acceleration_steps' in data:
+            try:
+                accel_steps = int(data['acceleration_steps'])
+            except (TypeError, ValueError):
+                return jsonify({'status': 'error', 'message': 'Invalid acceleration value'}), 400
+            if accel_steps < 0:
+                return jsonify({'status': 'error', 'message': 'Acceleration must be non-negative'}), 400
+            # Hard cap ramp length to keep runtimes reasonable and match UI range
+            stepper_controller.calibration.acceleration_steps = min(accel_steps, 1000)
         if 'x_max_steps' in data:
             stepper_controller.calibration.x_max_steps = int(data['x_max_steps'])
         
