@@ -298,11 +298,6 @@
                                 🏠 Home Camera to Center
                             </button>
                         </div>
-                      <h3>📹 Camera Tracking</h3>
-                        <div id="tracking-mode-info" style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; font-size: 13px; color: #856404;">
-                            <strong>Camera Mode:</strong> Physically moves the camera with stepper motors to keep objects centered. Crosshair stays fixed.
-                            <span class="tracking-mode-note">Use the testing toggle in the Status tab to experiment with crosshair-only tracking if needed.</span>
-                      </div>
                     </div>
 
                     <!-- Calibration required warning should always be present (toggled by JS) -->
@@ -393,20 +388,7 @@
                                 <span id="pid-kd-value" class="slider-value">0.20</span>
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="applyPID()">Apply PID</button>
-                    </div>
-
-                    </div> <!-- /#camera-tracking-controls -->
-
-                    <div class="control-group">
                         <h3>🔧 Calibration</h3>
-                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                            Automatically find limits and set home position, or manually calibrate steps-per-pixel
-                        </p>
-
-                        <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position.
-                        </div>
 
                         <div class="slider-control">
                             <label>X-Axis Steps/Pixel</label>
