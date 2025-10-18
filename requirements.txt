@@ -27,3 +27,4 @@ inference-sdk>=0.9.37
 pyserial>=3.5
 
 gunicorn>=21.2.0
+eventlet>=0.33.3
