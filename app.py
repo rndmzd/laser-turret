@@ -43,7 +43,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'laser-turret-secret-key-change-in-production'
 if app.config.get('SECRET_KEY') == 'laser-turret-secret-key-change-in-production':
     print("WARNING: Using default Flask SECRET_KEY; set a unique SECRET_KEY in production.")
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Global variables
 output_frame = None
