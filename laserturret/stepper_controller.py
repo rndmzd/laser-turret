@@ -84,6 +84,12 @@ class StepperController:
         self.config = config_manager
         self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
+        try:
+            accel = int(self.config.get_control_acceleration_steps())
+            self.calibration.acceleration_steps = max(0, accel)
+        except Exception:
+            # Fallback to dataclass default if config missing/malformed
+            pass
         # Enable polarity: True => HIGH enables, LOW disables; False => LOW enables, HIGH disables
         try:
             self.enable_active_high: bool = bool(self.config.get_enable_active_high())
@@ -1345,7 +1351,12 @@ class StepperController:
                 self.calibration.x_max_steps = cal_data.get('x_max_steps', 2000)
                 self.calibration.y_max_steps = cal_data.get('y_max_steps', 2000)
                 self.calibration.step_delay = cal_data.get('step_delay', 0.001)
-                self.calibration.acceleration_steps = cal_data.get('acceleration_steps', 50)
+                accel_steps = cal_data.get('acceleration_steps', 50)
+                try:
+                    accel_steps = int(accel_steps)
+                except Exception:
+                    accel_steps = 50
+                self.calibration.acceleration_steps = max(0, accel_steps)
                 self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
                 self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
                 self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
@@ -1431,6 +1442,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': int(max(0, self.calibration.acceleration_steps)),
                 'step_delay': self.calibration.step_delay,
                 'is_calibrated': self.calibration.is_calibrated,
                 'calibration_timestamp': self.calibration.calibration_timestamp
@@ -1494,6 +1506,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': int(max(0, self.calibration.acceleration_steps)),
                 'is_calibrated': self.calibration.is_calibrated,
                 'timestamp': self.calibration.calibration_timestamp,
             },
