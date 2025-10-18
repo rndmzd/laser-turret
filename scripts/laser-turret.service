@@ -1,0 +1,25 @@
+[Unit]
+Description=Laser Turret Control Panel (Gunicorn + Flask-SocketIO)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust as needed
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/laser-turret
+# Optional: load overrides from /etc/default/laser-turret if present
+EnvironmentFile=-/etc/default/laser-turret
+# Ensure the venv binaries are preferred (expects `env` under repo root)
+Environment=PATH=/home/pi/laser-turret/env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+Environment=FLASK_ENV=production
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/bin/bash /home/pi/laser-turret/start_gunicorn.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
