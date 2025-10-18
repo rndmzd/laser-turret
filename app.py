@@ -15,6 +15,8 @@ import logging
 import atexit
 import signal
 import sys
+from pathlib import Path
+from typing import Optional
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
@@ -80,6 +82,11 @@ video_writer = None
 recording_filename = None
 recording_lock = threading.Lock()
 recording_start_time = None
+
+# Media storage overrides
+media_path_lock = threading.Lock()
+custom_capture_dir: Optional[Path] = None
+custom_recording_dir: Optional[Path] = None
 
 # Motion detection
 motion_detection_enabled = False
@@ -180,6 +187,22 @@ def save_crosshair_calibration():
     global crosshair_offset
     with open(crosshair_calibration_file, 'w') as f:
         json.dump(crosshair_offset, f)
+
+
+def get_active_capture_directory() -> Path:
+    """Return the directory used for image captures, honoring runtime overrides."""
+    config = get_config()
+    with media_path_lock:
+        override = custom_capture_dir
+    return override or config.get_media_capture_path()
+
+
+def get_active_recording_directory() -> Path:
+    """Return the directory used for video recordings, honoring runtime overrides."""
+    config = get_config()
+    with media_path_lock:
+        override = custom_recording_dir
+    return override or config.get_media_recording_path()
 
 def initialize_laser_control():
     """Initialize laser control with PWM"""
@@ -1467,8 +1490,7 @@ def capture_image():
         return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
 
     try:
-        config = get_config()
-        capture_dir = config.get_media_capture_path()
+        capture_dir = get_active_capture_directory()
         capture_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1484,6 +1506,79 @@ def capture_image():
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/media/paths', methods=['GET', 'POST'])
+def media_paths():
+    """Return or update media storage directories used for captures and recordings."""
+    global custom_capture_dir, custom_recording_dir
+    config = get_config()
+    default_capture = config.get_media_capture_path()
+    default_recording = config.get_media_recording_path()
+
+    def serialize_paths(capture_override: Optional[Path], recording_override: Optional[Path]):
+        return {
+            'capture': {
+                'current': str((capture_override or default_capture).resolve()),
+                'default': str(default_capture.resolve()),
+                'override': str(capture_override.resolve()) if capture_override else None,
+            },
+            'recording': {
+                'current': str((recording_override or default_recording).resolve()),
+                'default': str(default_recording.resolve()),
+                'override': str(recording_override.resolve()) if recording_override else None,
+            }
+        }
+
+    if request.method == 'GET':
+        with media_path_lock:
+            capture_override = custom_capture_dir
+            recording_override = custom_recording_dir
+        return jsonify({'status': 'success', 'paths': serialize_paths(capture_override, recording_override)})
+
+    data = request.get_json(silent=True) or {}
+
+    def resolve_override(value: Optional[str]) -> Optional[Path]:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError('Path overrides must be provided as strings or null')
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        return config.resolve_media_path(trimmed)
+
+    try:
+        new_capture = None
+        new_recording = None
+        with media_path_lock:
+            current_capture = custom_capture_dir
+            current_recording = custom_recording_dir
+
+        if 'capture_path' in data:
+            new_capture = resolve_override(data.get('capture_path'))
+        else:
+            new_capture = current_capture
+
+        if 'recording_path' in data:
+            new_recording = resolve_override(data.get('recording_path'))
+        else:
+            new_recording = current_recording
+
+        with media_path_lock:
+            custom_capture_dir = new_capture
+            custom_recording_dir = new_recording
+
+        with media_path_lock:
+            capture_override = custom_capture_dir
+            recording_override = custom_recording_dir
+
+        paths = serialize_paths(capture_override, recording_override)
+        return jsonify({'status': 'success', 'paths': paths})
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'status': 'error', 'message': f'Failed to update media paths: {exc}'}), 500
 
 @app.route('/get_camera_settings')
 def get_camera_settings():
@@ -1521,10 +1616,10 @@ def start_recording():
         try:
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            config = get_config()
-            recording_dir = config.get_media_recording_path()
+            recording_dir = get_active_recording_directory()
             recording_dir.mkdir(parents=True, exist_ok=True)
-            recording_filename = str(recording_dir / f"video_{timestamp}.mp4")
+            recording_path = recording_dir / f"video_{timestamp}.mp4"
+            recording_filename = str(recording_path)
 
             # Initialize video writer
             # Using mp4v codec for MP4 container
@@ -1534,7 +1629,7 @@ def start_recording():
             actual_fps = fps_value if fps_value > 0 else 30.0
 
             video_writer = cv2.VideoWriter(
-                recording_filename,
+                str(recording_path),
                 fourcc,
                 actual_fps,
                 (CAMERA_WIDTH, CAMERA_HEIGHT)

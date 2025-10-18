@@ -1042,6 +1042,35 @@
                 <!-- Capture Tab -->
                 <div id="capture-tab" class="tab-content">
                     <div class="control-group">
+                        <h3>💾 Storage Paths</h3>
+                        <p class="storage-path-description">
+                            Choose where new captures and recordings are saved. Leave a field blank to use the configured default.
+                        </p>
+
+                        <label class="input-label" for="capture-path-input">Image Capture Folder</label>
+                        <div class="storage-path-controls">
+                            <input id="capture-path-input" type="text" class="text-input" placeholder="Enter capture directory">
+                            <div class="storage-path-actions">
+                                <button class="btn-primary inline-button" onclick="applyCapturePath()">Save</button>
+                                <button class="btn-secondary inline-button" onclick="resetCapturePath()">Use Default</button>
+                            </div>
+                        </div>
+                        <p class="storage-path-note">Active path: <span id="capture-path-display">--</span></p>
+
+                        <label class="input-label" for="recording-path-input">Video Recording Folder</label>
+                        <div class="storage-path-controls">
+                            <input id="recording-path-input" type="text" class="text-input" placeholder="Enter recording directory">
+                            <div class="storage-path-actions">
+                                <button class="btn-primary inline-button" onclick="applyRecordingPath()">Save</button>
+                                <button class="btn-secondary inline-button" onclick="resetRecordingPath()">Use Default</button>
+                            </div>
+                        </div>
+                        <p class="storage-path-note">Active path: <span id="recording-path-display">--</span></p>
+                    </div>
+
+                    <div id="media-path-status" class="status-message"></div>
+
+                    <div class="control-group">
                         <h3>📸 Image Capture</h3>
                         <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
                             Capture high-quality still images from the camera feed.
@@ -1385,6 +1414,102 @@
             .then(response => response.json())
             .then(data => showStatus('capture-status', data.status === 'success',
                 data.status === 'success' ? `Image saved: ${data.filename}` : data.message));
+        }
+
+        let mediaPathState = null;
+
+        function updateMediaPathUI(paths) {
+            mediaPathState = paths;
+            const captureDisplay = document.getElementById('capture-path-display');
+            if (captureDisplay && paths.capture) {
+                captureDisplay.textContent = paths.capture.current;
+                captureDisplay.setAttribute('title', `Default: ${paths.capture.default}`);
+            }
+
+            const recordingDisplay = document.getElementById('recording-path-display');
+            if (recordingDisplay && paths.recording) {
+                recordingDisplay.textContent = paths.recording.current;
+                recordingDisplay.setAttribute('title', `Default: ${paths.recording.default}`);
+            }
+
+            const captureInput = document.getElementById('capture-path-input');
+            if (captureInput && paths.capture) {
+                captureInput.value = paths.capture.override || '';
+            }
+
+            const recordingInput = document.getElementById('recording-path-input');
+            if (recordingInput && paths.recording) {
+                recordingInput.value = paths.recording.override || '';
+            }
+        }
+
+        function loadMediaPaths() {
+            fetch('/media/paths')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.paths) {
+                        updateMediaPathUI(data.paths);
+                    } else {
+                        showStatus('media-path-status', false, data.message || 'Failed to load media paths');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading media paths:', error);
+                    showStatus('media-path-status', false, 'Failed to load media paths');
+                });
+        }
+
+        function submitMediaPathUpdate(payload, successMessage) {
+            fetch('/media/paths', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.paths) {
+                        updateMediaPathUI(data.paths);
+                        if (successMessage) {
+                            showStatus('media-path-status', true, successMessage);
+                        }
+                    } else {
+                        showStatus('media-path-status', false, data.message || 'Failed to update media paths');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating media paths:', error);
+                    showStatus('media-path-status', false, 'Failed to update media paths');
+                });
+        }
+
+        function applyCapturePath() {
+            const input = document.getElementById('capture-path-input');
+            if (!input) return;
+            const value = input.value.trim();
+            const isReset = value.length === 0;
+            submitMediaPathUpdate(
+                { capture_path: isReset ? '' : value },
+                isReset ? 'Capture folder reset to default' : 'Capture folder updated'
+            );
+        }
+
+        function resetCapturePath() {
+            submitMediaPathUpdate({ capture_path: '' }, 'Capture folder reset to default');
+        }
+
+        function applyRecordingPath() {
+            const input = document.getElementById('recording-path-input');
+            if (!input) return;
+            const value = input.value.trim();
+            const isReset = value.length === 0;
+            submitMediaPathUpdate(
+                { recording_path: isReset ? '' : value },
+                isReset ? 'Recording folder reset to default' : 'Recording folder updated'
+            );
+        }
+
+        function resetRecordingPath() {
+            submitMediaPathUpdate({ recording_path: '' }, 'Recording folder reset to default');
         }
 
         // Status message display
@@ -3639,6 +3764,7 @@
         (async () => {
             // Load presets on page load
             loadPresetList();
+            loadMediaPaths();
 
             // Sync sliders on page load (not from WebSocket)
             syncMotionSliders();

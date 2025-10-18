@@ -339,14 +339,18 @@ class ConfigManager:
         return self._get('Camera', 'buffer_count', int)
 
     # Media storage configuration
-    def _get_media_path(self, key: str) -> Path:
-        """Resolve and normalize media storage paths relative to the config file."""
-        raw_path = self._get('Media', key, str)
+    def resolve_media_path(self, raw_path: str) -> Path:
+        """Resolve and normalize a media path relative to the configuration file."""
         path = Path(raw_path).expanduser()
         if not path.is_absolute():
             base = Path(self.config_file).resolve().parent
             path = base / path
         return path
+
+    def _get_media_path(self, key: str) -> Path:
+        """Resolve and normalize media storage paths relative to the config file."""
+        raw_path = self._get('Media', key, str)
+        return self.resolve_media_path(raw_path)
 
     def get_media_capture_path(self) -> Path:
         """Directory path used for captured still images."""
