@@ -15,6 +15,7 @@ import logging
 import atexit
 import signal
 import sys
+from pathlib import Path
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
@@ -80,6 +81,13 @@ video_writer = None
 recording_filename = None
 recording_lock = threading.Lock()
 recording_start_time = None
+
+RECORDING_OUTPUT_DIR = Path('media/recordings')
+RECORDING_CODEC_PREFERENCE = [
+    ('avc1', '.mp4'),
+    ('mp4v', '.mp4'),
+    ('XVID', '.avi'),
+]
 
 # Motion detection
 motion_detection_enabled = False
@@ -1207,25 +1215,24 @@ def generate_frames():
             last_frame_time = current_time
             
             # Capture frame - already in RGB format
-            frame = picam2.capture_array()
-            
-            # Add crosshair
-            frame = create_crosshair(frame, opacity=0.5)
-            
-            # Write frame to video file if recording
+            frame_rgb = picam2.capture_array()
+
+            # Add crosshair and overlays in RGB space
+            frame_rgb = create_crosshair(frame_rgb, opacity=0.5)
+
+            # Write frame to video file if recording (convert to BGR for OpenCV)
             with recording_lock:
                 if is_recording and video_writer is not None:
                     try:
-                        # Convert RGB to BGR for OpenCV
-                        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                        video_writer.write(bgr_frame)
+                        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                        video_writer.write(frame_bgr)
                     except Exception as e:
                         print(f"Error writing video frame: {e}")
-            
+
             # Encode with high quality
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 95]
             with lock:
-                _, encoded_frame = cv2.imencode('.jpg', frame, encode_param)
+                _, encoded_frame = cv2.imencode('.jpg', frame_rgb, encode_param)
                 output_frame = encoded_frame.tobytes()
             
             yield (b'--frame\r\n'
@@ -1243,6 +1250,42 @@ def update_fps():
         fps = len(fps_buffer) / sum(fps_buffer)
         with fps_lock:
             fps_value = round(fps, 1)
+
+
+def initialize_video_writer(base_name: str, fps: float):
+    """Initialize a video writer using the preferred codec order."""
+    RECORDING_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    for fourcc_name, extension in RECORDING_CODEC_PREFERENCE:
+        filename = RECORDING_OUTPUT_DIR / f"{base_name}{extension}"
+        fourcc = cv2.VideoWriter_fourcc(*fourcc_name)
+        writer = cv2.VideoWriter(
+            str(filename),
+            fourcc,
+            fps,
+            (CAMERA_WIDTH, CAMERA_HEIGHT),
+            True,
+        )
+
+        if writer.isOpened():
+            logger.info(
+                "Video recording initialized using codec %s at %s",
+                fourcc_name,
+                filename,
+            )
+            return writer, str(filename)
+
+        writer.release()
+        if filename.exists():
+            try:
+                filename.unlink()
+            except OSError:
+                logger.warning("Failed to remove incomplete recording file %s", filename)
+
+        logger.warning("Video codec %s unavailable; trying next option", fourcc_name)
+
+    raise RuntimeError("Failed to initialize video writer with available codecs")
+
 
 @app.route('/')
 def index():
@@ -1517,29 +1560,22 @@ def start_recording():
         try:
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            recording_filename = f"video_{timestamp}.mp4"
-            
-            # Initialize video writer
-            # Using mp4v codec for MP4 container
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            
+            base_name = f"video_{timestamp}"
+
             # Get actual FPS or use default
             actual_fps = fps_value if fps_value > 0 else 30.0
-            
-            video_writer = cv2.VideoWriter(
-                recording_filename,
-                fourcc,
-                actual_fps,
-                (CAMERA_WIDTH, CAMERA_HEIGHT)
-            )
-            
-            if not video_writer.isOpened():
-                video_writer = None
-                return jsonify({'status': 'error', 'message': 'Failed to open video writer'}), 500
-            
+
+            try:
+                writer, filename = initialize_video_writer(base_name, actual_fps)
+            except RuntimeError as err:
+                return jsonify({'status': 'error', 'message': str(err)}), 500
+
+            video_writer = writer
+            recording_filename = filename
+
             is_recording = True
             recording_start_time = datetime.now()
-            
+
             return jsonify({
                 'status': 'success',
                 'filename': recording_filename,
