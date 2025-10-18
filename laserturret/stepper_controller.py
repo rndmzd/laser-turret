@@ -449,6 +449,11 @@ class StepperController:
                 self.axis_y.set_suspended(False)
         except Exception:
             pass
+        # Reset idle timer so the watchdog does not immediately disable after re-enable
+        try:
+            self._mark_activity()
+        except Exception:
+            pass
         logger.info("Stepper motors enabled")
     
     def disable(self, invalidate_calibration: bool = True):
@@ -563,21 +568,21 @@ class StepperController:
         """
         if not self.enabled:
             logger.warning("Cannot step - motors not enabled")
-            return
+            return 0
         
         if steps == 0:
-            return
+            return 0
         
         # Apply software limits unless bypassed (e.g., during calibration)
         if not bypass_limits:
             steps = self.check_software_limits(axis, steps)
             if steps == 0:
                 logger.debug(f"Movement constrained by software limits on {axis} axis")
-                return
+                return 0
         
         motor = self.axis_x if axis == 'x' else self.axis_y
         if motor is None:
-            return
+            return 0
         direction_sign = 1 if steps > 0 else -1
         total = abs(steps)
         if delay is None:
@@ -591,7 +596,7 @@ class StepperController:
                 dir_const = COUNTER_CLOCKWISE if direction_sign > 0 else CLOCKWISE
             motor.set_direction(dir_const)
         except LimitSwitchError:
-            return
+            return 0
         self._active_moves += 1
         self._mark_activity()
         if accel > 0:
@@ -640,6 +645,7 @@ class StepperController:
         self._mark_activity()
         # Don't force enable here - respect user's enable/disable state
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
+        return moved_total
     
     def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
         if not self.enabled:
@@ -1124,11 +1130,20 @@ class StepperController:
                 self.calibration.x_max_steps = x_half_range
                 self.calibration.y_max_steps = y_half_range
                 
+                # Only succeed if we discovered a non-zero range on both axes
+                if x_half_range <= 0 or y_half_range <= 0:
+                    error_msg = 'Calibration failed: no movement detected on one or both axes'
+                    report('error', error_msg)
+                    return {
+                        'success': False,
+                        'message': error_msg,
+                    }
+
                 # Mark as calibrated and save timestamp
                 from datetime import datetime
                 self.calibration.is_calibrated = True
                 self.calibration.calibration_timestamp = datetime.now().isoformat()
-                
+
                 # Save calibration to file
                 self.save_calibration()
                 # Don't auto-enable after calibration - let user control enable state
@@ -1209,59 +1224,65 @@ class StepperController:
         """
         max_search_steps = 5000  # Maximum steps to search in each direction
         search_speed = 0.001  # Step delay during calibration
-        
-        # Save current position
+
+        # Save current position (for logging/debug; not strictly required)
         if axis == 'x':
             start_pos = self.calibration.x_position
         else:
             start_pos = self.calibration.y_position
-        
+
         # Find positive limit
         report('info', f'{axis.upper()} axis: searching positive direction')
         steps_moved = 0
-        
-        for i in range(max_search_steps):
+
+        for _ in range(max_search_steps):
             if self.has_limit_switches and self.check_limit_switch(axis, 1):
                 report('info', f'{axis.upper()} axis: positive limit switch found')
                 break
-            
-            self.step(axis, 1, delay=search_speed, bypass_limits=True)
-            steps_moved += 1
-            
+
+            moved = self.step(axis, 1, delay=search_speed, bypass_limits=True)
+            if moved <= 0:
+                report('warning', f'{axis.upper()} axis: movement stalled (motors disabled or at limit) during positive search')
+                break
+            steps_moved += moved
+
             # Report progress every 500 steps
             if steps_moved % 500 == 0:
                 report('info', f'{axis.upper()} axis: {steps_moved} steps positive')
         else:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
-        
+
         positive_limit = steps_moved
-        
+
         # Return to start
         report('info', f'{axis.upper()} axis: returning to start position')
         self.step(axis, -steps_moved, delay=search_speed, bypass_limits=True)
-        
+
         # Find negative limit
         report('info', f'{axis.upper()} axis: searching negative direction')
         steps_moved = 0
-        
-        for i in range(max_search_steps):
+
+        for _ in range(max_search_steps):
             if self.has_limit_switches and self.check_limit_switch(axis, -1):
                 report('info', f'{axis.upper()} axis: negative limit switch found')
                 break
-            
-            self.step(axis, -1, delay=search_speed, bypass_limits=True)
-            steps_moved += 1
-            
+
+            moved = self.step(axis, -1, delay=search_speed, bypass_limits=True)
+            if moved <= 0:
+                report('warning', f'{axis.upper()} axis: movement stalled (motors disabled or at limit) during negative search')
+                break
+            steps_moved += moved
+
             # Report progress every 500 steps
             if steps_moved % 500 == 0:
                 report('info', f'{axis.upper()} axis: {steps_moved} steps negative')
         else:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
-        
+
         negative_limit = -steps_moved
-        
+
         report('info', f'{axis.upper()} axis range: {negative_limit} to {positive_limit} steps')
-        
+
         return {
             'min': negative_limit,
             'max': positive_limit
