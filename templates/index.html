@@ -401,13 +401,8 @@
                     <div class="control-group">
                         <h3>🔧 Calibration</h3>
                         <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                            Automatically find limits and set home position, or manually calibrate steps-per-pixel
+                            Auto-Calibrate (top of the Control Center) discovers axis travel limits and sets the home/center. The sliders below adjust the steps-per-pixel scale used to convert pixel error to motor steps. Auto-Calibrate does not change steps-per-pixel.
                         </p>
-
-                        <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1565c0;">
-                            <strong>Auto-Calibration:</strong> Finds movement limits in all directions, moves to center, and sets home position.
-                        </div>
-
                         <div class="slider-control">
                             <label>X-Axis Steps/Pixel</label>
                             <div class="slider-wrapper">
@@ -415,7 +410,6 @@
                                 <span id="camera-x-steps-value" class="slider-value">0.10</span>
                             </div>
                         </div>
-
                         <div class="slider-control">
                             <label>Y-Axis Steps/Pixel</label>
                             <div class="slider-wrapper">
