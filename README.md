@@ -304,6 +304,7 @@ See `laserturret/motion/__init__.py` for available exports including `MotorStatu
 - **microsteps**: Microstepping resolution (1, 2, 4, 8, or 16)
 - **deadzone**: Input values below this are ignored (reduce jitter)
 - **step_delay**: Delay between steps (lower = faster, but may skip)
+- **acceleration_steps**: Steps spent ramping speed up/down (higher = smoother, `0` disables the ramp). The UI slider covers 0-1000 steps.
 
 ### Control Tuning
 
@@ -315,6 +316,7 @@ max_steps_per_update = 50
 deadzone = 5
 speed_scaling = 0.10
 step_delay = 0.0005
+acceleration_steps = 50
 ```
 
 ### Detection Settings
@@ -347,6 +349,19 @@ balloon_fill_ratio_min = 0.5
 balloon_aspect_ratio_min = 0.6
 balloon_aspect_ratio_max = 1.6
 ```
+
+### Media Storage
+
+Control where snapshots and recordings are written:
+
+```ini
+[Media]
+capture_path = media/captures      # still images
+recording_path = media/recordings  # video files
+```
+
+Relative paths are resolved from the directory that contains `laserturret.conf`, so you can point to mounted USB drives or NAS
+shares by using absolute paths such as `/mnt/storage/turret/recordings`.
 
 **Detection Method Comparison:**
 

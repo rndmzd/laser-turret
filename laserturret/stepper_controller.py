@@ -84,6 +84,12 @@ class StepperController:
         self.config = config_manager
         self.calibration_file = calibration_file
         self.calibration = StepperCalibration()
+        try:
+            accel = int(self.config.get_control_acceleration_steps())
+            self.calibration.acceleration_steps = max(0, accel)
+        except Exception:
+            # Fallback to dataclass default if config missing/malformed
+            pass
         # Enable polarity: True => HIGH enables, LOW disables; False => LOW enables, HIGH disables
         try:
             self.enable_active_high: bool = bool(self.config.get_enable_active_high())
@@ -443,6 +449,11 @@ class StepperController:
                 self.axis_y.set_suspended(False)
         except Exception:
             pass
+        # Reset idle timer so the watchdog does not immediately disable after re-enable
+        try:
+            self._mark_activity()
+        except Exception:
+            pass
         logger.info("Stepper motors enabled")
     
     def disable(self, invalidate_calibration: bool = True):
@@ -557,21 +568,21 @@ class StepperController:
         """
         if not self.enabled:
             logger.warning("Cannot step - motors not enabled")
-            return
+            return 0
         
         if steps == 0:
-            return
+            return 0
         
         # Apply software limits unless bypassed (e.g., during calibration)
         if not bypass_limits:
             steps = self.check_software_limits(axis, steps)
             if steps == 0:
                 logger.debug(f"Movement constrained by software limits on {axis} axis")
-                return
+                return 0
         
         motor = self.axis_x if axis == 'x' else self.axis_y
         if motor is None:
-            return
+            return 0
         direction_sign = 1 if steps > 0 else -1
         total = abs(steps)
         if delay is None:
@@ -585,7 +596,7 @@ class StepperController:
                 dir_const = COUNTER_CLOCKWISE if direction_sign > 0 else CLOCKWISE
             motor.set_direction(dir_const)
         except LimitSwitchError:
-            return
+            return 0
         self._active_moves += 1
         self._mark_activity()
         if accel > 0:
@@ -634,6 +645,7 @@ class StepperController:
         self._mark_activity()
         # Don't force enable here - respect user's enable/disable state
         logger.debug(f"Moved {moved_total} steps on {axis} axis, position: ({self.calibration.x_position}, {self.calibration.y_position})")
+        return moved_total
     
     def update_tracking_with_pid(self, target_x: int, target_y: int, frame_width: int, frame_height: int) -> None:
         if not self.enabled:
@@ -1093,9 +1105,37 @@ class StepperController:
                 x_range, x_center_absolute = self._calibrate_axis('x', x_start_position, report)
                 results['x_range'] = x_range
 
-                report('info', 'Calibrating Y axis - determining travel range')
-                y_range, y_center_absolute = self._calibrate_axis('y', y_start_position, report)
-                results['y_range'] = y_range
+                x_motor_disabled = False
+                x_motor = getattr(self, 'axis_x', None)
+                y_motor = getattr(self, 'axis_y', None)
+                if x_motor and hasattr(x_motor, 'disable'):
+                    try:
+                        if getattr(x_motor, 'enabled', True):
+                            report('info', 'Disabling X axis motor before calibrating Y axis')
+                            x_motor.disable()
+                            x_motor_disabled = True
+                    except Exception as exc:
+                        report('warning', f'Failed to disable X axis motor before Y calibration: {exc}')
+
+                try:
+                    report('info', 'Calibrating Y axis - determining travel range')
+                    y_range, y_center_absolute = self._calibrate_axis('y', y_start_position, report)
+                    results['y_range'] = y_range
+                finally:
+                    # Ensure motors remain enabled once calibration has begun
+                    for axis_name, motor, was_disabled in (
+                        ('X', x_motor, x_motor_disabled),
+                        ('Y', y_motor, False),
+                    ):
+                        if not motor or not hasattr(motor, 'enable'):
+                            continue
+                        should_enable = was_disabled or not getattr(motor, 'enabled', True)
+                        if should_enable:
+                            try:
+                                report('info', f'Ensuring {axis_name} axis motor is enabled after calibration step')
+                                motor.enable()
+                            except Exception as exc:
+                                report('warning', f'Failed to re-enable {axis_name} axis motor: {exc}')
 
                 report('info', f'Moving to center position: X={x_center_absolute}, Y={y_center_absolute}')
 
@@ -1118,11 +1158,20 @@ class StepperController:
                 self.calibration.x_max_steps = x_half_range
                 self.calibration.y_max_steps = y_half_range
                 
+                # Only succeed if we discovered a non-zero range on both axes
+                if x_half_range <= 0 or y_half_range <= 0:
+                    error_msg = 'Calibration failed: no movement detected on one or both axes'
+                    report('error', error_msg)
+                    return {
+                        'success': False,
+                        'message': error_msg,
+                    }
+
                 # Mark as calibrated and save timestamp
                 from datetime import datetime
                 self.calibration.is_calibrated = True
                 self.calibration.calibration_timestamp = datetime.now().isoformat()
-                
+
                 # Save calibration to file
                 self.save_calibration()
                 # Don't auto-enable after calibration - let user control enable state
@@ -1203,59 +1252,65 @@ class StepperController:
         """
         max_search_steps = 5000  # Maximum steps to search in each direction
         search_speed = 0.001  # Step delay during calibration
-        
-        # Save current position
+
+        # Save current position (for logging/debug; not strictly required)
         if axis == 'x':
             start_pos = self.calibration.x_position
         else:
             start_pos = self.calibration.y_position
-        
+
         # Find positive limit
         report('info', f'{axis.upper()} axis: searching positive direction')
         steps_moved = 0
-        
-        for i in range(max_search_steps):
+
+        for _ in range(max_search_steps):
             if self.has_limit_switches and self.check_limit_switch(axis, 1):
                 report('info', f'{axis.upper()} axis: positive limit switch found')
                 break
-            
-            self.step(axis, 1, delay=search_speed, bypass_limits=True)
-            steps_moved += 1
-            
+
+            moved = self.step(axis, 1, delay=search_speed, bypass_limits=True)
+            if moved <= 0:
+                report('warning', f'{axis.upper()} axis: movement stalled (motors disabled or at limit) during positive search')
+                break
+            steps_moved += moved
+
             # Report progress every 500 steps
             if steps_moved % 500 == 0:
                 report('info', f'{axis.upper()} axis: {steps_moved} steps positive')
         else:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
-        
+
         positive_limit = steps_moved
-        
+
         # Return to start
         report('info', f'{axis.upper()} axis: returning to start position')
         self.step(axis, -steps_moved, delay=search_speed, bypass_limits=True)
-        
+
         # Find negative limit
         report('info', f'{axis.upper()} axis: searching negative direction')
         steps_moved = 0
-        
-        for i in range(max_search_steps):
+
+        for _ in range(max_search_steps):
             if self.has_limit_switches and self.check_limit_switch(axis, -1):
                 report('info', f'{axis.upper()} axis: negative limit switch found')
                 break
-            
-            self.step(axis, -1, delay=search_speed, bypass_limits=True)
-            steps_moved += 1
-            
+
+            moved = self.step(axis, -1, delay=search_speed, bypass_limits=True)
+            if moved <= 0:
+                report('warning', f'{axis.upper()} axis: movement stalled (motors disabled or at limit) during negative search')
+                break
+            steps_moved += moved
+
             # Report progress every 500 steps
             if steps_moved % 500 == 0:
                 report('info', f'{axis.upper()} axis: {steps_moved} steps negative')
         else:
             report('info', f'{axis.upper()} axis: max search range reached ({max_search_steps} steps)')
-        
+
         negative_limit = -steps_moved
-        
+
         report('info', f'{axis.upper()} axis range: {negative_limit} to {positive_limit} steps')
-        
+
         return {
             'min': negative_limit,
             'max': positive_limit
@@ -1317,7 +1372,12 @@ class StepperController:
                 self.calibration.x_max_steps = cal_data.get('x_max_steps', 2000)
                 self.calibration.y_max_steps = cal_data.get('y_max_steps', 2000)
                 self.calibration.step_delay = cal_data.get('step_delay', 0.001)
-                self.calibration.acceleration_steps = cal_data.get('acceleration_steps', 50)
+                accel_steps = cal_data.get('acceleration_steps', 50)
+                try:
+                    accel_steps = int(accel_steps)
+                except Exception:
+                    accel_steps = 50
+                self.calibration.acceleration_steps = max(0, accel_steps)
                 self.calibration.dead_zone_pixels = cal_data.get('dead_zone_pixels', 20)
                 self.calibration.is_calibrated = cal_data.get('is_calibrated', False)
                 self.calibration.calibration_timestamp = cal_data.get('calibration_timestamp')
@@ -1403,6 +1463,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': int(max(0, self.calibration.acceleration_steps)),
                 'step_delay': self.calibration.step_delay,
                 'is_calibrated': self.calibration.is_calibrated,
                 'calibration_timestamp': self.calibration.calibration_timestamp
@@ -1466,6 +1527,7 @@ class StepperController:
                 'x_steps_per_pixel': self.calibration.x_steps_per_pixel,
                 'y_steps_per_pixel': self.calibration.y_steps_per_pixel,
                 'dead_zone_pixels': self.calibration.dead_zone_pixels,
+                'acceleration_steps': int(max(0, self.calibration.acceleration_steps)),
                 'is_calibrated': self.calibration.is_calibrated,
                 'timestamp': self.calibration.calibration_timestamp,
             },

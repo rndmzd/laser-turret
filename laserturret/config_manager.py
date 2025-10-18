@@ -61,6 +61,7 @@ class ConfigManager:
             'deadzone': 5,
             'speed_scaling': 0.10,
             'step_delay': 0.0005,
+            'acceleration_steps': 50,
             'idle_timeout_sec': 600.0,
         },
         'Laser': {
@@ -90,6 +91,10 @@ class ConfigManager:
             'roboflow_api_key': '',
             'roboflow_confidence': 0.5,
             'roboflow_class_filter': '',
+        },
+        'Media': {
+            'capture_path': 'media/captures',
+            'recording_path': 'media/recordings',
         }
     }
     
@@ -191,6 +196,13 @@ class ConfigManager:
         if not 1 <= port <= 65535:
             raise ConfigurationError(f"Invalid MQTT port: {port}")
         
+        # Validate control tuning values
+        accel_steps = self.get_control_acceleration_steps()
+        if accel_steps < 0:
+            raise ConfigurationError(
+                "Control.acceleration_steps must be zero or greater"
+            )
+
         logger.info("Configuration validation passed")
     
     def _get(self, section: str, key: str, value_type: type = str, default: Any = None) -> Any:
@@ -290,7 +302,19 @@ class ConfigManager:
     def get_control_step_delay(self) -> float:
         """Get step delay in seconds"""
         return self._get('Control', 'step_delay', float)
-    
+
+    def get_control_acceleration_steps(self) -> int:
+        """Get number of steps used for acceleration/deceleration"""
+        value = self._get('Control', 'acceleration_steps', int)
+        if value < 0:
+            logger.warning(
+                "Control.acceleration_steps was negative (%s); clamping to 0",
+                value,
+            )
+            value = 0
+            self._cache['Control.acceleration_steps'] = value
+        return value
+
     def get_control_idle_timeout(self) -> float:
         """Get motor idle timeout in seconds"""
         return self._get('Control', 'idle_timeout_sec', float)
@@ -333,7 +357,29 @@ class ConfigManager:
     def get_camera_buffer_count(self) -> int:
         """Get camera buffer count"""
         return self._get('Camera', 'buffer_count', int)
-    
+
+    # Media storage configuration
+    def resolve_media_path(self, raw_path: str) -> Path:
+        """Resolve and normalize a media path relative to the configuration file."""
+        path = Path(raw_path).expanduser()
+        if not path.is_absolute():
+            base = Path(self.config_file).resolve().parent
+            path = base / path
+        return path
+
+    def _get_media_path(self, key: str) -> Path:
+        """Resolve and normalize media storage paths relative to the config file."""
+        raw_path = self._get('Media', key, str)
+        return self.resolve_media_path(raw_path)
+
+    def get_media_capture_path(self) -> Path:
+        """Directory path used for captured still images."""
+        return self._get_media_path('capture_path')
+
+    def get_media_recording_path(self) -> Path:
+        """Directory path used for recorded videos."""
+        return self._get_media_path('recording_path')
+
     # Detection Configuration
     def get_detection_method(self) -> str:
         """Get detection method ('haar', 'tflite', or 'roboflow')"""

@@ -59,6 +59,9 @@ speed_scaling = 0.10
 # Delay between steps in seconds (lower = faster, but may skip steps)
 step_delay = 0.0005
 
+# Number of steps used to ramp up/down speed for smoother starts/stops (set to 0 to disable ramping)
+acceleration_steps = 50
+
 # Idle timeout in seconds before motors auto-disable to cool down (invalidates calibration)
 # Motors must be re-calibrated after disable. Set to 0 to disable auto-timeout.
 # Default: 600 seconds (10 minutes)
@@ -81,6 +84,11 @@ format = RGB888
 
 # Number of camera buffers
 buffer_count = 2
+
+[Media]
+# Storage paths for captures and recordings (relative paths resolve from this file's directory)
+capture_path = media/captures
+recording_path = media/recordings
 
 [Detection]
 # Object detection method: 'haar', 'tflite', or 'roboflow'
