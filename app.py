@@ -1233,7 +1233,8 @@ def generate_frames():
             with recording_lock:
                 if is_recording and video_writer is not None:
                     try:
-                        video_writer.write(frame_rgb)
+                        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                        video_writer.write(frame_bgr)
                         recording_frames_written += 1
                     except Exception as e:
                         print(f"Error writing video frame: {e}")
