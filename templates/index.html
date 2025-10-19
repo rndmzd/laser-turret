@@ -18,6 +18,7 @@
             <section class="video-section">
                 <div class="video-wrapper">
                     <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video stream">
+                    <audio id="audio-stream" preload="none" style="display:none"></audio>
 
                     <div class="overlay-toolbar">
                         <button id="motors-toggle" class="toolbar-button" onclick="toggleMotorsFromToolbar(this)">
@@ -27,6 +28,7 @@
                         <button class="toolbar-button active" data-overlay-target="movement" onclick="toggleOverlayPanel('movement-overlay', this)">Movement</button>
                         <button class="toolbar-button" data-overlay-target="objects" onclick="toggleOverlayPanel('objects-overlay', this)">Objects</button>
                         <button class="toolbar-button" data-overlay-target="laser" onclick="toggleOverlayPanel('laser-overlay', this)">Laser</button>
+                        <button id="audio-toggle" class="toolbar-button" onclick="toggleAudio(this)">Audio</button>
                     </div>
 
                     <div class="overlay-panel floating-controls movement-overlay active" id="movement-overlay" data-overlay-key="movement">
@@ -1132,7 +1134,6 @@
                 // Refresh object status to show appropriate panel for selected method
                 updateObjectStatus();
             }
-
         }
 
         // Crosshair positioning with camera movement support
@@ -1258,6 +1259,21 @@
                     }
                 })
                 .catch(error => console.error('Error fetching crosshair calibration:', error));
+        }
+
+        function toggleAudio(btn) {
+            const audio = document.getElementById('audio-stream');
+            if (!audio.src) {
+                audio.src = '/audio_feed';
+            }
+            if (audio.paused) {
+                audio.play().then(() => {
+                    if (btn) btn.classList.add('active');
+                }).catch(err => console.error('Audio play failed:', err));
+            } else {
+                audio.pause();
+                if (btn) btn.classList.remove('active');
+            }
         }
 
         // Exposure controls
@@ -1487,8 +1503,6 @@
                 console.error('Error stopping recording:', error);
             });
         }
-
-
 
         function updateRecordingStatus() {
             fetch('/recording_status')
@@ -3694,7 +3708,8 @@
         })();
 
         console.log('🚀 Laser Turret Control Panel initialized with WebSocket support');
+
+        
     </script>
 </body>
 </html>
-
