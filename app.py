@@ -1237,7 +1237,8 @@ def generate_frames():
             # Encode with high quality
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 95]
             with lock:
-                _, encoded_frame = cv2.imencode('.jpg', frame_rgb, encode_param)
+                frame_bgr_for_jpeg = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                _, encoded_frame = cv2.imencode('.jpg', frame_bgr_for_jpeg, encode_param)
                 output_frame = encoded_frame.tobytes()
             
             yield (b'--frame\r\n'
