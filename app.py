@@ -1620,7 +1620,7 @@ def start_recording():
         
         try:
             # Generate filename with timestamp
-          timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             recording_base = f"video_{timestamp}"
             base_name = recording_base
 
