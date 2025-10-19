@@ -1625,6 +1625,7 @@ def start_recording():
     """Start recording video to file"""
     global is_recording, video_writer, recording_filename, recording_start_time
     global audio_recording_process, audio_temp_filename, video_temp_filename, recording_base
+    global recording_fps, recording_start_monotonic, recording_frames_written, last_record_frame
     
     if picam2 is None:
         return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
@@ -1691,6 +1692,7 @@ def stop_recording():
     """Stop recording video"""
     global is_recording, video_writer, recording_filename, recording_start_time
     global audio_recording_process, audio_temp_filename, video_temp_filename, recording_base
+    global recording_fps, recording_start_monotonic, recording_frames_written, last_record_frame
     
     with recording_lock:
         if not is_recording:
