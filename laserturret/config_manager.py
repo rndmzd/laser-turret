@@ -74,6 +74,13 @@ class ConfigManager:
             'format': 'RGB888',
             'buffer_count': 2,
         },
+        'Audio': {
+            'enabled': True,
+            'device': 'default',
+            'sample_rate': 48000,
+            'channels': 1,
+            'bitrate_kbps': 128,
+        },
         'Detection': {
             'detection_method': 'haar',
             'tflite_model': 'ssd_mobilenet_v2',
@@ -351,8 +358,22 @@ class ConfigManager:
         return self._get('Camera', 'format', str)
     
     def get_camera_buffer_count(self) -> int:
-        """Get camera buffer count"""
         return self._get('Camera', 'buffer_count', int)
+    
+    def get_audio_enabled(self) -> bool:
+        return self._get('Audio', 'enabled', bool)
+
+    def get_audio_device(self) -> str:
+        return self._get('Audio', 'device', str)
+
+    def get_audio_sample_rate(self) -> int:
+        return self._get('Audio', 'sample_rate', int)
+
+    def get_audio_channels(self) -> int:
+        return self._get('Audio', 'channels', int)
+
+    def get_audio_bitrate_kbps(self) -> int:
+        return self._get('Audio', 'bitrate_kbps', int)
     
     # Detection Configuration
     def get_detection_method(self) -> str:

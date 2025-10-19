@@ -15,6 +15,7 @@ import logging
 import atexit
 import signal
 import sys
+import subprocess
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
@@ -80,6 +81,12 @@ video_writer = None
 recording_filename = None
 recording_lock = threading.Lock()
 recording_start_time = None
+
+audio_stream_lock = threading.Lock()
+audio_recording_process = None
+audio_temp_filename = None
+video_temp_filename = None
+recording_base = None
 
 # Motion detection
 motion_detection_enabled = False
@@ -1235,6 +1242,57 @@ def generate_frames():
             print(f"Error in generate_frames: {e}")
             time.sleep(0.1)
 
+def _build_ffmpeg_audio_cmd(device: str, channels: int, sample_rate: int, bitrate_kbps: int, fmt: str, output: str = '-'):
+    if fmt == 'webm':
+        return [
+            'ffmpeg', '-hide_banner', '-loglevel', 'error',
+            '-f', 'alsa', '-ac', str(channels), '-ar', str(sample_rate), '-i', device,
+            '-c:a', 'libopus', '-b:a', f'{bitrate_kbps}k',
+            '-f', 'webm', output
+        ]
+    elif fmt == 'wav':
+        return [
+            'ffmpeg', '-hide_banner', '-loglevel', 'error',
+            '-f', 'alsa', '-ac', str(channels), '-ar', str(sample_rate), '-i', device,
+            '-acodec', 'pcm_s16le', output
+        ]
+    else:
+        raise ValueError('Unsupported audio format')
+
+def stream_audio_generator():
+    try:
+        config = get_config()
+        if not config.get_audio_enabled():
+            while False:
+                yield b''
+            return
+        device = config.get_audio_device()
+        channels = int(config.get_audio_channels())
+        sample_rate = int(config.get_audio_sample_rate())
+        bitrate_kbps = int(config.get_audio_bitrate_kbps())
+
+        cmd = _build_ffmpeg_audio_cmd(device, channels, sample_rate, bitrate_kbps, fmt='webm', output='-')
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=0
+        )
+        try:
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Audio stream error: {e}")
+        return
+
 def update_fps():
     """Calculate current FPS using rolling average"""
     global fps_value
@@ -1254,6 +1312,10 @@ def video_feed():
     """Video streaming route"""
     return Response(generate_frames(),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/audio_feed')
+def audio_feed():
+    return Response(stream_audio_generator(), mimetype='audio/webm')
 
 @app.route('/update_crosshair', methods=['POST'])
 def update_crosshair():
@@ -1506,6 +1568,7 @@ def get_camera_settings():
 def start_recording():
     """Start recording video to file"""
     global is_recording, video_writer, recording_filename, recording_start_time
+    global audio_recording_process, audio_temp_filename, video_temp_filename, recording_base
     
     if picam2 is None:
         return jsonify({'status': 'error', 'message': 'Camera not available'}), 503
@@ -1517,7 +1580,9 @@ def start_recording():
         try:
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            recording_filename = f"video_{timestamp}.mp4"
+            recording_base = f"video_{timestamp}"
+            recording_filename = f"{recording_base}.mp4"
+            video_temp_filename = f"{recording_base}_video.mp4"
             
             # Initialize video writer
             # Using mp4v codec for MP4 container
@@ -1527,7 +1592,7 @@ def start_recording():
             actual_fps = fps_value if fps_value > 0 else 30.0
             
             video_writer = cv2.VideoWriter(
-                recording_filename,
+                video_temp_filename,
                 fourcc,
                 actual_fps,
                 (CAMERA_WIDTH, CAMERA_HEIGHT)
@@ -1537,6 +1602,25 @@ def start_recording():
                 video_writer = None
                 return jsonify({'status': 'error', 'message': 'Failed to open video writer'}), 500
             
+            
+            try:
+                config = get_config()
+                if config.get_audio_enabled():
+                    device = config.get_audio_device()
+                    channels = int(config.get_audio_channels())
+                    sample_rate = int(config.get_audio_sample_rate())
+                    audio_temp_filename = f"{recording_base}_audio.wav"
+                    cmd = _build_ffmpeg_audio_cmd(device, channels, sample_rate, bitrate_kbps=0, fmt='wav', output=audio_temp_filename)
+                    audio_recording_process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+            except Exception as e:
+                print(f"Failed to start audio recording: {e}")
+                audio_recording_process = None
+                audio_temp_filename = None
+
             is_recording = True
             recording_start_time = datetime.now()
             
@@ -1554,6 +1638,7 @@ def start_recording():
 def stop_recording():
     """Stop recording video"""
     global is_recording, video_writer, recording_filename, recording_start_time
+    global audio_recording_process, audio_temp_filename, video_temp_filename, recording_base
     
     with recording_lock:
         if not is_recording:
@@ -1571,8 +1656,56 @@ def stop_recording():
                 video_writer.release()
                 video_writer = None
             
+            if audio_recording_process is not None:
+                try:
+                    audio_recording_process.terminate()
+                    audio_recording_process.wait(timeout=3)
+                except Exception:
+                    try:
+                        audio_recording_process.kill()
+                    except Exception:
+                        pass
+                finally:
+                    audio_recording_process = None
+            
+            try:
+                if audio_temp_filename and os.path.exists(audio_temp_filename) and video_temp_filename and os.path.exists(video_temp_filename):
+                    mux_cmd = [
+                        'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+                        '-i', video_temp_filename,
+                        '-i', audio_temp_filename,
+                        '-c:v', 'copy', '-c:a', 'aac', '-shortest',
+                        '-movflags', '+faststart',
+                        filename
+                    ]
+                    subprocess.run(mux_cmd, check=True)
+                    try:
+                        os.remove(video_temp_filename)
+                    except Exception:
+                        pass
+                    try:
+                        os.remove(audio_temp_filename)
+                    except Exception:
+                        pass
+                else:
+                    if video_temp_filename and os.path.exists(video_temp_filename) and video_temp_filename != filename:
+                        try:
+                            os.replace(video_temp_filename, filename)
+                        except Exception as e:
+                            print(f"Failed to rename video file: {e}")
+            except Exception as e:
+                print(f"Error muxing A/V: {e}")
+                if video_temp_filename and os.path.exists(video_temp_filename) and not os.path.exists(filename):
+                    try:
+                        os.replace(video_temp_filename, filename)
+                    except Exception:
+                        pass
+
             is_recording = False
             recording_start_time = None
+            recording_base = None
+            audio_temp_filename = None
+            video_temp_filename = None
             
             return jsonify({
                 'status': 'success',

@@ -85,6 +85,13 @@ format = RGB888
 # Number of camera buffers
 buffer_count = 2
 
+[Audio]
+enabled = true
+device = default
+sample_rate = 48000
+channels = 1
+bitrate_kbps = 128
+
 [Detection]
 # Object detection method: 'haar', 'tflite', or 'roboflow'
 # haar: Fast, simple, works for faces/bodies (legacy, lower accuracy)

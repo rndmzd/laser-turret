@@ -8,3 +8,5 @@ python3-libcamera
 python3-lgpio
 # Raspberry Pi 4 and earlier: python3-rpi.gpio
 python3-rpi.gpio
+ffmpeg
+alsa-utils
