@@ -1234,6 +1234,7 @@ def generate_frames():
                 if is_recording and video_writer is not None:
                     try:
                         video_writer.write(frame_rgb)
+                        recording_frames_written += 1
                     except Exception as e:
                         print(f"Error writing video frame: {e}")
 
@@ -1711,27 +1712,36 @@ def stop_recording():
                     audio_recording_process = None
             
             try:
+                # Compute effective output FPS from frames written and elapsed duration
+                eff_fps = None
+                if recording_frames_written and recording_start_time:
+                    try:
+                        dur = (datetime.now() - recording_start_time).total_seconds()
+                        if dur > 0:
+                            eff_fps = max(5.0, min(60.0, recording_frames_written / dur))
+                    except Exception:
+                        pass
+                if eff_fps is None:
+                    eff_fps = max(5.0, min(fps_value if fps_value > 0 else 30.0, 30.0))
+
                 if audio_temp_filename and os.path.exists(audio_temp_filename) and video_temp_filename and os.path.exists(video_temp_filename):
-                    ext = os.path.splitext(video_temp_filename)[1].lower()
-                    if ext == '.mp4':
-                        mux_cmd = [
-                            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
-                            '-i', video_temp_filename,
-                            '-i', audio_temp_filename,
-                            '-c:v', 'copy', '-c:a', 'aac', '-shortest',
-                            '-movflags', '+faststart',
-                            filename
-                        ]
-                    else:
-                        mux_cmd = [
-                            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
-                            '-i', video_temp_filename,
-                            '-i', audio_temp_filename,
-                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22',
-                            '-c:a', 'aac', '-shortest',
-                            '-movflags', '+faststart',
-                            filename
-                        ]
+                    ratio = 1.0
+                    try:
+                        if float(recording_fps) > 0 and float(eff_fps) > 0:
+                            ratio = float(recording_fps) / float(eff_fps)
+                    except Exception:
+                        ratio = 1.0
+                    vf_arg = f"setpts={ratio}*PTS,fps={eff_fps}"
+                    mux_cmd = [
+                        'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+                        '-i', video_temp_filename,
+                        '-i', audio_temp_filename,
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22',
+                        '-vf', vf_arg,
+                        '-c:a', 'aac', '-shortest',
+                        '-movflags', '+faststart',
+                        filename
+                    ]
                     subprocess.run(mux_cmd, check=True)
                     try:
                         os.remove(video_temp_filename)
@@ -1743,25 +1753,26 @@ def stop_recording():
                         pass
                 else:
                     if video_temp_filename and os.path.exists(video_temp_filename) and video_temp_filename != filename:
-                        ext = os.path.splitext(video_temp_filename)[1].lower()
-                        if ext == '.mp4':
-                            try:
-                                os.replace(video_temp_filename, filename)
-                            except Exception as e:
-                                print(f"Failed to rename video file: {e}")
-                        else:
-                            transcode_cmd = [
-                                'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
-                                '-i', video_temp_filename,
-                                '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22',
-                                '-movflags', '+faststart',
-                                filename
-                            ]
-                            subprocess.run(transcode_cmd, check=True)
-                            try:
-                                os.remove(video_temp_filename)
-                            except Exception:
-                                pass
+                        ratio = 1.0
+                        try:
+                            if float(recording_fps) > 0 and float(eff_fps) > 0:
+                                ratio = float(recording_fps) / float(eff_fps)
+                        except Exception:
+                            ratio = 1.0
+                        vf_arg = f"setpts={ratio}*PTS,fps={eff_fps}"
+                        transcode_cmd = [
+                            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+                            '-i', video_temp_filename,
+                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22',
+                            '-vf', vf_arg,
+                            '-movflags', '+faststart',
+                            filename
+                        ]
+                        subprocess.run(transcode_cmd, check=True)
+                        try:
+                            os.remove(video_temp_filename)
+                        except Exception:
+                            pass
             except Exception as e:
                 print(f"Error muxing A/V: {e}")
                 if video_temp_filename and os.path.exists(video_temp_filename) and not os.path.exists(filename):
