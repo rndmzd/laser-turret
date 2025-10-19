@@ -87,6 +87,10 @@ audio_recording_process = None
 audio_temp_filename = None
 video_temp_filename = None
 recording_base = None
+recording_fps = 0.0
+recording_start_monotonic = 0.0
+recording_frames_written = 0
+last_record_frame = None
 RECORDING_OUTPUT_DIR = Path('media/recordings')
 RECORDING_CODEC_PREFERENCE = [
     ('avc1', '.mp4'),
@@ -1194,7 +1198,7 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
 
 def generate_frames():
     """Generate frames with crosshair overlay and FPS monitoring"""
-    global output_frame, lock, last_frame_time, video_writer, is_recording
+    global output_frame, lock, last_frame_time, video_writer, is_recording, recording_fps, recording_start_monotonic, recording_frames_written, last_record_frame
     
     # Check if camera is available
     if picam2 is None:
@@ -1229,7 +1233,19 @@ def generate_frames():
             with recording_lock:
                 if is_recording and video_writer is not None:
                     try:
-                        video_writer.write(frame_rgb)
+                        now_m = time.monotonic()
+                        target = int((now_m - recording_start_monotonic) * float(recording_fps))
+                        if target <= int(recording_frames_written):
+                            last_record_frame = frame_rgb
+                        else:
+                            if last_record_frame is None:
+                                last_record_frame = frame_rgb
+                            video_writer.write(frame_rgb)
+                            recording_frames_written += 1
+                            while recording_frames_written < target:
+                                video_writer.write(last_record_frame)
+                                recording_frames_written += 1
+                            last_record_frame = frame_rgb
                     except Exception as e:
                         print(f"Error writing video frame: {e}")
 
@@ -1624,7 +1640,7 @@ def start_recording():
             base_name = recording_base
 
             # Get actual FPS or use default
-            actual_fps = fps_value if fps_value > 0 else 30.0
+            actual_fps = max(5.0, min(fps_value if fps_value > 0 else 30.0, 30.0))
 
             try:
                 writer, temp_filename = initialize_video_writer(f"{base_name}_video", actual_fps)
@@ -1654,6 +1670,10 @@ def start_recording():
                 audio_temp_filename = None
 
             is_recording = True
+            recording_fps = float(actual_fps)
+            recording_start_monotonic = time.monotonic()
+            recording_frames_written = 0
+            last_record_frame = None
             recording_start_time = datetime.now()
 
             return jsonify({
@@ -1734,6 +1754,10 @@ def stop_recording():
                         pass
 
             is_recording = False
+            recording_fps = 0.0
+            recording_start_monotonic = 0.0
+            recording_frames_written = 0
+            last_record_frame = None
             recording_start_time = None
             recording_base = None
             audio_temp_filename = None
