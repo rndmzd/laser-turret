@@ -16,6 +16,7 @@ import atexit
 import signal
 import sys
 import subprocess
+from pathlib import Path
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
@@ -81,12 +82,17 @@ video_writer = None
 recording_filename = None
 recording_lock = threading.Lock()
 recording_start_time = None
-
 audio_stream_lock = threading.Lock()
 audio_recording_process = None
 audio_temp_filename = None
 video_temp_filename = None
 recording_base = None
+RECORDING_OUTPUT_DIR = Path('media/recordings')
+RECORDING_CODEC_PREFERENCE = [
+    ('avc1', '.mp4'),
+    ('mp4v', '.mp4'),
+    ('XVID', '.avi'),
+]
 
 # Motion detection
 motion_detection_enabled = False
@@ -1214,25 +1220,24 @@ def generate_frames():
             last_frame_time = current_time
             
             # Capture frame - already in RGB format
-            frame = picam2.capture_array()
-            
-            # Add crosshair
-            frame = create_crosshair(frame, opacity=0.5)
-            
-            # Write frame to video file if recording
+            frame_rgb = picam2.capture_array()
+
+            # Add crosshair and overlays in RGB space
+            frame_rgb = create_crosshair(frame_rgb, opacity=0.5)
+
+            # Write frame to video file if recording (convert to BGR for OpenCV)
             with recording_lock:
                 if is_recording and video_writer is not None:
                     try:
-                        # Convert RGB to BGR for OpenCV
-                        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                        video_writer.write(bgr_frame)
+                        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                        video_writer.write(frame_bgr)
                     except Exception as e:
                         print(f"Error writing video frame: {e}")
-            
+
             # Encode with high quality
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 95]
             with lock:
-                _, encoded_frame = cv2.imencode('.jpg', frame, encode_param)
+                _, encoded_frame = cv2.imencode('.jpg', frame_rgb, encode_param)
                 output_frame = encoded_frame.tobytes()
             
             yield (b'--frame\r\n'
@@ -1301,6 +1306,42 @@ def update_fps():
         fps = len(fps_buffer) / sum(fps_buffer)
         with fps_lock:
             fps_value = round(fps, 1)
+
+
+def initialize_video_writer(base_name: str, fps: float):
+    """Initialize a video writer using the preferred codec order."""
+    RECORDING_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    for fourcc_name, extension in RECORDING_CODEC_PREFERENCE:
+        filename = RECORDING_OUTPUT_DIR / f"{base_name}{extension}"
+        fourcc = cv2.VideoWriter_fourcc(*fourcc_name)
+        writer = cv2.VideoWriter(
+            str(filename),
+            fourcc,
+            fps,
+            (CAMERA_WIDTH, CAMERA_HEIGHT),
+            True,
+        )
+
+        if writer.isOpened():
+            logger.info(
+                "Video recording initialized using codec %s at %s",
+                fourcc_name,
+                filename,
+            )
+            return writer, str(filename)
+
+        writer.release()
+        if filename.exists():
+            try:
+                filename.unlink()
+            except OSError:
+                logger.warning("Failed to remove incomplete recording file %s", filename)
+
+        logger.warning("Video codec %s unavailable; trying next option", fourcc_name)
+
+    raise RuntimeError("Failed to initialize video writer with available codecs")
+
 
 @app.route('/')
 def index():
@@ -1579,37 +1620,29 @@ def start_recording():
         
         try:
             # Generate filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+          timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             recording_base = f"video_{timestamp}"
-            recording_filename = f"{recording_base}.mp4"
-            video_temp_filename = f"{recording_base}_video.mp4"
-            
-            # Initialize video writer
-            # Using mp4v codec for MP4 container
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            
+            base_name = recording_base
+
             # Get actual FPS or use default
             actual_fps = fps_value if fps_value > 0 else 30.0
-            
-            video_writer = cv2.VideoWriter(
-                video_temp_filename,
-                fourcc,
-                actual_fps,
-                (CAMERA_WIDTH, CAMERA_HEIGHT)
-            )
-            
-            if not video_writer.isOpened():
-                video_writer = None
-                return jsonify({'status': 'error', 'message': 'Failed to open video writer'}), 500
-            
-            
+
+            try:
+                writer, temp_filename = initialize_video_writer(f"{base_name}_video", actual_fps)
+            except RuntimeError as err:
+                return jsonify({'status': 'error', 'message': str(err)}), 500
+
+            video_writer = writer
+            video_temp_filename = temp_filename
+            recording_filename = str(RECORDING_OUTPUT_DIR / f"{base_name}.mp4")
+
             try:
                 config = get_config()
                 if config.get_audio_enabled():
                     device = config.get_audio_device()
                     channels = int(config.get_audio_channels())
                     sample_rate = int(config.get_audio_sample_rate())
-                    audio_temp_filename = f"{recording_base}_audio.wav"
+                    audio_temp_filename = str(RECORDING_OUTPUT_DIR / f"{base_name}_audio.wav")
                     cmd = _build_ffmpeg_audio_cmd(device, channels, sample_rate, bitrate_kbps=0, fmt='wav', output=audio_temp_filename)
                     audio_recording_process = subprocess.Popen(
                         cmd,
@@ -1623,7 +1656,7 @@ def start_recording():
 
             is_recording = True
             recording_start_time = datetime.now()
-            
+
             return jsonify({
                 'status': 'success',
                 'filename': recording_filename,
