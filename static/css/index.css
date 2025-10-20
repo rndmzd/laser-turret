@@ -12,7 +12,8 @@
         }
 
         .container {
-            max-width: 1600px;
+            width: 100%;
+            max-width: none;
             margin: 0 auto;
         }
 
@@ -33,7 +34,8 @@
             flex-direction: column;
             gap: 20px;
             align-items: stretch;
-            max-width: 1400px;
+            width: 95%;
+            max-width: none;
             margin: 0 auto;
         }
 
@@ -416,6 +418,25 @@
             flex-direction: column;
             gap: 20px;
             position: relative;
+        }
+
+        @media (min-width: 1100px) {
+            .control-layout {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+
+            .controls-panel {
+                order: 0;
+                flex: 0 0 clamp(420px, 32vw, 620px);
+                min-width: 420px;
+            }
+
+            .video-section {
+                order: 1;
+                flex: 1 1 0;
+                min-width: 0;
+            }
         }
 
         @media (min-width: 1024px) {
