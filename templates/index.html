@@ -102,6 +102,15 @@
                             <button id="overlay-objects-track" class="overlay-toggle-chip" onclick="toggleObjectAutoTrackFromOverlay()">Auto-Track</button>
                         </div>
                         <div class="overlay-slider">
+                            <label for="overlay-target-priority">Target Priority</label>
+                            <select id="overlay-target-priority" onchange="applyOverlayTargetPriority()">
+                                <option value="largest">Largest Object</option>
+                                <option value="closest">Closest Object</option>
+                                <option value="leftmost">Leftmost Object</option>
+                                <option value="rightmost">Rightmost Object</option>
+                            </select>
+                        </div>
+                        <div class="overlay-slider">
                             <label for="overlay-object-confidence" style="display: flex; justify-content: space-between; align-items: center;">
                                 <span>Confidence Threshold</span>
                                 <span id="overlay-object-confidence-value" class="overlay-slider-value">0.50</span>
@@ -1120,7 +1129,6 @@
             if (targetContent) {
                 targetContent.classList.add('active');
             }
-
             const targetButton = buttonEl || document.querySelector(`.tab[data-tab="${tabName}"]`);
             if (targetButton) {
                 targetButton.classList.add('active');
@@ -1134,6 +1142,14 @@
                 // Refresh object status to show appropriate panel for selected method
                 updateObjectStatus();
             }
+        }
+
+        function applyOverlayTargetPriority() {
+            const overlaySelect = document.getElementById('overlay-target-priority');
+            if (!overlaySelect) return;
+            const mainSelect = document.getElementById('target-priority');
+            if (mainSelect) mainSelect.value = overlaySelect.value;
+            applyObjectSettings();
         }
 
         // Crosshair positioning with camera movement support
@@ -2333,6 +2349,8 @@
                         document.getElementById('object-enabled').checked = data.enabled;
                         document.getElementById('object-auto-track-enabled').checked = data.auto_track;
                         document.getElementById('target-priority').value = data.priority;
+                        const overlayPriority = document.getElementById('overlay-target-priority');
+                        if (overlayPriority) overlayPriority.value = data.priority;
 
                         const detectBtn = document.getElementById('overlay-objects-detect');
                         if (detectBtn) detectBtn.classList.toggle('active', !!data.enabled);
