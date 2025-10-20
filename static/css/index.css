@@ -33,8 +33,25 @@
             flex-direction: column;
             gap: 20px;
             align-items: stretch;
-            max-width: 1400px;
+            max-width: 1800px;
             margin: 0 auto;
+        }
+
+        @media (min-width: 1200px) {
+            .control-layout {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+
+            .video-section {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            .controls-panel {
+                flex: 0 0 420px;
+                width: 420px;
+            }
         }
 
         .video-section {
