@@ -33,7 +33,7 @@
             flex-direction: column;
             gap: 20px;
             align-items: stretch;
-            max-width: 2400px;
+            max-width: 95%;
             margin: 0 auto;
         }
 
