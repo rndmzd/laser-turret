@@ -428,8 +428,8 @@
 
             .controls-panel {
                 order: 0;
-                flex: 0 0 clamp(360px, 28vw, 520px);
-                min-width: 360px;
+                flex: 0 0 clamp(420px, 32vw, 620px);
+                min-width: 420px;
             }
 
             .video-section {
