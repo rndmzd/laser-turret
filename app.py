@@ -1,4 +1,4 @@
-from flask import Flask, Response, render_template, jsonify, request
+from flask import Flask, Response, render_template, jsonify, request, send_from_directory, abort
 from flask_socketio import SocketIO, emit
 from picamera2 import Picamera2
 from picamera2.controls import Controls
@@ -17,6 +17,7 @@ import signal
 import sys
 import subprocess
 from pathlib import Path
+from werkzeug.utils import secure_filename
 
 from laserturret.hardware_interface import get_gpio_backend
 from laserturret.config_manager import get_config
@@ -92,11 +93,18 @@ recording_start_monotonic = 0.0
 recording_frames_written = 0
 last_record_frame = None
 RECORDING_OUTPUT_DIR = Path('media/recordings')
+CAPTURE_OUTPUT_DIR = Path('media/captures')
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.webm'}
 RECORDING_CODEC_PREFERENCE = [
     ('avc1', '.mp4'),
     ('mp4v', '.mp4'),
     ('XVID', '.avi'),
 ]
+
+# Ensure media directories exist
+RECORDING_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+CAPTURE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Motion detection
 motion_detection_enabled = False
@@ -1576,9 +1584,12 @@ def capture_image():
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"capture_{timestamp}.jpg"
+        # Ensure capture directory exists
+        CAPTURE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        file_path = CAPTURE_OUTPUT_DIR / filename
         
         # Capture high quality image
-        picam2.capture_file(filename)
+        picam2.capture_file(str(file_path))
         
         return jsonify({
             'status': 'success',
@@ -1587,6 +1598,165 @@ def capture_image():
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+def _get_media_dir(kind: str) -> Path:
+    kind_l = (kind or '').lower()
+    if kind_l in ('capture', 'captures', 'images', 'image'):
+        return CAPTURE_OUTPUT_DIR
+    if kind_l in ('recording', 'recordings', 'videos', 'video'):
+        return RECORDING_OUTPUT_DIR
+    return None
+
+def _is_allowed_file(filename: str, kind: str) -> bool:
+    suf = Path(filename).suffix.lower()
+    if kind in ('capture', 'captures', 'images', 'image'):
+        return suf in ALLOWED_IMAGE_EXTENSIONS
+    if kind in ('recording', 'recordings', 'videos', 'video'):
+        return suf in ALLOWED_VIDEO_EXTENSIONS
+    return False
+
+@app.route('/media/list', methods=['GET'])
+def list_media():
+    """Return combined list of captured images and recorded videos."""
+    files = []
+    try:
+        for kind, base_dir, ftype in [
+            ('captures', CAPTURE_OUTPUT_DIR, 'image'),
+            ('recordings', RECORDING_OUTPUT_DIR, 'video'),
+        ]:
+            if base_dir.exists():
+                for p in base_dir.iterdir():
+                    if not p.is_file():
+                        continue
+                    suf = p.suffix.lower()
+                    if (ftype == 'image' and suf not in ALLOWED_IMAGE_EXTENSIONS) or (ftype == 'video' and suf not in ALLOWED_VIDEO_EXTENSIONS):
+                        continue
+                    try:
+                        stat = p.stat()
+                        files.append({
+                            'name': p.name,
+                            'kind': kind,
+                            'type': ftype,
+                            'size': stat.st_size,
+                            'mtime': stat.st_mtime,
+                            'view_url': f"/media/view/{kind}/{p.name}",
+                            'download_url': f"/media/download/{kind}/{p.name}",
+                            'thumb_url': (f"/media/thumb/{kind}/{p.name}" if ftype == 'image' else None),
+                        })
+                    except Exception:
+                        continue
+        files.sort(key=lambda x: x.get('mtime', 0), reverse=True)
+        return jsonify({'status': 'success', 'files': files})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e), 'files': []}), 500
+
+@app.route('/media/view/<kind>/<path:filename>', methods=['GET'])
+def view_media(kind, filename):
+    base_dir = _get_media_dir(kind)
+    if base_dir is None:
+        abort(404)
+    safe_name = secure_filename(filename)
+    if not _is_allowed_file(safe_name, kind):
+        abort(404)
+    file_path = base_dir / safe_name
+    if not file_path.exists():
+        abort(404)
+    return send_from_directory(str(base_dir), safe_name)
+
+@app.route('/media/download/<kind>/<path:filename>', methods=['GET'])
+def download_media(kind, filename):
+    base_dir = _get_media_dir(kind)
+    if base_dir is None:
+        abort(404)
+    safe_name = secure_filename(filename)
+    if not _is_allowed_file(safe_name, kind):
+        abort(404)
+    file_path = base_dir / safe_name
+    if not file_path.exists():
+        abort(404)
+    return send_from_directory(str(base_dir), safe_name, as_attachment=True)
+
+@app.route('/media/delete', methods=['POST'])
+def delete_media():
+    data = request.get_json() or {}
+    kind = data.get('kind', '')
+    filename = data.get('filename', '')
+    base_dir = _get_media_dir(kind)
+    if base_dir is None:
+        return jsonify({'status': 'error', 'message': 'Invalid media kind'}), 400
+    safe_name = secure_filename(filename)
+    if not _is_allowed_file(safe_name, kind):
+        return jsonify({'status': 'error', 'message': 'Invalid file'}), 400
+    file_path = base_dir / safe_name
+    if not file_path.exists() or not file_path.is_file():
+        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+    try:
+        file_path.unlink()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/media/rename', methods=['POST'])
+def rename_media():
+    data = request.get_json() or {}
+    kind = data.get('kind', '')
+    filename = data.get('filename', '')
+    new_name_raw = data.get('new_name', '')
+    base_dir = _get_media_dir(kind)
+    if base_dir is None:
+        return jsonify({'status': 'error', 'message': 'Invalid media kind'}), 400
+    safe_name = secure_filename(filename)
+    safe_new = secure_filename(new_name_raw)
+    if not _is_allowed_file(safe_name, kind) or not _is_allowed_file(safe_new, kind):
+        return jsonify({'status': 'error', 'message': 'Invalid file name'}), 400
+    if Path(safe_new).suffix.lower() != Path(safe_name).suffix.lower():
+        return jsonify({'status': 'error', 'message': 'Extension change not allowed'}), 400
+    src = base_dir / safe_name
+    dst = base_dir / safe_new
+    if not src.exists() or not src.is_file():
+        return jsonify({'status': 'error', 'message': 'Source not found'}), 404
+    if dst.exists():
+        return jsonify({'status': 'error', 'message': 'Target already exists'}), 400
+    try:
+        src.rename(dst)
+        return jsonify({
+            'status': 'success',
+            'name': safe_new,
+            'view_url': f"/media/view/{kind}/{safe_new}",
+            'download_url': f"/media/download/{kind}/{safe_new}",
+            'thumb_url': f"/media/thumb/{kind}/{safe_new}" if kind in ('capture','captures','images','image') else None,
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/media/thumb/<kind>/<path:filename>', methods=['GET'])
+def thumb_media(kind, filename):
+    base_dir = _get_media_dir(kind)
+    if base_dir is None:
+        abort(404)
+    safe_name = secure_filename(filename)
+    if not _is_allowed_file(safe_name, kind):
+        abort(404)
+    file_path = base_dir / safe_name
+    if not file_path.exists():
+        abort(404)
+    try:
+        img = cv2.imread(str(file_path))
+        if img is None:
+            abort(404)
+        h, w = img.shape[:2]
+        max_dim = 160
+        scale = min(max_dim / max(h, w), 1.0)
+        if scale < 1.0:
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        ok, buf = cv2.imencode('.jpg', img)
+        if not ok:
+            abort(500)
+        return Response(buf.tobytes(), mimetype='image/jpeg')
+    except Exception:
+        abort(500)
 
 @app.route('/get_camera_settings')
 def get_camera_settings():
