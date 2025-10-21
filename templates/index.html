@@ -1094,10 +1094,38 @@
                     </div>
 
                     <div id="recording-status" class="status-message"></div>
+                    <div class="control-group">
+                        <h3>📁 Media Library</h3>
+                        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                            <button class="btn-secondary" onclick="fetchMediaList()">Refresh</button>
+                            <span id="media-list-summary" style="font-size:12px; color:#666;"></span>
+                        </div>
+                        <div id="media-list" class="media-list" style="max-height:220px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; background:#fff;"></div>
+                        <div id="media-list-status" class="status-message"></div>
+                    </div>
                 </div>
 
             </div>
         </aside>
+    </div>
+</div>
+
+<div id="media-viewer-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+    <div id="media-viewer" style="position:relative; max-width:90vw; max-height:90vh; background:#111; border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; color:#fff;">
+            <div id="media-title" style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;"></div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn-secondary" onclick="zoomOutImage()">➖</button>
+                <button class="btn-secondary" onclick="resetZoomPan()">⟳</button>
+                <button class="btn-secondary" onclick="zoomInImage()">➕</button>
+                <button class="btn-primary" id="media-download-btn">⬇️ Download</button>
+                <button class="btn-secondary" onclick="closeMediaViewer()">✖</button>
+            </div>
+        </div>
+        <div id="media-content" style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#000;">
+            <img id="media-image" alt="Preview" style="display:none; max-width:none; max-height:none; transform-origin:center center; cursor:grab;" draggable="false">
+            <video id="media-video" style="display:none; max-width:90vw; max-height:80vh; background:#000;" controls></video>
+        </div>
     </div>
 </div>
 
@@ -1141,6 +1169,9 @@
             } else {
                 // Refresh object status to show appropriate panel for selected method
                 updateObjectStatus();
+            }
+            if (tabName === 'capture') {
+                fetchMediaList();
             }
         }
 
@@ -1417,8 +1448,10 @@
                 headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
-            .then(data => showStatus('capture-status', data.status === 'success',
-                data.status === 'success' ? `Image saved: ${data.filename}` : data.message));
+            .then(data => {
+                showStatus('capture-status', data.status === 'success', data.status === 'success' ? `Image saved: ${data.filename}` : data.message);
+                if (data.status === 'success') fetchMediaList();
+            });
         }
 
         // Status message display
@@ -1510,6 +1543,7 @@
                     const duration = data.duration ? `${Math.floor(data.duration)}s` : '';
                     showStatus('recording-status', true, 
                         `Recording saved: ${data.filename} (${duration})`);
+                    fetchMediaList();
                 } else {
                     showStatus('recording-status', false, data.message);
                 }
@@ -3727,7 +3761,208 @@
 
         console.log('🚀 Laser Turret Control Panel initialized with WebSocket support');
 
-        
+        function fetchMediaList() {
+            const statusEl = document.getElementById('media-list-status');
+            const listEl = document.getElementById('media-list');
+            const summaryEl = document.getElementById('media-list-summary');
+            if (!listEl) return;
+            statusEl && (statusEl.style.display = 'none');
+            listEl.innerHTML = '<div style="padding:12px; color:#666;">Loading...</div>';
+            fetch('/media/list')
+              .then(r => r.json())
+              .then(data => {
+                  if (data.status !== 'success') {
+                      listEl.innerHTML = '';
+                      showStatus('media-list-status', false, data.message || 'Failed to load media list');
+                      return;
+                  }
+                  renderMediaList(data.files || []);
+                  if (summaryEl) summaryEl.textContent = `${(data.files || []).length} file(s)`;
+              })
+              .catch(err => {
+                  listEl.innerHTML = '';
+                  showStatus('media-list-status', false, 'Failed to load media list');
+              });
+        }
+
+        function renderMediaList(files) {
+            const listEl = document.getElementById('media-list');
+            if (!listEl) return;
+            if (!files.length) {
+                listEl.innerHTML = '<div style="padding:12px; color:#666;">No media files yet.</div>';
+                return;
+            }
+            const fmtSize = (b) => {
+                if (b < 1024) return `${b} B`;
+                if (b < 1024*1024) return `${(b/1024).toFixed(1)} KB`;
+                if (b < 1024*1024*1024) return `${(b/1024/1024).toFixed(1)} MB`;
+                return `${(b/1024/1024/1024).toFixed(1)} GB`;
+            };
+            const fmtTime = (t) => {
+                try { return new Date(t*1000).toLocaleString(); } catch (e) { return ''; }
+            };
+            let html = '<div class="media-items">';
+            files.forEach((f) => {
+                const icon = f.type === 'image' ? '🖼️' : '🎬';
+                const thumb = f.thumb_url
+                    ? `<img src="${f.thumb_url}" alt="" class="media-thumb">`
+                    : `<div class="media-thumb-placeholder">${icon}</div>`;
+                html += `
+                <div class="media-item">
+                    <div class="media-thumb-wrap">${thumb}</div>
+                    <div class="media-meta">
+                        <div class="media-name" title="${f.name}">${f.name}</div>
+                        <div class="media-sub">${fmtSize(f.size)} • ${fmtTime(f.mtime)}</div>
+                    </div>
+                    <div class="media-actions">
+                        <button class="icon-btn btn-primary" title="View" aria-label="View" onclick="openMediaViewerFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>👁️</button>
+                        <a class="icon-btn btn-secondary" title="Download" aria-label="Download" href="${f.download_url}" download>⬇️</a>
+                        <button class="icon-btn btn-secondary" title="Rename" aria-label="Rename" onclick="renameMediaFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>✏️</button>
+                        <button class="icon-btn btn-secondary" title="Delete" aria-label="Delete" onclick="deleteMediaFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>🗑️</button>
+                    </div>
+                </div>
+            `;
+            });
+            html += '</div>';
+            listEl.innerHTML = html;
+        }
+
+        function openMediaViewerFromData(btn) {
+            try {
+                const f = JSON.parse(btn.getAttribute('data-file').replace(/&apos;/g, "'"));
+                openMediaViewer(f);
+            } catch (e) {}
+        }
+
+        function renameMediaFromData(btn) {
+            try {
+                const f = JSON.parse(btn.getAttribute('data-file').replace(/&apos;/g, "'"));
+                renameMedia(f);
+            } catch (e) {}
+        }
+
+        function deleteMediaFromData(btn) {
+            try {
+                const f = JSON.parse(btn.getAttribute('data-file').replace(/&apos;/g, "'"));
+                deleteMedia(f);
+            } catch (e) {}
+        }
+
+        function renameMedia(file) {
+            const current = file && file.name ? file.name : '';
+            const input = prompt('Rename file', current);
+            if (!input || input === current) return;
+            const i1 = current.lastIndexOf('.');
+            const i2 = input.lastIndexOf('.');
+            const ext1 = i1 >= 0 ? current.slice(i1).toLowerCase() : '';
+            const ext2 = i2 >= 0 ? input.slice(i2).toLowerCase() : '';
+            if (ext1 !== ext2) { showStatus('media-list-status', false, 'Cannot change file extension'); return; }
+            fetch('/media/rename', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: file.kind, filename: file.name, new_name: input }) })
+            .then(r => r.json())
+            .then(d => {
+                if (d.status === 'success') { showStatus('media-list-status', true, 'File renamed'); fetchMediaList(); }
+                else { showStatus('media-list-status', false, d.message || 'Rename failed'); }
+            })
+            .catch(() => { showStatus('media-list-status', false, 'Rename failed'); });
+        }
+
+        function deleteMedia(file) {
+            if (!file) return;
+            const ok = confirm('Delete this file?');
+            if (!ok) return;
+            fetch('/media/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: file.kind, filename: file.name }) })
+            .then(r => r.json())
+            .then(d => {
+                if (d.status === 'success') { showStatus('media-list-status', true, 'File deleted'); fetchMediaList(); }
+                else { showStatus('media-list-status', false, d.message || 'Delete failed'); }
+            })
+            .catch(() => { showStatus('media-list-status', false, 'Delete failed'); });
+        }
+
+        let zoomLevel = 1.0;
+        let panX = 0, panY = 0;
+        let isPanning = false;
+        let lastPan = {x:0,y:0};
+
+        function openMediaViewer(file) {
+            const overlay = document.getElementById('media-viewer-overlay');
+            const img = document.getElementById('media-image');
+            const vid = document.getElementById('media-video');
+            const title = document.getElementById('media-title');
+            const dl = document.getElementById('media-download-btn');
+            if (!overlay || !img || !vid) return;
+            resetZoomPan();
+            title && (title.textContent = file.name || '');
+            dl && (dl.onclick = () => { window.location.href = file.download_url; });
+            if (file.type === 'image') {
+                vid.pause();
+                vid.src = '';
+                vid.style.display = 'none';
+                img.src = file.view_url;
+                img.style.display = 'block';
+            } else {
+                img.style.display = 'none';
+                img.src = '';
+                vid.src = file.view_url;
+                vid.style.display = 'block';
+                setTimeout(() => { try { vid.play(); } catch(e){} }, 50);
+            }
+            overlay.style.display = 'flex';
+        }
+
+        function closeMediaViewer() {
+            const overlay = document.getElementById('media-viewer-overlay');
+            const img = document.getElementById('media-image');
+            const vid = document.getElementById('media-video');
+            if (!overlay) return;
+            overlay.style.display = 'none';
+            if (vid) { try { vid.pause(); } catch(e){} vid.src = ''; }
+            if (img) { img.src = ''; }
+        }
+
+        function applyTransform() {
+            const img = document.getElementById('media-image');
+            if (!img || img.style.display === 'none') return;
+            img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+        }
+
+        function zoomInImage() { zoomLevel = Math.min(zoomLevel * 1.2, 10); applyTransform(); }
+        function zoomOutImage() { zoomLevel = Math.max(zoomLevel / 1.2, 0.1); applyTransform(); }
+        function resetZoomPan() { zoomLevel = 1.0; panX = 0; panY = 0; applyTransform(); }
+
+        (function setupImagePanZoom(){
+            const img = document.getElementById('media-image');
+            const content = document.getElementById('media-content');
+            if (!img || !content) return;
+            content.addEventListener('wheel', (e) => {
+                if (img.style.display === 'none') return;
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 1.1 : 0.9;
+                zoomLevel = Math.min(Math.max(zoomLevel * delta, 0.1), 10);
+                applyTransform();
+            }, { passive: false });
+            img.addEventListener('mousedown', (e) => { if (img.style.display !== 'none') { isPanning = true; img.style.cursor = 'grabbing'; lastPan = {x:e.clientX, y:e.clientY}; } });
+            window.addEventListener('mousemove', (e) => { if (isPanning) { panX += (e.clientX - lastPan.x); panY += (e.clientY - lastPan.y); lastPan = {x:e.clientX, y:e.clientY}; applyTransform(); } });
+            window.addEventListener('mouseup', () => { if (isPanning) { isPanning = false; img.style.cursor = 'grab'; } });
+        })();
+
+        (function setupOverlayClose(){
+            const overlay = document.getElementById('media-viewer-overlay');
+            const viewer = document.getElementById('media-viewer');
+            if (!overlay) return;
+            overlay.addEventListener('click', (e) => {
+                if (!viewer || viewer.contains(e.target)) return;
+                closeMediaViewer();
+            });
+        })();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab && activeTab.getAttribute('data-tab') === 'capture') {
+                fetchMediaList();
+            }
+        });
+
     </script>
 </body>
 </html>
