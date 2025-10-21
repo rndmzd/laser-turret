@@ -1167,6 +1167,7 @@ def create_crosshair(frame, color=(0, 255, 0), thickness=3, opacity=0.5):
                 obj_text = f"Detect: {detection_method.upper()} ({len(detected_objects)})"
             if object_auto_track:
                 obj_text += " [TRACK]"
+            obj_text += f" | Priority: {target_priority.upper()}"
             texts.append(obj_text)
     
     # Add motion detection status
@@ -2113,7 +2114,7 @@ def toggle_object_auto_track():
 @app.route('/object_detection/settings', methods=['POST'])
 def update_object_settings():
     """Update object detection settings"""
-    global detection_mode, target_priority
+    global detection_mode, target_priority, object_track_smooth_center, object_last_switch_time
     
     try:
         data = request.get_json()
@@ -2122,7 +2123,11 @@ def update_object_settings():
                 detection_mode = data['mode']
             
             if 'priority' in data:
-                target_priority = data['priority']
+                new_priority = data['priority']
+                if new_priority != target_priority:
+                    object_track_smooth_center = None
+                    object_last_switch_time = 0.0
+                target_priority = new_priority
         
         return jsonify({
             'status': 'success',
