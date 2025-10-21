@@ -3783,22 +3783,24 @@
             const fmtTime = (t) => {
                 try { return new Date(t*1000).toLocaleString(); } catch (e) { return ''; }
             };
-            let html = '<div style="display:flex; flex-direction:column;">';
+            let html = '<div class="media-items">';
             files.forEach((f) => {
                 const icon = f.type === 'image' ? '🖼️' : '🎬';
-                const thumb = f.thumb_url ? `<img src="${f.thumb_url}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;background:#222;">` : `<div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#f5f5f5;border-radius:4px;">${icon}</div>`;
+                const thumb = f.thumb_url
+                    ? `<img src="${f.thumb_url}" alt="" class="media-thumb">`
+                    : `<div class="media-thumb-placeholder">${icon}</div>`;
                 html += `
-                <div style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid #eee;">
-                    <div>${thumb}</div>
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${f.name}">${f.name}</div>
-                        <div style="font-size:11px; color:#666;">${fmtSize(f.size)} • ${fmtTime(f.mtime)}</div>
+                <div class="media-item">
+                    <div class="media-thumb-wrap">${thumb}</div>
+                    <div class="media-meta">
+                        <div class="media-name" title="${f.name}">${f.name}</div>
+                        <div class="media-sub">${fmtSize(f.size)} • ${fmtTime(f.mtime)}</div>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn-primary" onclick="openMediaViewerFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>View</button>
-                        <a class="btn-secondary" href="${f.download_url}" download>Download</a>
-                        <button class="btn-secondary" onclick="renameMediaFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>Rename</button>
-                        <button class="btn-secondary" onclick="deleteMediaFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>Delete</button>
+                    <div class="media-actions">
+                        <button class="icon-btn btn-primary" title="View" aria-label="View" onclick="openMediaViewerFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>👁️</button>
+                        <a class="icon-btn btn-secondary" title="Download" aria-label="Download" href="${f.download_url}" download>⬇️</a>
+                        <button class="icon-btn btn-secondary" title="Rename" aria-label="Rename" onclick="renameMediaFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>✏️</button>
+                        <button class="icon-btn btn-secondary" title="Delete" aria-label="Delete" onclick="deleteMediaFromData(this)" data-file='${JSON.stringify(f).replace(/'/g, '&apos;')}'>🗑️</button>
                     </div>
                 </div>
             `;
